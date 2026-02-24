@@ -1,7 +1,0 @@
-Requirement already satisfied: python-telegram-bot in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (21.0.1)
-Requirement already satisfied: httpx~=0.27 in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (from python-telegram-bot) (0.28.1)
-Requirement already satisfied: anyio in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (from httpx~=0.27->python-telegram-bot) (4.12.1)
-Requirement already satisfied: certifi in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (from httpx~=0.27->python-telegram-bot) (2026.1.4)
-Requirement already satisfied: httpcore==1.* in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (from httpx~=0.27->python-telegram-bot) (1.0.9)
-Requirement already satisfied: idna in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (from httpx~=0.27->python-telegram-bot) (3.11)
-Requirement already satisfied: h11>=0.16 in c:\users\songp\appdata\local\python\pythoncore-3.14-64\lib\site-packages (from httpcore==1.*->httpx~=0.27->python-telegram-bot) (0.16.0)
