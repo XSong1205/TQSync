@@ -1,0 +1,9 @@
+python-telegram-bot>=21.0.0
+aiohttp
+websockets
+pyyaml
+loguru
+python-dotenv
+httpx[socks]
+aiosqlite
+aiofiles

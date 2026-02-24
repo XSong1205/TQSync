@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Logs and databases
+logs/
+data/
+temp/
+*.db
+*.sqlite
+*.log
+*.backup
+
+# Environment variables and configs
+.env
+.env.local
+.env.production
+config.yaml
+*.backup
+
+# IDE
+.lingma/
+.idea/
+*.swp
+*.swo
+*~
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Media files (optional)
+media/
+uploads/
+
+# Test files with sensitive data
+test_*.py
+demo_*.py
+*_test.py
+
+# Backup files
+*.backup
+*.bak
