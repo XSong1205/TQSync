@@ -54,7 +54,7 @@ def install_dependencies():
     
     # 逐个安装依赖（备用方案）
     deps = [
-        "python-telegram-bot>=21.0.0",
+        "python-telegram-bot==21.0.1",
         "aiohttp", 
         "websockets",
         "pyyaml",
