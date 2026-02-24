@@ -13,10 +13,12 @@
 - **消息重试机制** - 自动重试失败消息
 - **智能过滤系统** - 支持前缀命令和消息过滤
 
+## 📖 演示截图
+
 ## 🚀 快速开始
 
 ### 环境要求
-- Python 3.14 (更低版本没试过)
+- Python 3.14 + (更低版本没试过)
 - 能连接 Telegram 的网络
 - NapCatQQ 较新版本
 - Windows Server 2016 及以上；能安装 Python 3.14 的 Linux 系统
@@ -38,13 +40,16 @@ cp .env.example .env
 python test_database_persistence.py
 python test.py
 
+# 启动 NapCat
+安装 NapCat，然后创建一个HTTP Server 和 Websocket Server，端口默认；您也可以通过初始化后的.env文件对端口进行更改来自定义
+
 # 启动机器人
 python main.py
 ```
 
 ## Linux 支持
 
-TQSync 支持 Linux 系统 (AI说的)
+警告：目前 TQSync **没有**在 Linux 环境上进行过**任何**测试，能不能跑起来我也不知道（）
 
 ### Linux 快速安装
 ```bash
@@ -74,9 +79,20 @@ python3 main.py
 nohup python3 main.py > bot.log 2>&1 &
 ```
 
-## 📖 文档
+## 代理配置方法
 
-- [使用说明](USAGE.md)
-- [更新日志](CHANGELOG.md)
-- [GitHub 发布指南](GITHUB_PUBLISH_GUIDE.md)
+编辑 `config.yaml` 文件：
+
+```yaml
+telegram:
+  token: "YOUR_TELEGRAM_BOT_TOKEN"
+  chat_id: "YOUR_TELEGRAM_CHAT_ID"
+  proxy:
+    enable: true
+    type: "socks5"  # 或 "http"
+    host: "127.0.0.1"
+    port: 1080
+    username: ""  # 可选
+    password: ""  # 可选
+```
 
