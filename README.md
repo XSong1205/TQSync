@@ -32,9 +32,10 @@ cd TQSync
 # 运行安装脚本
 python install.py
 
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件填入你的配置
+# 初始化 Bot
+python init.py
+# 编辑 .env 或 config.yaml 文件填入你的配置
+> Telegram的机器人创建详见仓库中 TGBotGuide.md
 
 # 测试功能
 python test_database_persistence.py
