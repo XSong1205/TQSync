@@ -134,7 +134,6 @@ class StatsManager:
                      filtered, prefix_filtered, commands_processed, uptime, last_update)
                     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    1,
                     self.cached_stats['telegram_received'],
                     self.cached_stats['qq_received'],
                     self.cached_stats['telegram_sent'],
