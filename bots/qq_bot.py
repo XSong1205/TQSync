@@ -149,6 +149,8 @@ class QQBot:
                 replied_to_message = replied_info.get('message')
             
             # 提取消息信息
+            logger.debug(f"[QQ Bot] 原始数据：message_id={data.get('message_id')}, user_id={data.get('sender', {}).get('user_id')}")
+            
             message_data = {
                 'platform': 'qq',
                 'message_id': data.get('message_id'),

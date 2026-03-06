@@ -329,8 +329,10 @@ class MessageSync:
             logger.error(f"处理QQ消息撤回事件时出错: {e}")
     
     async def _handle_qq_text_message(self, message_data: Dict[Any, Any]):
-        """处理QQ文本消息"""
+        """处理 QQ 文本消息"""
         try:
+            logger.debug(f"[QQ 消息] message_data: {message_data}")
+                
             message_type = message_data.get('type', 'text')
             
             if message_type == 'forward':
@@ -489,6 +491,7 @@ class MessageSync:
             
             # 检查绑定相关命令
             if self._is_binding_command(text):
+                logger.info(f"检测到绑定命令：{text}")
                 asyncio.create_task(self._handle_binding_command(message_data))
                 return True
             
