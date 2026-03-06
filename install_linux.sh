@@ -29,6 +29,15 @@ fi
 echo "📦 安装 Python 依赖..."
 pip3 install -r requirements.txt
 
+# 安装 Web Dashboard 依赖
+echo "📦 检查 Web Dashboard 依赖..."
+if [ -f "web_dashboard/requirements.txt" ]; then
+    echo "  安装 Web Dashboard 依赖..."
+    pip3 install -r web_dashboard/requirements.txt || echo "⚠️  Web Dashboard 依赖安装失败，可手动运行：cd web_dashboard && pip3 install -r requirements.txt"
+else
+    echo "  ℹ️  未找到 web_dashboard/requirements.txt，跳过"
+fi
+
 # 创建必要目录
 echo "🔧 创建项目目录..."
 mkdir -p logs data temp

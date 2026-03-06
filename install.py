@@ -131,6 +131,18 @@ def main():
         print("   pip install -r requirements.txt")
         sys.exit(1)
     
+    # 安装 Web Dashboard 依赖
+    print("\n📦 检查 Web Dashboard 依赖...")
+    dashboard_req = Path('web_dashboard/requirements.txt')
+    if dashboard_req.exists():
+        print("  安装 Web Dashboard 依赖...")
+        result = run_command("python -m pip install -r web_dashboard/requirements.txt", "安装 Web Dashboard 依赖包")
+        if result is None:
+            print("  ⚠️  Web Dashboard 依赖安装失败，可手动运行:")
+            print("     cd web_dashboard && pip install -r requirements.txt")
+    else:
+        print("  ℹ️  未找到 web_dashboard/requirements.txt，跳过")
+    
     # 设置项目
     if not setup_project():
         print("\n❌ 项目初始化失败")
