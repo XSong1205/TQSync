@@ -142,11 +142,13 @@ class QQBot:
             is_reply = self._is_reply_message(data)
             replied_to_user = None
             replied_to_message = None
+            reply_to_message_id = None
             
             if is_reply:
                 replied_info = self._extract_reply_info(data)
                 replied_to_user = replied_info.get('user')
                 replied_to_message = replied_info.get('message')
+                reply_to_message_id = replied_info.get('message_id')  # 获取被回复消息 ID
             
             # 提取消息信息
             logger.debug(f"[QQ Bot] 原始数据：message_id={data.get('message_id')}, user_id={data.get('sender', {}).get('user_id')}")
@@ -160,6 +162,7 @@ class QQBot:
                 'is_reply': is_reply,
                 'replied_to_user': replied_to_user,
                 'replied_to_message': replied_to_message,
+                'reply_to_message_id': reply_to_message_id,  # 新增：被回复消息的 ID
                 'sender': {
                     'user_id': data.get('sender', {}).get('user_id'),
                     'nickname': data.get('sender', {}).get('nickname'),
@@ -342,50 +345,46 @@ class QQBot:
         """提取回复信息"""
         try:
             message_elements = data.get('message', [])
-            reply_info = {'user': None, 'message': None}
+            reply_info = {'user': None, 'message': None, 'message_id': None}
             
-            # 收集所有文本内容
-            text_parts = []
-            at_users = []
-            
+            # 检查 raw_data 中是否有回复消息的 ID
+            # NapCat/OneBot 会在 message 数组中包含 reply 类型的元素
             for element in message_elements:
                 if isinstance(element, dict):
-                    # 提取at消息中的用户信息
-                    if element.get('type') == 'at':
+                    # 提取 reply 类型的消息段（包含被回复消息的 ID）
+                    if element.get('type') == 'reply':
+                        reply_id = element.get('data', {}).get('id')
+                        if reply_id:
+                            reply_info['message_id'] = int(reply_id)
+                            logger.debug(f"[QQ Bot] 提取到回复消息 ID: {reply_id}")
+                    
+                    # 提取 at 用户信息
+                    elif element.get('type') == 'at':
                         qq_id = element.get('data', {}).get('qq')
                         if qq_id and qq_id != 'all':
-                            at_users.append(f"QQ用户{qq_id}")
-                    
-                    # 收集文本内容
-                    elif element.get('type') == 'text':
-                        text = element.get('data', {}).get('text', '').strip()
-                        if text:
-                            text_parts.append(text)
+                            if not reply_info['user']:
+                                reply_info['user'] = f"QQ 用户{qq_id}"
             
-            # 设置被回复用户（取第一个@的用户）
-            if at_users:
-                reply_info['user'] = at_users[0]
+            # 收集所有文本内容作为回复消息
+            text_parts = []
+            for element in message_elements:
+                if isinstance(element, dict) and element.get('type') == 'text':
+                    text = element.get('data', {}).get('text', '').strip()
+                    if text:
+                        text_parts.append(text)
             
-            # 对于QQ回复，我们无法准确区分原始消息和新回复
-            # 因为QQ的消息结构是: [@用户] 回复内容
-            # 我们将整个回复内容作为新消息，原始消息留空或使用占位符
             if text_parts:
-                # 合并所有文本部分作为回复内容
                 full_text = ' '.join(text_parts).strip()
+                # 移除@用户部分
+                if reply_info['user'] and full_text.startswith('@' + reply_info['user'].replace('QQ 用户', '')):
+                    full_text = full_text[len(reply_info['user'].replace('QQ 用户', '@')):].strip()
                 reply_info['message'] = full_text
-                
-                # 如果有@用户，尝试分离@部分和回复内容
-                if at_users and full_text.startswith(at_users[0].replace('QQ用户', '@')):
-                    # 移除@用户部分，只保留实际回复内容
-                    clean_text = full_text[len(at_users[0].replace('QQ用户', '@')):].strip()
-                    if clean_text:
-                        reply_info['message'] = clean_text
             
             return reply_info
         except Exception as e:
-            logger.error(f"提取回复信息时出错: {e}")
-            return {'user': None, 'message': None}
-    
+            logger.error(f"提取回复信息时出错：{e}")
+            return {'user': None, 'message': None, 'message_id': None}
+
     async def send_group_message(self, message: str, reply_to_message_id: Optional[int] = None) -> bool:
         """
         发送群消息
