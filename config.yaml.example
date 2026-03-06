@@ -1,0 +1,123 @@
+# TQSync - Telegram QQ Bot 配置文件
+# 将本文件复制为 config.yaml 并填写实际配置信息
+
+# ===========================================
+# Telegram Bot 配置
+# ===========================================
+telegram:
+  # Bot Token (从 @BotFather 获取)
+  token: "your_bot_token_here"
+  
+  # 聊天 ID (群组或频道的 ID)
+  chat_id: "your_chat_id_here"
+  
+  # 代理配置 (可选，中国大陆用户建议启用)
+  proxy:
+    enable: false  # 是否启用代理
+    scheme: "http"  # 代理类型：http, https, socks5
+    hostname: "127.0.0.1"  # 代理地址
+    port: 7890  # 代理端口
+    username: ""  # 代理用户名（可选）
+    password: ""  # 代理密码（可选）
+
+# ===========================================
+# QQ Bot 配置 (NapCat)
+# ===========================================
+qq:
+  # WebSocket URL (反向 WebSocket 地址)
+  ws_url: "ws://127.0.0.1:8080/ws"
+  
+  # HTTP API URL (HTTP 接口地址)
+  http_url: "http://127.0.0.1:5700"
+  
+  # 群号
+  group_id: "your_group_id_here"
+
+# ===========================================
+# 消息同步配置
+# ===========================================
+sync:
+  # 是否启用双向同步 (true: 双向，false: 仅 Telegram -> QQ)
+  bidirectional: true
+  
+  # 消息过滤关键词 (包含这些词的消息不会被同步)
+  filter_keywords:
+    - "#skip"
+    - "!skip"
+  
+  # 最大消息长度 (超过此长度的消息会被截断)
+  max_message_length: 4096
+  
+  # 发送冷却时间 (秒，防止发送过快)
+  cooldown_time: 1
+  
+  # 媒体文件配置
+  media:
+    enable: true  # 是否启用媒体同步
+    supported_types:  # 支持的媒体类型
+      - photo     # 照片
+      - video     # 视频
+      - audio     # 音频
+      - voice     # 语音
+      - document  # 文档
+      - sticker   # 贴纸
+      - animation # GIF
+    max_file_size: 50  # 最大文件大小 (MB)
+    temp_file_retention: 24  # 临时文件保留时间 (小时)
+  
+  # 回复功能配置
+  reply:
+    enable: true  # 是否启用原生回复
+    format: "[{replier} 回复 {replied}] 原始消息：『{original_message}』，新回复：『{reply_message}』"
+    simple_format: "[回复 @{username}] {message}"
+  
+  # 命令前缀 (以此开头的消息不会被同步)
+  filter_prefix: "!"
+
+# ===========================================
+# 日志配置
+# ===========================================
+logging:
+  # 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  
+  # 日志文件路径
+  file: "logs/bot.log"
+  
+  # 是否输出到控制台
+  console: true
+  
+  # 日志格式
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {module}:{function}:{line} - {message}"
+
+# ===========================================
+# 数据库配置
+# ===========================================
+database:
+  # 数据库文件路径
+  path: "data/tqsync.db"
+  
+  # 是否启用自动备份
+  auto_backup: true
+  
+  # 备份间隔 (小时)
+  backup_interval: 24
+
+# ===========================================
+# 高级配置 (一般不需要修改)
+# ===========================================
+advanced:
+  # 消息重试配置
+  retry:
+    max_retries: 3  # 最大重试次数
+    delay: 2  # 重试间隔 (秒)
+  
+  # 用户绑定配置
+  binding:
+    code_length: 6  # 验证码长度
+    timeout: 300  # 验证码超时时间 (秒)
+  
+  # 消息 ID 映射配置
+  message_mapping:
+    ttl: 86400  # 映射存活时间 (秒)，默认 24 小时
+    cleanup_interval: 3600  # 清理过期映射的间隔 (秒)

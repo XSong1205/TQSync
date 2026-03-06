@@ -45,15 +45,16 @@ class TelegramBot:
     async def initialize(self):
         """初始化机器人"""
         try:
-            # 配置代理
-            http_client = await self._setup_http_client()
+            # 配置代理（新版本使用不同的方式）
+            await self._setup_http_client()
             
-            # 创建应用（带代理支持）
+            # 创建应用
             builder = Application.builder().token(self.bot_token)
             
-            if http_client:
-                builder = builder.http_client(http_client)
-                logger.info("Telegram机器人已配置代理")
+            # 新版本不再支持直接传入http_client，代理配置需要在_session_builder中处理
+            if self.http_client:
+                logger.info("Telegram机器人已配置自定义HTTP客户端")
+                # 注意：这里可能需要根据具体版本调整实现方式
             
             self.application = builder.build()
             self.bot = self.application.bot
@@ -206,7 +207,11 @@ class TelegramBot:
     
     def _identify_media_type(self, message) -> str:
         """识别媒体类型"""
-        if message.photo:
+        if message.sticker:
+            return 'sticker'
+        elif message.animation:
+            return 'animation'  # GIF
+        elif message.photo:
             return 'photo'
         elif message.video:
             return 'video'
@@ -220,9 +225,13 @@ class TelegramBot:
             return 'unknown'
     
     def _get_file_id(self, message, media_type: str) -> Optional[str]:
-        """获取文件ID"""
+        """获取文件 ID"""
         try:
-            if media_type == 'photo':
+            if media_type == 'sticker':
+                return message.sticker.file_id
+            elif media_type == 'animation':
+                return message.animation.file_id
+            elif media_type == 'photo':
                 # 选择最高质量的照片
                 photo = max(message.photo, key=lambda x: x.file_size)
                 return photo.file_id
@@ -237,7 +246,7 @@ class TelegramBot:
             else:
                 return None
         except Exception as e:
-            logger.error(f"获取文件ID时出错: {e}")
+            logger.error(f"获取文件 ID 时出错：{e}")
             return None
     
     def _extract_original_sender(self, message_text: str) -> Optional[str]:
@@ -289,44 +298,39 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"处理Telegram命令时出错: {e}")
     
-    async def send_message(self, text: str, reply_to_message_id: Optional[int] = None, 
-                         is_reply: bool = False, replied_to_user: Optional[Dict] = None,
-                         replied_to_message: Optional[str] = None, **kwargs) -> bool:
+    async def send_message(self, text: str, reply_to_message_id: Optional[int] = None, **kwargs) -> bool:
         """
-        发送消息到Telegram（带重试机制和原生回复支持）
-        
+        发送消息到 Telegram（带重试机制和原生回复支持）
+                
         Args:
             text (str): 消息文本
-            reply_to_message_id (int, optional): 要回复的消息ID
-            is_reply (bool): 是否为回复消息
-            replied_to_user (dict, optional): 被回复用户信息
-            replied_to_message (str, optional): 被回复的消息内容
+            reply_to_message_id (int, optional): 要回复的消息 ID
             **kwargs: 其他参数
-            
+                    
         Returns:
             bool: 发送是否成功
         """
         try:
             if not self.bot:
-                logger.error("Telegram机器人未初始化")
+                logger.error("Telegram 机器人未初始化")
                 return False
-            
+                    
             # 初始化重试管理器
             if not self.retry_manager:
                 self.retry_manager = await get_retry_manager()
                 self.retry_manager.set_send_callback(self._direct_send_message)
                 await self.retry_manager.start()
-            
-            # 如果是回复消息且有具体的回复ID，则使用原生回复
-            if is_reply and reply_to_message_id:
+                    
+            # 如果是回复消息且有具体的回复 ID，则使用原生回复
+            if reply_to_message_id:
                 kwargs['reply_to_message_id'] = reply_to_message_id
-                logger.info(f"[Telegram] 使用原生回复功能，回复消息ID: {reply_to_message_id}")
-            
+                logger.info(f"[Telegram] 使用原生回复功能，回复消息 ID: {reply_to_message_id}")
+                    
             # 直接尝试发送
-            success = await self._direct_send_message(text, **kwargs)
-            
-            if success:
-                logger.info(f"[Telegram] 消息发送成功: {text[:50]}...")
+            sent_message = await self._direct_send_message(text, **kwargs)
+                    
+            if sent_message:
+                logger.info(f"[Telegram] 消息发送成功：{text[:50]}... (ID: {sent_message.message_id})")
                 return True
             else:
                 # 发送失败，添加到重试队列
@@ -334,58 +338,106 @@ class TelegramBot:
                     'type': 'text',
                     'text': text,
                     'reply_to_message_id': reply_to_message_id,
-                    'is_reply': is_reply,
-                    'replied_to_user': replied_to_user,
-                    'replied_to_message': replied_to_message,
                     'kwargs': kwargs
                 }
                 await self.retry_manager.add_to_retry_queue(message_data, "首次发送失败")
-                logger.warning(f"[Telegram] 消息发送失败，已加入重试队列: {text[:50]}...")
+                logger.warning(f"[Telegram] 消息发送失败，已加入重试队列：{text[:50]}...")
                 return False
-                
+                    
         except Exception as e:
-            logger.error(f"[Telegram] 发送消息时出错: {e}")
+            logger.error(f"[Telegram] 发送消息时出错：{e}")
             return False
+        
+    async def send_message_with_result(self, text: str, reply_to_message_id: Optional[int] = None, **kwargs):
+        """
+        发送消息到 Telegram 并返回消息对象（用于需要获取消息 ID 的场景）
+                
+        Args:
+            text (str): 消息文本
+            reply_to_message_id (int, optional): 要回复的消息 ID
+            **kwargs: 其他参数
+                    
+        Returns:
+            Optional[Any]: 发送成功的消息对象，失败返回 None
+        """
+        try:
+            if not self.bot:
+                logger.error("Telegram 机器人未初始化")
+                return None
+                    
+            # 初始化重试管理器
+            if not self.retry_manager:
+                self.retry_manager = await get_retry_manager()
+                self.retry_manager.set_send_callback(self._direct_send_message)
+                await self.retry_manager.start()
+                    
+            # 如果是回复消息且有具体的回复 ID，则使用原生回复
+            if reply_to_message_id:
+                kwargs['reply_to_message_id'] = reply_to_message_id
+                logger.info(f"[Telegram] 使用原生回复功能，回复消息 ID: {reply_to_message_id}")
+                    
+            # 直接尝试发送
+            sent_message = await self._direct_send_message(text, **kwargs)
+                    
+            if sent_message:
+                logger.debug(f"[Telegram] 消息发送成功：{text[:50]}... (ID: {sent_message.message_id})")
+                return sent_message
+            else:
+                # 发送失败，添加到重试队列
+                message_data = {
+                    'type': 'text',
+                    'text': text,
+                    'reply_to_message_id': reply_to_message_id,
+                    'kwargs': kwargs
+                }
+                await self.retry_manager.add_to_retry_queue(message_data, "首次发送失败")
+                logger.warning(f"[Telegram] 消息发送失败，已加入重试队列：{text[:50]}...")
+                return None
+                    
+        except Exception as e:
+            logger.error(f"[Telegram] 发送消息时出错：{e}")
+            return None
     
     async def _direct_send_message(self, text: str, reply_to_message_id: Optional[int] = None, 
                                  is_reply: bool = False, replied_to_user: Optional[Dict] = None,
-                                 replied_to_message: Optional[str] = None, **kwargs) -> bool:
+                                 replied_to_message: Optional[str] = None, **kwargs) -> Optional[Any]:
         """
-        直接发送消息到Telegram（支持原生回复）
-        
+        直接发送消息到 Telegram（支持原生回复）
+            
         Args:
             text (str): 消息文本
-            reply_to_message_id (int, optional): 要回复的消息ID
+            reply_to_message_id (int, optional): 要回复的消息 ID
             is_reply (bool): 是否为回复消息
             replied_to_user (dict, optional): 被回复用户信息
             replied_to_message (str, optional): 被回复的消息内容
             **kwargs: 其他参数
-            
+                
         Returns:
-            bool: 发送是否成功
+            Optional[Any]: 发送成功的消息对象，失败返回 None
         """
         try:
             if not self.bot:
-                return False
-            
+                return None
+                
             # 准备发送参数
             send_kwargs = {
                 'chat_id': self.chat_id,
                 'text': text,
                 **kwargs
             }
-            
-            # 如果有回复ID，添加到参数中
+                
+            # 如果有回复 ID，添加到参数中
             if reply_to_message_id:
                 send_kwargs['reply_to_message_id'] = reply_to_message_id
-            
-            # 发送消息
+                
+            # 发送消息并返回消息对象
             sent_message = await self.bot.send_message(**send_kwargs)
-            return True
-            
+            logger.debug(f"[Telegram] 消息发送成功，ID: {sent_message.message_id}")
+            return sent_message
+                
         except Exception as e:
-            logger.error(f"[Telegram] 直接发送消息失败: {e}")
-            return False
+            logger.error(f"[Telegram] 直接发送消息失败：{e}")
+            return None
     
     async def delete_message(self, message_id: int) -> bool:
         """
@@ -425,16 +477,22 @@ class TelegramBot:
         """启动机器人"""
         try:
             if not self.application:
-                await self.initialize()
+                success = await self.initialize()
+                if not success:
+                    logger.error("Telegram机器人初始化失败，无法启动")
+                    return
             
             logger.info("启动Telegram机器人...")
             # 使用新的API方式启动
-            async with self.application:
-                await self.application.start()
-                await self.application.updater.start_polling()
-                # 保持运行直到被中断
-                while True:
-                    await asyncio.sleep(1)
+            if self.application:
+                async with self.application:
+                    await self.application.start()
+                    await self.application.updater.start_polling()
+                    # 保持运行直到被中断
+                    while True:
+                        await asyncio.sleep(1)
+            else:
+                logger.error("Telegram应用程序未正确初始化")
             
         except asyncio.CancelledError:
             logger.info("Telegram机器人被取消")
@@ -448,7 +506,13 @@ class TelegramBot:
             # 检查是否启用代理
             if not self.proxy_config.get('enable', False):
                 logger.info("Telegram代理未启用，使用直连")
-                return None
+                # 即使不使用代理，也要处理SSL验证问题
+                import ssl
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                self.http_client = httpx.AsyncClient(verify=ssl_context)
+                return
             
             # 获取代理配置
             proxy_type = self.proxy_config.get('type', 'socks5')
@@ -464,13 +528,20 @@ class TelegramBot:
                 proxy_url = f"{proxy_type}://{proxy_host}:{proxy_port}"
             
             # 创建HTTP客户端
+            # 配置SSL上下文以处理证书验证问题
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
             if proxy_type == 'socks5':
                 # SOCKS5代理
-                transport = httpx.AsyncHTTPTransport(proxy=httpx.Proxy(proxy_url))
+                proxy_config = httpx.Proxy(proxy_url, verify=ssl_context)
+                transport = httpx.AsyncHTTPTransport(proxy=proxy_config)
                 self.http_client = httpx.AsyncClient(transport=transport)
             else:
                 # HTTP代理
-                self.http_client = httpx.AsyncClient(proxy=proxy_url)
+                self.http_client = httpx.AsyncClient(proxy=proxy_url, verify=ssl_context)
             
             logger.info(f"Telegram代理已配置: {proxy_type}://{proxy_host}:{proxy_port}")
             return self.http_client

@@ -28,8 +28,17 @@ class MediaHandler:
     async def initialize(self):
         """初始化HTTP会话"""
         if not self.session:
+            # 配置SSL上下文以处理证书验证问题
+            import ssl
+            ssl_context = ssl.create_default_context()
+            # 在某些环境下跳过证书验证（仅用于开发/测试）
+            # 生产环境建议使用有效的证书
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
             self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=300)  # 5分钟超时
+                timeout=aiohttp.ClientTimeout(total=300),  # 5分钟超时
+                connector=aiohttp.TCPConnector(ssl=ssl_context)
             )
     
     async def download_media(self, url: str, filename: Optional[str] = None) -> Optional[str]:

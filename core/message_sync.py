@@ -141,23 +141,33 @@ class MessageSync:
             logger.error(f"处理Telegram文本消息时出错: {e}")
     
     async def _handle_telegram_media_message(self, message_data: Dict[Any, Any]):
-        """处理Telegram媒体消息""" 
+        """处理 Telegram 媒体消息""" 
         try:
             media_type = message_data.get('media_type')
             file_url = message_data.get('file_url')
             caption = message_data.get('caption', '')
                 
-            logger.info(f"处理Telegram媒体消息: {media_type} - {file_url}")
+            logger.info(f"处理 Telegram 媒体消息：{media_type} - {file_url}")
             
             # 初始化媒体处理器
             if not self.media_handler:
                 self.media_handler = await get_media_handler()
                 await self.media_handler.initialize()
             
-            # 下载媒体文件
-            local_file_path = await self.media_handler.download_media(file_url)
+            # 特殊处理贴纸和 GIF
+            if media_type in ['sticker', 'animation']:
+                logger.info(f"正在处理特殊媒体类型：{media_type}")
+                # 对于贴纸和 GIF，使用 document 类型下载
+                local_file_path = await self.media_handler.download_media(
+                    file_url, 
+                    f"{media_type}_{message_data.get('message_id', '')}.webp"
+                )
+            else:
+                # 下载媒体文件
+                local_file_path = await self.media_handler.download_media(file_url)
+            
             if not local_file_path:
-                logger.error(f"下载Telegram媒体文件失败: {file_url}")
+                logger.error(f"下载 Telegram 媒体文件失败：{file_url}")
                 # 如果下载失败，降级为文本格式
                 formatted_message = self._format_telegram_media_message(message_data)
                 success = await self.qq_bot.send_group_message(formatted_message)
@@ -167,8 +177,12 @@ class MessageSync:
                     self._cache_message_id('telegram', message_data.get('message_id'))
                 return
             
-            # 使用新的QQ媒体发送功能
+            logger.info(f"Telegram 媒体文件已下载到：{local_file_path}")
+            
+            # 使用新的 QQ 媒体发送功能
             qq_file_type = self._map_telegram_type_to_qq(media_type)
+            logger.info(f"映射媒体类型：{media_type} -> {qq_file_type}")
+            
             send_result = await self.qq_bot.send_media_message(
                 local_file_path,
                 qq_file_type,
@@ -180,16 +194,16 @@ class MessageSync:
                 self._update_send_time('qq')
                 self._cache_message_id('telegram', message_data.get('message_id'))
                 
-                # 记录消息ID映射
+                # 记录消息 ID 映射
                 if self.message_id_mapper and send_result.get('message_id'):
                     await self.message_id_mapper.add_mapping(
                         'telegram', message_data.get('message_id'),
                         'qq', send_result.get('message_id')
                     )
                 
-                logger.info(f"Telegram媒体消息已成功发送到QQ: {send_result.get('message_id')}")
+                logger.info(f"Telegram 媒体消息已成功发送到 QQ: {send_result.get('message_id')}")
             else:
-                logger.error("发送媒体文件到QQ失败，降级为文本格式")
+                logger.error("发送媒体文件到 QQ 失败，降级为文本格式")
                 # 降级处理
                 formatted_message = self._format_telegram_media_message(message_data)
                 success = await self.qq_bot.send_group_message(formatted_message)
@@ -199,7 +213,9 @@ class MessageSync:
                     self._cache_message_id('telegram', message_data.get('message_id'))
                     
         except Exception as e:
-            logger.error(f"处理Telegram媒体消息时出错: {e}")
+            logger.error(f"处理 Telegram 媒体消息时出错：{e}")
+            import traceback
+            traceback.print_exc()
     
     async def _on_qq_message(self, message_data: Dict[Any, Any]):
         """处理来自QQ的消息"""
@@ -307,44 +323,37 @@ class MessageSync:
                 await self._handle_qq_forward_message(message_data)
             else:
                 # 检查是否为回复消息
-                is_reply = message_data.get('is_reply', False)
-                replied_to_user = message_data.get('replied_to_user')
-                replied_to_message = message_data.get('replied_to_message')
-                
-                if is_reply and replied_to_user:
-                    # 尝试查找被回复的Telegram消息ID
-                    reply_to_message_id = await self._find_telegram_reply_target(
-                        replied_to_user, replied_to_message
-                    )
-                    
-                    # 使用原生回复功能发送
-                    formatted_message = self._format_qq_message(message_data)
-                    success = await self.telegram_bot.send_message(
-                        text=formatted_message,
-                        reply_to_message_id=reply_to_message_id,
-                        is_reply=True,
-                        replied_to_user=replied_to_user,
-                        replied_to_message=replied_to_message
-                    )
-                else:
-                    # 处理普通文本消息
-                    formatted_message = self._format_qq_message(message_data)
-                    success = await self.telegram_bot.send_message(formatted_message)
-                
-                if success:
+                reply_to_message_id = message_data.get('reply_to_message_id')
+                                        
+                # 使用原生回复功能发送
+                formatted_message = self._format_qq_message(message_data)
+                sent_message = await self.telegram_bot.send_message_with_result(
+                    text=formatted_message,
+                    reply_to_message_id=reply_to_message_id
+                )
+                            
+                if sent_message:
                     self.stats['telegram_sent'] += 1
                     self._update_send_time('telegram')
-                    # 缓存消息ID防止重复
+                    # 缓存消息 ID 防止重复
                     self._cache_message_id('qq', message_data.get('message_id'))
-                    
-                    # 记录消息ID映射
-                    if self.message_id_mapper and hasattr(success, 'message_id'):
-                        await self.message_id_mapper.add_mapping(
-                            'qq', message_data.get('message_id'),
-                            'telegram', success.message_id
+                                
+                    # 记录消息 ID 映射
+                    telegram_message_id = sent_message.message_id
+                    qq_message_id = message_data.get('message_id')
+                    if self.message_id_mapper and telegram_message_id and qq_message_id:
+                        success = await self.message_id_mapper.add_mapping(
+                            'qq', qq_message_id,
+                            'telegram', telegram_message_id
                         )
+                        if success:
+                            logger.info(f"[ID 映射] QQ({qq_message_id}) → Telegram({telegram_message_id})")
+                        else:
+                            logger.error(f"[ID 映射] 添加失败：QQ({qq_message_id}) → Telegram({telegram_message_id})")
+                    else:
+                        logger.warning(f"[ID 映射] 无法添加映射：mapper={self.message_id_mapper is not None}, tg_id={telegram_message_id}, qq_id={qq_message_id}")
                 else:
-                    logger.error("发送文本消息到Telegram失败")
+                    logger.error("发送文本消息到 Telegram 失败")
         except Exception as e:
             logger.error(f"处理QQ文本消息时出错: {e}")
     
@@ -370,7 +379,7 @@ class MessageSync:
                 if success:
                     success_count += 1
                     self.stats['telegram_sent'] += 1
-                await asyncio.sleep(0.5)  # 避免发送过快
+                await asyncio.sleep(0.2)  # 妈了个逼的我说怎么有这么大延迟，调低了
             
             self._update_send_time('telegram')
             self._cache_message_id('qq', message_data.get('message_id'))
@@ -593,7 +602,7 @@ class MessageSync:
             logger.error(f"发送绑定响应时出错: {e}")
     
     def _format_telegram_message(self, message_data: Dict[Any, Any]) -> str:
-        """格式化Telegram消息为QQ格式"""
+        """格式化 Telegram 消息为 QQ 格式"""
         try:
             sender = message_data.get('from_user', {})
             username = sender.get('username') or sender.get('first_name', 'Unknown')
@@ -602,65 +611,14 @@ class MessageSync:
             # 清理用户名中的特殊字符
             username = self._clean_username(username)
             
-            # 检查是否为回复消息
-            if message_data.get('is_reply') and self.sync_config.get('reply', {}).get('enable', True):
-                replied_user = message_data.get('replied_to_user')
-                replied_message = message_data.get('replied_to_message')
-                replier_user = message_data.get('from_user', {})
-                
-                try:
-                    if replied_user and replied_message:
-                        # 获取回复者信息
-                        replier_name = replier_user.get('username') if replier_user.get('username') else replier_user.get('first_name', 'Unknown')
-                        replier_name = self._clean_username(str(replier_name))
-                        
-                        # 获取被回复者信息
-                        if isinstance(replied_user, dict):
-                            replied_name = replied_user.get('username', 'Unknown')
-                        elif hasattr(replied_user, 'username'):
-                            # 如果是对象，优先获取username属性
-                            replied_name = replied_user.username
-                        elif hasattr(replied_user, 'first_name'):
-                            # 如果没有username，使用first_name
-                            replied_name = replied_user.first_name
-                        else:
-                            # 兜底方案：转换为字符串并清理
-                            replied_name = str(replied_user)
-                        replied_name = self._clean_username(replied_name)
-                        
-                        # 使用更简洁的格式
-                        formatted = f"[{replier_name} 回复 {replied_name}] {text}"
-                    else:
-                        # 降级到简单格式
-                        if replied_user:
-                            if isinstance(replied_user, dict):
-                                replied_username = replied_user.get('username', 'Unknown')
-                            elif hasattr(replied_user, 'username'):
-                                replied_username = replied_user.username
-                            elif hasattr(replied_user, 'first_name'):
-                                replied_username = replied_user.first_name
-                            else:
-                                replied_username = str(replied_user)
-                            replied_username = self._clean_username(replied_username)
-                            simple_format = self.sync_config.get('reply', {}).get('simple_format', '[回复 @{username}] {message}')
-                            formatted = simple_format.format(username=replied_username, message=text)
-                        else:
-                            formatted = f"[TG回复] {text}"
-                except Exception as e:
-                    logger.error(f"格式化回复消息时出错: {e}")
-                    # 出错时使用简单格式
-                    formatted = f"[TG回复] {text}"
-            else:
-                formatted = f"[TG] {username}: {text}"
-            
-            return formatted
+            return f"[TG] {username}: {text}"
             
         except Exception as e:
-            logger.error(f"格式化Telegram消息出错: {e}")
+            logger.error(f"格式化 Telegram 消息出错：{e}")
             return f"[TG] Unknown: {message_data.get('text', '')}"
     
     def _format_qq_message(self, message_data: Dict[Any, Any]) -> str:
-        """格式化QQ消息为Telegram格式"""
+        """格式化 QQ 消息为 Telegram 格式"""
         try:
             sender = message_data.get('sender', {})
             nickname = sender.get('card') or sender.get('nickname', 'Unknown')
@@ -669,69 +627,14 @@ class MessageSync:
             # 清理昵称中的特殊字符
             nickname = self._clean_username(nickname)
             
-            # 检查是否为回复消息
-            if message_data.get('is_reply') and self.sync_config.get('reply', {}).get('enable', True):
-                replied_user = message_data.get('replied_to_user')
-                replied_message = message_data.get('replied_to_message')
-                replier_user = message_data.get('sender', {})
-                
-                try:
-                    if replied_user:
-                        # 获取回复者信息
-                        replier_name = replier_user.get('card') if replier_user.get('card') else replier_user.get('nickname', 'Unknown')
-                        replier_name = self._clean_username(str(replier_name))
-                        
-                        # 获取被回复者信息
-                        if isinstance(replied_user, dict):
-                            replied_name = replied_user.get('username', 'Unknown')
-                        else:
-                            replied_name = str(replied_user)
-                        replied_name = self._clean_username(replied_name)
-                        
-                        # 对于QQ回复，由于协议限制无法获取原始消息
-                        # 我们使用特殊标记来表示这种情况
-                        if replied_message and replied_message != text:
-                            # 如果原始消息和当前消息不同，说明可能有区分
-                            reply_format = self.sync_config.get('reply', {}).get('format', 
-                                '[{replier} 回复 {replied}] 原始消息：『{original_message}』，新回复：『{reply_message}』')
-                            formatted = reply_format.format(
-                                replier=replier_name,
-                                replied=replied_name,
-                                original_message=str(replied_message)[:100],
-                                reply_message=text
-                            )
-                        else:
-                            # 如果相同或没有原始消息，使用QQ专用格式并添加提示
-                            # 修复：避免重复的"回复"字样，直接显示回复内容
-                            formatted = f"[{replier_name} 回复 {replied_name}] {text} (腾讯限制暂无法识别原发送内容)"
-                    else:
-                        # 降级到简单格式
-                        if replied_user:
-                            if isinstance(replied_user, dict):
-                                replied_nickname = replied_user.get('username', 'Unknown')
-                            else:
-                                replied_nickname = str(replied_user)
-                            
-                            replied_nickname = self._clean_username(replied_nickname)
-                            simple_format = self.sync_config.get('reply', {}).get('simple_format', '[回复 @{username}] {message}')
-                            formatted = simple_format.format(username=replied_nickname, message=text)
-                        else:
-                            formatted = f"[QQ回复] {text}"
-                except Exception as e:
-                    logger.error(f"格式化QQ回复消息时出错: {e}")
-                    # 出错时使用简单格式
-                    formatted = f"[QQ回复] {text}"
-            else:
-                formatted = f"[QQ] {nickname}: {text}"
-            
-            return formatted
+            return f"[QQ] {nickname}: {text}"
             
         except Exception as e:
-            logger.error(f"格式化QQ消息出错: {e}")
+            logger.error(f"格式化 QQ 消息出错：{e}")
             return f"[QQ] Unknown: {message_data.get('text', '')}"
     
     def _format_telegram_media_message(self, message_data: Dict[Any, Any]) -> str:
-        """格式化Telegram媒体消息"""
+        """格式化 Telegram 媒体消息为 QQ 格式"""
         try:
             sender = message_data.get('from_user', {})
             username = sender.get('username') or sender.get('first_name', 'Unknown')
@@ -803,27 +706,76 @@ class MessageSync:
     
     async def _find_qq_reply_target(self, replied_to_user: Any, replied_to_message: Optional[str]) -> Optional[int]:
         """
-        查找被回复的QQ消息ID
+        查找被回复的 QQ 消息 ID
         
         Args:
             replied_to_user: 被回复的用户信息
             replied_to_message: 被回复的消息内容
             
         Returns:
-            int: QQ消息ID，如果找不到则返回None
+            int: QQ 消息 ID，如果找不到则返回 None
         """
         try:
-            # 这是一个简化的实现
-            # 在实际应用中，你可能需要维护一个消息映射表
-            # 来跟踪Telegram消息和QQ消息之间的对应关系
+            # 使用 NapCat API 的 get_msg 接口获取消息详情
+            # 通过消息内容和用户信息匹配找到对应的消息 ID
+            if not self.qq_bot or not self.qq_bot.session:
+                logger.debug("QQ Bot 未初始化")
+                return None
             
-            # 目前返回None，让QQ使用文本格式化而非原生回复
-            # 后续可以扩展为智能匹配逻辑
-            logger.debug(f"查找QQ回复目标: {replied_to_user}, {replied_to_message}")
+            # 如果是从消息映射中查找（推荐方式）
+            # 这里应该使用 message_id_mapper 来查找
+            # 但由于参数限制，我们采用另一种策略
+            
+            logger.debug(f"查找 QQ 回复目标：用户={replied_to_user}, 消息={replied_to_message}")
+            
+            # 方案 1: 从最近的聊天记录中查找匹配的消息
+            # 使用 get_group_msg_history API 获取群聊历史消息
+            group_id = self.qq_bot.group_id
+            
+            try:
+                url = f"{self.qq_bot.http_url}/get_group_msg_history"
+                payload = {
+                    'group_id': int(group_id),
+                    'count': 20  # 获取最近 20 条消息
+                }
+                
+                async with self.qq_bot.session.post(url, json=payload, 
+                                                  timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if result.get('status') == 'ok':
+                            messages = result.get('data', {}).get('messages', [])
+                            
+                            # 遍历历史消息，查找匹配的消息
+                            for msg in reversed(messages):  # 从旧到新排序
+                                msg_sender = msg.get('sender', {})
+                                msg_user_id = str(msg_sender.get('user_id', ''))
+                                msg_content = msg.get('raw_message', '')
+                                msg_id = msg.get('message_id')
+                                
+                                # 检查是否匹配
+                                user_match = (str(replied_to_user) == msg_user_id)
+                                content_match = (replied_to_message and replied_to_message in msg_content)
+                                
+                                if user_match and content_match:
+                                    logger.info(f"找到匹配的 QQ 消息：ID={msg_id}")
+                                    return msg_id
+                            
+                            logger.warning(f"未在历史消息中找到匹配的消息")
+                        else:
+                            logger.error(f"获取群历史消息失败：{result}")
+                    else:
+                        logger.error(f"HTTP 请求失败：{response.status}")
+                        
+            except Exception as e:
+                logger.error(f"查询群历史消息时出错：{e}")
+            
+            # 方案 2: 如果无法通过历史消息找到，返回 None
+            # 让上层使用文本格式化而非原生回复
             return None
             
         except Exception as e:
-            logger.error(f"查找QQ回复目标时出错: {e}")
+            logger.error(f"查找 QQ 回复目标时出错：{e}")
             return None
     
     def _clean_username(self, username: str) -> str:
@@ -853,13 +805,15 @@ class MessageSync:
         return mapping.get(qq_media_type.lower(), 'document')
     
     def _map_telegram_type_to_qq(self, telegram_media_type: str) -> str:
-        """将Telegram媒体类型映射到QQ文件类型"""
+        """将 Telegram 媒体类型映射到 QQ 文件类型"""
         mapping = {
             'photo': 'image',
             'video': 'video',
             'audio': 'audio',
             'voice': 'record',
-            'document': 'file'
+            'document': 'file',
+            'sticker': 'image',  # 贴纸作为图片发送
+            'animation': 'image'  # GIF 作为图片发送
         }
         return mapping.get(telegram_media_type.lower(), 'file')
     
