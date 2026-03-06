@@ -12,6 +12,7 @@ from utils.filter_prefix import get_filter_prefix_handler
 from utils.user_binding import get_user_binding_manager
 from utils.message_id_mapper import get_message_id_mapper
 from utils.media_handler import get_media_handler
+from utils.stats_manager import get_stats_manager
 from bots.telegram_bot import get_telegram_bot
 from bots.qq_bot import get_qq_bot
 
@@ -59,8 +60,11 @@ class MessageSync:
         # 用户绑定管理器
         self.user_binding_manager = None
         
-        # 消息ID映射管理器
+        # 消息 ID 映射管理器
         self.message_id_mapper = None
+                
+        # 统计数据管理器
+        self.stats_manager = None
     
     async def initialize(self):
         """初始化同步器"""
@@ -74,10 +78,13 @@ class MessageSync:
             await self.user_binding_manager.initialize_database()
             await self.user_binding_manager.start_cleanup_task()
             
-            # 初始化消息ID映射管理器
+            # 初始化消息 ID 映射管理器
             self.message_id_mapper = await get_message_id_mapper()
             await self.message_id_mapper.start_cleanup_task()
-            
+                        
+            # 初始化统计数据管理器
+            self.stats_manager = await get_stats_manager()
+                        
             # 设置消息回调
             self.telegram_bot.set_message_callback(self._on_telegram_message)
             self.qq_bot.set_message_callback(self._on_qq_message)
@@ -90,9 +97,13 @@ class MessageSync:
             return False
     
     async def _on_telegram_message(self, message_data: Dict[Any, Any]):
-        """处理来自Telegram的消息"""
+        """处理来自 Telegram 的消息"""
         try:
             self.stats['telegram_received'] += 1
+                
+            # 定期更新统计数据到数据库
+            if self.stats_manager and self.stats['telegram_received'] % 10 == 0:
+                await self.stats_manager.update_stats(self.stats)
             
             # 检查是否需要转发到QQ
             if not self.sync_config.get('bidirectional', True):
@@ -218,14 +229,18 @@ class MessageSync:
             traceback.print_exc()
     
     async def _on_qq_message(self, message_data: Dict[Any, Any]):
-        """处理来自QQ的消息"""
+        """处理来自 QQ 的消息"""
         try:
             # 检查是否为事件消息
             if message_data.get('event_type') == 'message_delete':
                 await self._handle_qq_message_delete(message_data)
                 return
-            
+                
             self.stats['qq_received'] += 1
+                
+            # 定期更新统计数据到数据库
+            if self.stats_manager and self.stats['qq_received'] % 10 == 0:
+                await self.stats_manager.update_stats(self.stats)
             
             # 检查是否需要转发到Telegram
             if not self.sync_config.get('bidirectional', True):
