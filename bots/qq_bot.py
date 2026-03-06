@@ -404,17 +404,28 @@ class QQBot:
             url = f"{self.http_url}/send_group_msg"
             
             # 构建消息内容，支持原生回复
-            if reply_to_message_id:
-                # 使用CQ码格式的回复消息
-                reply_segment = f"[CQ:reply,id={reply_to_message_id}]"
-                final_message = reply_segment + message
-            else:
-                final_message = message
-            
             payload = {
                 'group_id': int(self.group_id),
-                'message': final_message
             }
+                        
+            if reply_to_message_id:
+                # 使用消息数组格式支持原生回复
+                payload['message'] = [
+                    {
+                        'type': 'reply',
+                        'data': {
+                            'id': str(reply_to_message_id)
+                        }
+                    },
+                    {
+                        'type': 'text',
+                        'data': {
+                            'text': message
+                        }
+                    }
+                ]
+            else:
+                payload['message'] = message
             
             async with self.session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:

@@ -474,25 +474,25 @@ class MessageSync:
             # 初始化过滤前缀处理器
             if not self.filter_prefix_handler:
                 self.filter_prefix_handler = get_filter_prefix_handler()
-            
+                        
+            # 先检查绑定相关命令（避免被过滤前缀拦截）
+            if self._is_binding_command(text):
+                logger.info(f"检测到绑定命令：{text}")
+                asyncio.create_task(self._handle_binding_command(message_data))
+                return False  # 不过滤，让绑定处理器处理
+                        
             # 检查过滤前缀
             should_filter, filtered_text = self.filter_prefix_handler.should_filter_message(message_data)
             if should_filter:
                 self.stats['prefix_filtered'] += 1
-                logger.info(f"消息被过滤前缀过滤: {text[:50]}...")
-                
+                logger.info(f"消息被过滤前缀过滤：{text[:50]}...")
+                            
                 # 处理命令
                 command_info = self.filter_prefix_handler.extract_command(message_data)
                 if command_info:
                     # 异步处理命令
                     asyncio.create_task(self._handle_command_response(message_data, command_info))
-                
-                return True
-            
-            # 检查绑定相关命令
-            if self._is_binding_command(text):
-                logger.info(f"检测到绑定命令：{text}")
-                asyncio.create_task(self._handle_binding_command(message_data))
+                            
                 return True
             
             # 检查关键词过滤
