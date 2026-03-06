@@ -1,4 +1,10 @@
+# ===========================================
+# TQSync - Telegram QQ Bot Git Ignore
+# ===========================================
+
+# ===========================================
 # Python
+# ===========================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,44 +26,206 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
 
+# ===========================================
+# Virtual Environment
+# ===========================================
+.venv/
+venv/
+ENV/
+env/
+.env.local
+.env.production
+
+# ===========================================
 # Logs and databases
+# ===========================================
 logs/
 data/
 temp/
 *.db
 *.sqlite
+*.sqlite3
 *.log
 *.backup
+*.bak
 
+# ===========================================
 # Environment variables and configs
+# ===========================================
 .env
-.env.local
-.env.production
 config.yaml
 *.backup
+sq
 
+# ===========================================
 # IDE
+# ===========================================
 .lingma/
 .idea/
 *.swp
 *.swo
 *~
-.venv/
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+.vscode/
+*.tmproj
 
+# ===========================================
 # OS
+# ===========================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
+# ===========================================
 # Media files (optional)
+# ===========================================
 media/
 uploads/
+cache/
 
+# ===========================================
 # Test files with sensitive data
+# ===========================================
 test_*.py
 demo_*.py
 *_test.py
+!test_ssl_fix.py
+!test_telegram_fix.py
+!test_message_id_mapping.py
+!test_telegram_media.py
 
+# ===========================================
 # Backup files
+# ===========================================
 *.backup
 *.bak
+*.old
+
+# ===========================================
+# Coverage and testing
+# ===========================================
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ===========================================
+# Distribution / packaging
+# ===========================================
+.cache
+.installed.cfg
+*.egg-info
+*.manifest
+*.spec
+
+# ===========================================
+# Installer logs
+# ===========================================
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ===========================================
+# Unit test / coverage reports
+# ===========================================
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ===========================================
+# Jupyter Notebook
+# ===========================================
+.ipynb_checkpoints
+
+# ===========================================
+# pyenv
+# ===========================================
+.python-version
+
+# ===========================================
+# Celery
+# ===========================================
+celerybeat-schedule
+celerybeat.pid
+
+# ===========================================
+# SageMath
+# ===========================================
+*.sage.py
+
+# ===========================================
+# Spyder
+# ===========================================
+.spyderproject
+.spyproject
+
+# ===========================================
+# Rope
+# ===========================================
+.ropeproject
+
+# ===========================================
+# mkdocs
+# ===========================================
+/site
+
+# ===========================================
+# mypy
+# ===========================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ===========================================
+# Pyre type checker
+# ===========================================
+.pyre/
+
+# ===========================================
+# TQSync specific
+# ===========================================
+# Private keys and secrets
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# Local scripts and custom configurations
+local_*.py
+local_*.yaml
+local_*.json
+custom_*.py
+custom_*.yaml
+
+# Temporary files
+*.tmp
+*.temp
+~*
+
+# Lock files
+Pipfile.lock
+poetry.lock
