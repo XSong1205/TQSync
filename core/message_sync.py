@@ -357,7 +357,7 @@ class MessageSync:
                     telegram_message_id = sent_message.message_id
                     qq_message_id = message_data.get('message_id')
                     if self.message_id_mapper and telegram_message_id and qq_message_id:
-                        success = await self.message_id_mapper.add_mapping(
+                        success = self.message_id_mapper.add_mapping(
                             'qq', qq_message_id,
                             'telegram', telegram_message_id
                         )
