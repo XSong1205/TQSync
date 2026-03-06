@@ -169,10 +169,13 @@ class MessageSync:
             if media_type in ['sticker', 'animation']:
                 logger.info(f"正在处理特殊媒体类型：{media_type}")
                 # 对于贴纸和 GIF，使用 document 类型下载
+                filename = f"{media_type}_{message_data.get('message_id', '')}.webp"
+                logger.info(f"Sticker 文件名：{filename}")
                 local_file_path = await self.media_handler.download_media(
                     file_url, 
-                    f"{media_type}_{message_data.get('message_id', '')}.webp"
+                    filename
                 )
+                logger.info(f"Sticker 下载结果：{local_file_path}")
             else:
                 # 下载媒体文件
                 local_file_path = await self.media_handler.download_media(file_url)
@@ -341,12 +344,23 @@ class MessageSync:
             else:
                 # 检查是否为回复消息
                 reply_to_message_id = message_data.get('reply_to_message_id')
+                telegram_reply_to_id = None
+                
+                # 如果有被回复的 QQ 消息 ID，尝试查找对应的 Telegram 消息 ID
+                if reply_to_message_id and self.message_id_mapper:
+                    telegram_reply_to_id = self.message_id_mapper.get_target_message_id(
+                        'qq', reply_to_message_id, 'telegram'
+                    )
+                    if telegram_reply_to_id:
+                        logger.info(f"[ID 映射] 找到回复目标：QQ({reply_to_message_id}) → Telegram({telegram_reply_to_id})")
+                    else:
+                        logger.warning(f"[ID 映射] 未找到回复目标：QQ({reply_to_message_id})")
                                         
                 # 使用原生回复功能发送
                 formatted_message = self._format_qq_message(message_data)
                 sent_message = await self.telegram_bot.send_message_with_result(
                     text=formatted_message,
-                    reply_to_message_id=reply_to_message_id
+                    reply_to_message_id=telegram_reply_to_id  # 使用 Telegram 消息 ID
                 )
                             
                 if sent_message:
