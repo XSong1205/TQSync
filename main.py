@@ -21,15 +21,26 @@ async def handle_qq_webhook(request):
     try:
         data = await request.json()
         # 仅处理群消息
-        if data.get('message_type') == 'group' and data.get('raw_message'):
+        if data.get('message_type') == 'group':
             sender = data.get('sender', {})
             qq_id = data['user_id']
             nickname = sender.get('card') or sender.get('nickname') or str(qq_id)
-            text = data['raw_message']
             
-            # 转发到 TG
             engine = SyncEngine.get_instance()
-            await engine.forward_to_tg(qq_id, nickname, text)
+            
+            # 处理图片消息 (OneBot v11 array format)
+            message_array = data.get('message', [])
+            for msg_part in message_array:
+                if msg_part.get('type') == 'image':
+                    image_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    if image_url:
+                        await engine.forward_image_to_tg(qq_id, nickname, image_url)
+                    return web.Response(text="ok")
+            
+            # 处理文本消息
+            text = data.get('raw_message')
+            if text:
+                await engine.forward_to_tg(qq_id, nickname, text)
         
         return web.Response(text="ok")
     except Exception as e:

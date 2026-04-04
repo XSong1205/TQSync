@@ -23,6 +23,37 @@ class SyncEngine:
             raise RuntimeError("SyncEngine has not been initialized. Call SyncEngine(bot) first.")
         return cls._instance
 
+    async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+        """将 Telegram 图片转发到 QQ"""
+        binding = await db.get_binding_by_tg(tg_user_id)
+        prefix = f"[TG] {binding[3] or tg_username}" if binding else f"[TG] {tg_username}"
+        
+        try:
+            # 获取文件对象
+            file = await self.bot.get_file(file_id)
+            # 构建下载链接 (Telegram 提供的临时链接)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            # 使用 CQ 码发送图片
+            cq_code = f"[CQ:image,file={file_url}]"
+            message = f"{prefix} 发送了一张图片：\n{cq_code}"
+            await onebot_client.send_group_msg(self.qq_group_id, message)
+        except Exception as e:
+            logger.error(f"Failed to forward image to QQ: {e}")
+
+    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str):
+        """将 QQ 图片转发到 Telegram"""
+        binding = await db.get_binding_by_qq(qq_user_id)
+        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        
+        try:
+            # Telegram send_photo 支持 URL
+            await self.bot.send_photo(chat_id=self.tg_group_id, photo=image_url, caption=f"{prefix} 发送了一张图片")
+        except Exception as e:
+            logger.error(f"Failed to forward image to TG: {e}")
+
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
         binding = await db.get_binding_by_tg(tg_user_id)
         if binding:
