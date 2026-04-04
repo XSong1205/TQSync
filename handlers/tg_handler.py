@@ -1,8 +1,9 @@
 from telegram import Update
-from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler
+from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler, MessageDeletedHandler
 from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
+from handlers.qq_handler import onebot_client
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,54 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if text:
         try:
-            await engine.forward_to_qq(user.id, user.username or str(user.id), text)
+            # 解析 @ (Mention) 实体
+            message_array = []
+            last_offset = 0
+            entities = update.message.entities or []
+            
+            for entity in entities:
+                if entity.type in ['mention', 'text_mention']:
+                    # 提取 mention 之前的文本
+                    if entity.offset > last_offset:
+                        message_array.append({"type": "text", "data": {"text": text[last_offset:entity.offset]}})
+                    
+                    # 处理 @ 逻辑
+                    target_tg_id = None
+                    if entity.type == 'text_mention':
+                        target_tg_id = entity.user.id
+                    elif entity.type == 'mention':
+                        # 简单处理：这里需要根据 mention 的名字去查 TG ID，比较复杂，先简化为纯文本
+                        pass 
+
+                    if target_tg_id:
+                        binding = await db.get_binding_by_tg(target_tg_id)
+                        if binding:
+                            message_array.append({"type": "at", "data": {"qq": binding[1]}})
+                        else:
+                            message_array.append({"type": "text", "data": {"text": text[entity.offset:entity.offset+entity.length]}})
+                    else:
+                        message_array.append({"type": "text", "data": {"text": text[entity.offset:entity.offset+entity.length]}})
+                    
+                    last_offset = entity.offset + entity.length
+
+            # 添加剩余文本
+            if last_offset < len(text):
+                message_array.append({"type": "text", "data": {"text": text[last_offset:]}})
+            
+            if not message_array:
+                message_array.append({"type": "text", "data": {"text": text}})
+
+            display_name = await engine.get_display_name(tg_user_id=user.id, fallback_name=user.username or str(user.id))
+            final_message = [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}] + message_array
+            
+            result = await onebot_client.send_group_msg(engine.qq_group_id, final_message)
+            # 存储映射关系（如果是纯文本）
+            if result and result.get('data', {}).get('message_id'):
+                await db.save_message_mapping(
+                    tg_message_id=update.message.message_id,
+                    qq_message_id=result['data']['message_id'],
+                    sender_tg_id=user.id
+                )
         except RuntimeError as e:
             print(f"Error: {e}")
 
@@ -59,9 +107,26 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await db.add_binding(tg_user.id, qq_number, tg_user.username)
     await update.message.reply_text(f"Successfully bound to QQ: {qq_number}")
 
+async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 Telegram 消息删除事件，同步撤回到 QQ"""
+    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
+        return
+    
+    # MessageDeletedUpdate 包含 deleted_message_ids
+    for msg_id in update.message.deleted_message_ids:
+        qq_msg_id = await db.get_qq_msg_id_by_tg(msg_id)
+        if qq_msg_id:
+            try:
+                await onebot_client.delete_msg(qq_msg_id)
+                logger.info(f"Synced deletion from TG (msg_id: {msg_id}) to QQ (msg_id: {qq_msg_id})")
+                await db.delete_mapping_by_tg(msg_id)
+            except Exception as e:
+                logger.error(f"Failed to delete message in QQ: {e}")
+
 def get_tg_handlers():
     return [
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
-        CommandHandler('bind', handle_bind_command)
+        CommandHandler('bind', handle_bind_command),
+        MessageDeletedHandler(handle_message_deleted)
     ]

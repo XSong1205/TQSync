@@ -57,6 +57,18 @@ class SyncEngine:
         except Exception as e:
             logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
 
+    async def get_display_name(self, tg_user_id: int = None, qq_user_id: int = None, fallback_name: str = "Unknown"):
+        """根据绑定关系获取统一显示名称"""
+        if tg_user_id:
+            binding = await db.get_binding_by_tg(tg_user_id)
+            if binding:
+                return binding[3] or binding[2] or fallback_name  # qq_nickname or tg_username
+        if qq_user_id:
+            binding = await db.get_binding_by_qq(qq_user_id)
+            if binding:
+                return binding[3] or binding[2] or fallback_name
+        return f"{fallback_name} [Unbound]"
+
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = ""):
         """将 Telegram 图片转发到 QQ (本地文件中转方案，支持 Caption 图文混排)"""
         binding = await db.get_binding_by_tg(tg_user_id)
@@ -223,27 +235,20 @@ class SyncEngine:
             logger.error(f"Failed to forward to TG: {e}", exc_info=True)
 
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
-        binding = await db.get_binding_by_tg(tg_user_id)
-        if binding:
-            prefix = f"[TG] {binding[3] or tg_username}"
-        else:
-            prefix = f"[TG] {tg_username}"
-        
-        message = f"{prefix}: {text}"
-        await onebot_client.send_group_msg(self.qq_group_id, message)
+        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
+        message = f"[TG] {display_name}: {text}"
+        result = await onebot_client.send_group_msg(self.qq_group_id, message)
+        return result
 
     async def forward_to_tg(self, qq_user_id: int, qq_nickname: str, text: str):
-        binding = await db.get_binding_by_qq(qq_user_id)
-        if binding:
-            prefix = f"[QQ] {binding[2] or qq_nickname}"
-        else:
-            prefix = f"[QQ] {qq_nickname}"
-        
-        message = f"{prefix}: {text}"
+        display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
+        message = f"[QQ] {display_name}: {text}"
         try:
-            await self.bot.send_message(chat_id=self.tg_group_id, text=message)
+            result = await self.bot.send_message(chat_id=self.tg_group_id, text=message)
+            return result
         except Exception as e:
             print(f"Error sending to TG: {e}")
+            return None
 
     async def send_startup_notification(self):
         """向两个平台发送启动成功通知"""

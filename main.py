@@ -23,6 +23,21 @@ logger = logging.getLogger(__name__)
 async def handle_qq_webhook(request):
     try:
         data = await request.json()
+        
+        # 处理撤回通知 (Notice)
+        if data.get('post_type') == 'notice' and data.get('notice_type') == 'group_recall':
+            qq_msg_id = data.get('message_id')
+            if qq_msg_id:
+                tg_msg_id = await db.get_tg_msg_id_by_qq(qq_msg_id)
+                if tg_msg_id:
+                    engine = SyncEngine.get_instance()
+                    try:
+                        await engine.bot.delete_message(chat_id=engine.tg_group_id, message_id=tg_msg_id)
+                        logger.info(f"Synced recall from QQ (msg_id: {qq_msg_id}) to TG (msg_id: {tg_msg_id})")
+                    except Exception as e:
+                        logger.error(f"Failed to delete message in TG: {e}")
+            return web.Response(text="ok")
+
         # 仅处理群消息
         if data.get('message_type') == 'group':
             sender = data.get('sender', {})
@@ -38,11 +53,18 @@ async def handle_qq_webhook(request):
             video_url = None
             file_url = None
             file_name = "unknown_file"
+            at_tg_ids = []
             
             for msg_part in message_array:
                 msg_type = msg_part.get('type')
                 if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
+                elif msg_type == 'at':
+                    target_qq = int(msg_part['data'].get('qq', 0))
+                    if target_qq != 0: # 排除 @全体成员
+                        binding = await db.get_binding_by_qq(target_qq)
+                        if binding:
+                            at_tg_ids.append(binding[0]) # tg_user_id
                 elif msg_type == 'image' and not image_url:
                     image_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                 elif msg_type == 'video' and not video_url:
@@ -53,14 +75,37 @@ async def handle_qq_webhook(request):
             
             combined_text = "".join(text_parts).strip()
             
-            if image_url:
+            # 构造 TG 的 HTML 消息以支持 @
+            if at_tg_ids:
+                display_name = await engine.get_display_name(qq_user_id=qq_id, fallback_name=nickname)
+                html_text = f"[QQ] <b>{display_name}</b>: "
+                for tid in at_tg_ids:
+                    html_text += f"<a href='tg://user?id={tid}'>@User</a> "
+                html_text += combined_text
+                try:
+                    result = await engine.bot.send_message(chat_id=engine.tg_group_id, text=html_text, parse_mode='HTML')
+                    if result:
+                        await db.save_message_mapping(
+                            tg_message_id=result.message_id,
+                            qq_message_id=data.get('message_id'),
+                            sender_qq_id=qq_id
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to send HTML message to TG: {e}")
+            elif image_url:
                 await engine.forward_image_to_tg(qq_id, nickname, image_url, combined_text)
             elif video_url:
                 await engine.forward_video_to_tg(qq_id, nickname, video_url, combined_text)
             elif file_url:
                 await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name)
             elif combined_text:
-                await engine.forward_to_tg(qq_id, nickname, combined_text)
+                result = await engine.forward_to_tg(qq_id, nickname, combined_text)
+                if result:
+                    await db.save_message_mapping(
+                        tg_message_id=result.message_id,
+                        qq_message_id=data.get('message_id'),
+                        sender_qq_id=qq_id
+                    )
         
         return web.Response(text="ok")
     except Exception as e:
