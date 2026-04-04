@@ -128,6 +128,17 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except RuntimeError as e:
             print(f"Error: {e}")
 
+async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "🤖 TQSync 帮助文档\n\n"
+        "可用命令：\n"
+        "/bind <qq_number> - 绑定您的 QQ 号以启用同步\n"
+        "/setprefix <nickname> - 设置您在双端显示的统一昵称\n"
+        "/help - 显示此帮助信息\n\n"
+        "提示：绑定后，您在 Telegram 和 QQ 的消息将自动双向同步。"
+    )
+    await update.message.reply_text(help_text)
+
 async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /setprefix <nickname>")
@@ -162,5 +173,6 @@ def get_tg_handlers():
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
-        CommandHandler('setprefix', handle_setprefix_command)
+        CommandHandler('setprefix', handle_setprefix_command),
+        CommandHandler('help', handle_help_command)
     ]
