@@ -34,7 +34,8 @@ async def handle_qq_webhook(request):
             # 处理消息段数组 (OneBot v11)
             message_array = data.get('message', [])
             text_parts = []
-            image_urls = []
+            image_url = None
+            video_url = None
             file_url = None
             file_name = "unknown_file"
             
@@ -42,21 +43,20 @@ async def handle_qq_webhook(request):
                 msg_type = msg_part.get('type')
                 if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
-                elif msg_type == 'image':
-                    url = msg_part['data'].get('url') or msg_part['data'].get('file')
-                    if url: image_urls.append(url)
+                elif msg_type == 'image' and not image_url:
+                    image_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                elif msg_type == 'video' and not video_url:
+                    video_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     file_name = msg_part['data'].get('name', 'unknown_file')
-                elif msg_type == 'video' and not image_urls:
-                    # 某些情况下 GIF 会被识别为 video
-                    url = msg_part['data'].get('url') or msg_part['data'].get('file')
-                    if url: image_urls.append(url)
             
             combined_text = "".join(text_parts).strip()
             
-            if image_urls:
-                await engine.forward_image_to_tg(qq_id, nickname, image_urls[0], combined_text)
+            if image_url:
+                await engine.forward_image_to_tg(qq_id, nickname, image_url, combined_text)
+            elif video_url:
+                await engine.forward_video_to_tg(qq_id, nickname, video_url, combined_text)
             elif file_url:
                 await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name)
             elif combined_text:

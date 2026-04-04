@@ -132,6 +132,13 @@ class SyncEngine:
         full_caption = f"{prefix}\n{caption}" if caption else prefix
         await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, "photo", caption=full_caption)
 
+    async def forward_video_to_tg(self, qq_user_id: int, qq_nickname: str, video_url: str, caption: str = ""):
+        """将 QQ 视频转发到 Telegram (支持本地文件中转)"""
+        binding = await db.get_binding_by_qq(qq_user_id)
+        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        full_caption = f"{prefix}\n{caption}" if caption else prefix
+        await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption)
+
     async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file"):
         """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
         await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name)
@@ -164,13 +171,23 @@ class SyncEngine:
                 
             send_kwargs.update(kwargs)
 
-            # 如果是本地文件，以二进制流形式发送
-            if os.path.exists(temp_path) and not temp_path.startswith("http"):
+            # 关键修复：即使是 http URL，如果 Telegram 无法访问（如内网或需代理），也应下载到本地再上传
+            # 我们统一采用“下载到本地 -> 上传给 TG”的策略以确保稳定性
+            if not os.path.exists(temp_path) or temp_path.startswith("http"):
+                # 如果是 URL，先下载到临时文件
+                if temp_path.startswith("http"):
+                    ext = os.path.splitext(temp_path.split('?')[0])[1] or '.tmp'
+                    temp_filename = f"forward_{uuid.uuid4().hex}{ext}"
+                    downloaded_path = await self._download_to_temp(temp_path, temp_filename)
+                    temp_path = downloaded_path
+
+            # 以二进制流形式发送给 Telegram
+            if os.path.exists(temp_path):
                 with open(temp_path, 'rb') as f:
                     send_kwargs[file_key] = f
                     await send_func(**send_kwargs)
             else:
-                await send_func(**send_kwargs)
+                raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
                 
         except Exception as e:
             logger.error(f"Failed to forward to TG: {e}", exc_info=True)
