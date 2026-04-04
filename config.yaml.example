@@ -1,0 +1,20 @@
+# TQSync 配置文件模板
+# 请复制此文件为 config.yaml 并填入你的真实信息
+
+telegram:
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+  group_id: -1001234567890  # 目标 Telegram 群组 ID (负数)
+
+qq:
+  napcat_api_url: "http://127.0.0.1:3000"  # Napcat HTTP API 地址
+  access_token: ""  # 如果 Napcat 配置了 Access Token，请在此填写
+  group_id: 123456789  # 目标 QQ 群组 ID
+
+server:
+  host: "0.0.0.0"
+  qq_webhook_port: 8080  # 接收 Napcat Webhook 的端口
+  admin_api_port: 8081   # 管理 API 的端口
+  webhook_path: "/webhook/qq"  # Webhook 路径
+
+database:
+  path: "db/tqsync.db"

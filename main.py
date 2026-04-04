@@ -1,0 +1,94 @@
+import asyncio
+import logging
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from aiohttp import web
+import uvicorn
+
+from config.config_loader import config_loader
+from db.database import db
+from core.sync_engine import SyncEngine, sync_engine as global_sync_engine
+from handlers.tg_handler import get_tg_handlers
+from api.admin_api import app as admin_app
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+async def handle_qq_webhook(request):
+    try:
+        data = await request.json()
+        # 仅处理群消息
+        if data.get('message_type') == 'group' and data.get('raw_message'):
+            sender = data.get('sender', {})
+            qq_id = data['user_id']
+            nickname = sender.get('card') or sender.get('nickname') or str(qq_id)
+            text = data['raw_message']
+            
+            # 转发到 TG
+            await global_sync_engine.forward_to_tg(qq_id, nickname, text)
+        
+        return web.Response(text="ok")
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return web.Response(text="error", status=500)
+
+async def start_qq_webhook():
+    app = web.Application()
+    webhook_path = config_loader.get('server.webhook_path', '/webhook/qq')
+    app.router.add_post(webhook_path, handle_qq_webhook)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, config_loader.get('server.host', '0.0.0.0'), config_loader.get('server.qq_webhook_port', 8080))
+    logger.info(f"QQ Webhook server started on port {config_loader.get('server.qq_webhook_port')}")
+    await site.start()
+    
+    # 保持运行
+    while True:
+        await asyncio.sleep(3600)
+
+async def main():
+    # 初始化数据库
+    await db.init_db()
+    
+    # 初始化 Telegram Bot
+    token = config_loader.get('telegram.bot_token')
+    application = Application.builder().token(token).build()
+    
+    # 初始化同步引擎
+    global global_sync_engine
+    global_sync_engine = SyncEngine(application.bot)
+    
+    # 注册 TG 处理器
+    for handler in get_tg_handlers():
+        application.add_handler(handler)
+    
+    # 启动 TG Polling
+    await application.initialize()
+    await application.start()
+    updater_task = asyncio.create_task(application.updater.start_polling(drop_pending_updates=True))
+    
+    # 启动 QQ Webhook
+    webhook_task = asyncio.create_task(start_qq_webhook())
+    
+    # 启动 Admin API (使用 uvicorn 的 serve 方法在协程中运行)
+    config = uvicorn.Config(admin_app, host=config_loader.get('server.host', '0.0.0.0'), port=config_loader.get('server.admin_api_port', 8081), log_level="info")
+    server = uvicorn.Server(config)
+    api_task = asyncio.create_task(server.serve())
+    
+    logger.info("TQSync is running...")
+    
+    # 发送启动成功通知
+    await global_sync_engine.send_startup_notification()
+    
+    # 等待所有任务
+    await asyncio.gather(updater_task, webhook_task, api_task)
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Stopped by user")
