@@ -34,7 +34,7 @@ class SyncEngine:
         file_path = os.path.join(temp_dir, filename)
         logger.info(f"Downloading to local temp: {file_path}")
         
-        # 创建不使用 SSL 验证的连接器以解决证书链问题
+        # 全局禁用 SSL 验证以适配国内代理环境
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(file_url) as resp:

@@ -68,7 +68,14 @@ async def main():
     
     # 初始化 Telegram Bot
     token = config_loader.get('telegram.bot_token')
-    application = Application.builder().token(token).build()
+    proxy_url = config_loader.get('telegram.proxy_url')
+    
+    builder = Application.builder().token(token)
+    if proxy_url:
+        logger.info(f"Using Telegram proxy: {proxy_url}")
+        builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
+    
+    application = builder.build()
     
     # 初始化同步引擎 (单例模式)
     global_sync_engine = SyncEngine(application.bot)

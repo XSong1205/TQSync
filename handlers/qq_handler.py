@@ -22,7 +22,9 @@ class OneBotClient:
             "message": message,
             "auto_escape": False
         }
-        async with aiohttp.ClientSession() as session:
+        # 禁用 SSL 验证以适配国内代理环境
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(url, json=payload, headers=self.headers) as resp:
                 result = await resp.json()
                 if result.get('retcode') != 0:
