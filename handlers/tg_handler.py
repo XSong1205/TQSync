@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler, MessageDeletedHandler
+from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler
 from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
@@ -7,6 +7,23 @@ from handlers.qq_handler import onebot_client
 import logging
 
 logger = logging.getLogger(__name__)
+
+async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 Telegram 消息删除事件，同步撤回到 QQ"""
+    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
+        return
+    
+    # PTB v21+ 使用 update.deleted_message_ids
+    deleted_ids = getattr(update, 'deleted_message_ids', [])
+    for msg_id in deleted_ids:
+        qq_msg_id = await db.get_qq_msg_id_by_tg(msg_id)
+        if qq_msg_id:
+            try:
+                await onebot_client.delete_msg(qq_msg_id)
+                logger.info(f"Synced deletion from TG (msg_id: {msg_id}) to QQ (msg_id: {qq_msg_id})")
+                await db.delete_mapping_by_tg(msg_id)
+            except Exception as e:
+                logger.error(f"Failed to delete message in QQ: {e}")
 
 async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
@@ -128,5 +145,9 @@ def get_tg_handlers():
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
-        MessageDeletedHandler(handle_message_deleted)
+        # PTB v21+ 不再需要专门的 Handler，直接在 Application 中通过 post_init 或其他方式处理
+        # 但由于我们使用的是 Polling，且 PTB v21 的 DeletedMessage 更新通常由 MessageHandler 过滤掉
+        # 我们需要确保 Application 能够接收到这些更新。在 PTB v21 中，DeletedMessage 是一个独立的 Update 类型。
+        # 我们可以尝试用一个非常宽泛的 Handler 来捕获它，或者检查 update.deleted_message_ids
+        MessageHandler(filters.UpdateType.DELETED_MESSAGE, handle_message_deleted)
     ]
