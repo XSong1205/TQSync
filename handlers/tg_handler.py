@@ -144,10 +144,5 @@ def get_tg_handlers():
     return [
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
-        CommandHandler('bind', handle_bind_command),
-        # PTB v21+ 不再需要专门的 Handler，直接在 Application 中通过 post_init 或其他方式处理
-        # 但由于我们使用的是 Polling，且 PTB v21 的 DeletedMessage 更新通常由 MessageHandler 过滤掉
-        # 我们需要确保 Application 能够接收到这些更新。在 PTB v21 中，DeletedMessage 是一个独立的 Update 类型。
-        # 我们可以尝试用一个非常宽泛的 Handler 来捕获它，或者检查 update.deleted_message_ids
-        MessageHandler(filters.UpdateType.DELETED_MESSAGE, handle_message_deleted)
+        CommandHandler('bind', handle_bind_command)
     ]
