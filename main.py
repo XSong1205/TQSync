@@ -2,6 +2,7 @@ import asyncio
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
 from aiohttp import web
 import uvicorn
 
@@ -78,7 +79,10 @@ async def main():
     token = config_loader.get('telegram.bot_token')
     proxy_url = config_loader.get('telegram.proxy_url')
     
-    builder = Application.builder().token(token)
+    # 配置请求超时时间，防止大文件获取时超时 (连接5s, 读取10s)
+    request = HTTPXRequest(connection_pool_size=8, read_timeout=10.0, connect_timeout=5.0)
+    
+    builder = Application.builder().token(token).request(request)
     if proxy_url:
         logger.info(f"Using Telegram proxy: {proxy_url}")
         builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
