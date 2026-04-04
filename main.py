@@ -168,12 +168,12 @@ async def main():
     for handler in get_tg_handlers():
         application.add_handler(handler)
     
-    # 注册消息删除监听器 (PTB v21+ 使用 ChatMemberHandler 或直接在 application 中处理)
-    # 由于 PTB v21 移除了专门的 DeletedMessageHandler，我们通过自定义逻辑在 main 循环或 post_init 中处理
-    # 这里我们采用一种更稳妥的方式：利用 Application 的 process_update 钩子或者简单地在 handle_tg_message 中兼容
-    # 但最简单的方法是直接添加一个能捕获所有 Update 的 Handler 并在内部判断
+    # 注册消息删除监听器 (PTB v21+ 自定义 Handler)
     from telegram.ext import BaseHandler
     class DeletedMessageHandler(BaseHandler):
+        def __init__(self):
+            super().__init__(callback=None) # PTB v21 requires a callback in init
+        
         def check_update(self, update):
             return hasattr(update, 'deleted_message_ids') and update.deleted_message_ids
         
