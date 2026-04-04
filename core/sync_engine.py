@@ -24,24 +24,42 @@ class SyncEngine:
         return cls._instance
 
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
-        """将 Telegram 图片转发到 QQ"""
+        """将 Telegram 图片转发到 QQ (使用消息段数组实现图文混排)"""
         binding = await db.get_binding_by_tg(tg_user_id)
-        prefix = f"[TG] {binding[3] or tg_username}" if binding else f"[TG] {tg_username}"
+        nickname = binding[3] if binding and binding[3] else tg_username
         
         try:
-            # 获取文件对象
+            # 1. 获取 Telegram 文件对象并构建下载链接
             file = await self.bot.get_file(file_id)
-            # 构建下载链接 (Telegram 提供的临时链接)
             file_url = file.file_path
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            # 使用 CQ 码发送图片
-            cq_code = f"[CQ:image,file={file_url}]"
-            message = f"{prefix} 发送了一张图片：\n{cq_code}"
-            await onebot_client.send_group_msg(self.qq_group_id, message)
+            logger.info(f"Forwarding image from TG to QQ. URL: {file_url}")
+
+            # 2. 构造 OneBot v11 消息段数组 (Array Message)
+            # 这种格式比 CQ 码字符串更稳定，且能完美支持图文混排
+            message_array = [
+                {
+                    "type": "text",
+                    "data": {
+                        "text": f"[TG] {nickname} 发送了一张图片\n"
+                    }
+                },
+                {
+                    "type": "image",
+                    "data": {
+                        "file": file_url
+                    }
+                }
+            ]
+            
+            # 3. 调用 OneBot API 发送
+            await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info("Image forwarded to QQ successfully.")
+
         except Exception as e:
-            logger.error(f"Failed to forward image to QQ: {e}")
+            logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
 
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str):
         """将 QQ 图片转发到 Telegram"""

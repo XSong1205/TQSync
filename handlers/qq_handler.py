@@ -9,7 +9,10 @@ class OneBotClient:
         if self.access_token:
             self.headers['Authorization'] = f'Bearer {self.access_token}'
 
-    async def send_group_msg(self, group_id: int, message: str):
+    async def send_group_msg(self, group_id: int, message):
+        """
+        发送群消息。支持字符串（CQ码）或列表（消息段数组）。
+        """
         url = f"{self.base_url}/send_group_msg"
         payload = {
             "group_id": group_id,
