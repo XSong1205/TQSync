@@ -4,7 +4,7 @@
 telegram:
   bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
   group_id: -1001234567890  # 目标 Telegram 群组 ID (负数)
-  proxy_url: "http://127.0.0.1:7890"  # 代理地址 (可选, 如 http://127.0.0.1:7890)
+  proxy_url: ""  # 代理地址 (可选, 不使用代理请留空, 以免无法访问导致报错。格式如 http://127.0.0.1:7890)
 
 qq:
   napcat_api_url: "http://127.0.0.1:3000"  # Napcat HTTP API 地址
