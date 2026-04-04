@@ -10,12 +10,26 @@ logger = logging.getLogger(__name__)
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息删除事件，同步撤回到 QQ"""
-    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
+    logger.info(f"Received deleted message update: {update}")
+    
+    # PTB v21+ 中，deleted_message_ids 位于 update.channel_post 或 update.message 之外，直接在 update 对象上
+    deleted_ids = getattr(update, 'deleted_message_ids', [])
+    
+    if not deleted_ids:
+        return
+
+    # 检查聊天 ID (PTB v21 中可能在 update.chat 或通过其他方式获取)
+    chat_id = None
+    if hasattr(update, 'chat'):
+        chat_id = update.chat.id
+    elif hasattr(update, 'channel_post') and update.channel_post:
+        chat_id = update.channel_post.chat.id
+    
+    if chat_id != config_loader.get('telegram.group_id'):
         return
     
-    # PTB v21+ 使用 update.deleted_message_ids
-    deleted_ids = getattr(update, 'deleted_message_ids', [])
     for msg_id in deleted_ids:
+        logger.info(f"Processing deletion for TG msg_id: {msg_id}")
         qq_msg_id = await db.get_qq_msg_id_by_tg(msg_id)
         if qq_msg_id:
             try:
@@ -24,6 +38,8 @@ async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_T
                 await db.delete_mapping_by_tg(msg_id)
             except Exception as e:
                 logger.error(f"Failed to delete message in QQ: {e}")
+        else:
+            logger.warning(f"No mapping found for TG msg_id: {msg_id}")
 
 async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
@@ -123,22 +139,6 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 简单绑定逻辑：直接建立映射
     await db.add_binding(tg_user.id, qq_number, tg_user.username)
     await update.message.reply_text(f"Successfully bound to QQ: {qq_number}")
-
-async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 Telegram 消息删除事件，同步撤回到 QQ"""
-    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
-        return
-    
-    # MessageDeletedUpdate 包含 deleted_message_ids
-    for msg_id in update.message.deleted_message_ids:
-        qq_msg_id = await db.get_qq_msg_id_by_tg(msg_id)
-        if qq_msg_id:
-            try:
-                await onebot_client.delete_msg(qq_msg_id)
-                logger.info(f"Synced deletion from TG (msg_id: {msg_id}) to QQ (msg_id: {qq_msg_id})")
-                await db.delete_mapping_by_tg(msg_id)
-            except Exception as e:
-                logger.error(f"Failed to delete message in QQ: {e}")
 
 def get_tg_handlers():
     return [
