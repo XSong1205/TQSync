@@ -125,14 +125,19 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str):
-        """将 QQ 图片转发到 Telegram"""
+    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = ""):
+        """将 QQ 图片转发到 Telegram (支持图文混排)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
         
         try:
-            # Telegram send_photo 支持 URL
-            await self.bot.send_photo(chat_id=self.tg_group_id, photo=image_url, caption=f"{prefix} 发送了一张图片")
+            # 组合标题和说明文字
+            full_caption = prefix
+            if caption:
+                full_caption += f"\n{caption}"
+                
+            # Telegram send_photo 支持 URL 和 Caption
+            await self.bot.send_photo(chat_id=self.tg_group_id, photo=image_url, caption=full_caption)
         except Exception as e:
             logger.error(f"Failed to forward image to TG: {e}")
 
