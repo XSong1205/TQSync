@@ -17,6 +17,12 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id)
         return
 
+    # 处理视频消息
+    if update.message.video:
+        file_id = update.message.video.file_id
+        await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
+        return
+
     # 处理文本消息
     text = update.message.text
     if text:

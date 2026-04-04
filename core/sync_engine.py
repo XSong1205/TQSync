@@ -1,6 +1,7 @@
 from telegram import Bot
 import logging
-import base64
+import os
+import uuid
 import aiohttp
 from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
@@ -25,55 +26,97 @@ class SyncEngine:
             raise RuntimeError("SyncEngine has not been initialized. Call SyncEngine(bot) first.")
         return cls._instance
 
+    async def _download_to_temp(self, file_url: str, filename: str) -> str:
+        """下载文件到 temp 目录并返回本地绝对路径"""
+        temp_dir = os.path.join(os.getcwd(), 'temp')
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        file_path = os.path.join(temp_dir, filename)
+        logger.info(f"Downloading to local temp: {file_path}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Download failed with status {resp.status}")
+                with open(file_path, 'wb') as f:
+                    while True:
+                        chunk = await resp.content.read(8192)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+        return os.path.abspath(file_path)
+
+    def _cleanup_temp(self, file_path: str):
+        """清理临时文件"""
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Cleaned up temp file: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
+
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
-        """将 Telegram 图片转发到 QQ (采用 Base64 中转方案以确保稳定性)"""
+        """将 Telegram 图片转发到 QQ (本地文件中转方案)"""
         binding = await db.get_binding_by_tg(tg_user_id)
         nickname = binding[3] if binding and binding[3] else tg_username
+        temp_path = None
         
         try:
-            # 1. 获取 Telegram 文件对象并构建下载链接
+            # 1. 获取 Telegram 文件链接
             file = await self.bot.get_file(file_id)
             file_url = file.file_path
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            logger.info(f"Downloading image from TG: {file_url}")
-
-            # 2. 下载图片到内存并转为 Base64
-            async with aiohttp.ClientSession() as session:
-                async with session.get(file_url) as resp:
-                    if resp.status != 200:
-                        raise Exception(f"Failed to download image from TG, status: {resp.status}")
-                    image_bytes = await resp.read()
+            # 2. 下载到本地 temp
+            ext = os.path.splitext(file_url)[1] or '.jpg'
+            temp_filename = f"img_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
             
-            base64_str = base64.b64encode(image_bytes).decode('utf-8')
-            base64_data = f"base64://{base64_str}"
-            logger.info(f"Image converted to Base64. Length: {len(base64_str)}")
-
-            # 3. 构造 OneBot v11 消息段数组
+            # 3. 构造消息段 (使用 file:/// 协议或绝对路径)
             message_array = [
-                {
-                    "type": "text",
-                    "data": {
-                        "text": f"[TG] {nickname} 发送了一张图片\n"
-                    }
-                },
-                {
-                    "type": "image",
-                    "data": {
-                        "file": base64_data
-                    }
-                }
+                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一张图片\n"}},
+                {"type": "image", "data": {"file": temp_path}}
             ]
             
-            logger.info(f"Sending payload to NapCat: {message_array}")
-            
-            # 4. 调用 OneBot API 发送
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"NapCat Response: {result}")
+            logger.info(f"Image sent to QQ. Result: {result}")
 
         except Exception as e:
             logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
+
+    async def forward_video_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+        """将 Telegram 视频转发到 QQ"""
+        binding = await db.get_binding_by_tg(tg_user_id)
+        nickname = binding[3] if binding and binding[3] else tg_username
+        temp_path = None
+        
+        try:
+            file = await self.bot.get_file(file_id)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            ext = os.path.splitext(file_url)[1] or '.mp4'
+            temp_filename = f"vid_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一个视频\n"}},
+                {"type": "video", "data": {"file": temp_path}}
+            ]
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"Video sent to QQ. Result: {result}")
+
+        except Exception as e:
+            logger.error(f"Failed to forward video to QQ: {e}", exc_info=True)
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
 
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str):
         """将 QQ 图片转发到 Telegram"""
