@@ -228,19 +228,36 @@ class SyncEngine:
                 # 处理本地路径
                 local_path = file_url.replace("file://", "")
                 if os.path.exists(local_path):
-                    temp_path = local_path  # 直接使用，不移动，避免权限问题
+                    temp_path = local_path
                 else:
                     raise FileNotFoundError(f"Local file not found: {local_path}")
             else:
-                # 如果是公网 URL，直接传给 PTB（PTB 会自己下载）
+                # 如果是公网 URL，直接传给 PTB
                 temp_path = file_url
+
+            # 准备发送参数
+            send_kwargs = {"chat_id": self.tg_group_id}
+            
+            # 合并 caption：如果 kwargs 里有 caption 则优先使用（用于图片混排），否则用 prefix
+            if "caption" in kwargs:
+                send_kwargs["caption"] = kwargs.pop("caption")
+            else:
+                send_kwargs["caption"] = prefix
+                
+            # 添加其他参数（如 filename）
+            send_kwargs.update(kwargs)
 
             # 打开文件并发送
             if os.path.exists(temp_path) and not temp_path.startswith("http"):
                 with open(temp_path, 'rb') as f:
-                    await send_func(chat_id=self.tg_group_id, caption=prefix, **{**kwargs, 'photo': f} if 'photo' in kwargs else {**kwargs, 'document': f} if 'document' in kwargs else {**kwargs, 'voice': f})
+                    # 根据 send_func 确定文件参数的 key (photo, document, voice)
+                    file_key = "photo" if "photo" in send_kwargs else "document" if "document" in send_kwargs else "voice"
+                    send_kwargs[file_key] = f
+                    await send_func(**send_kwargs)
             else:
-                await send_func(chat_id=self.tg_group_id, caption=prefix, **{**kwargs, 'photo': temp_path} if 'photo' in kwargs else {**kwargs, 'document': temp_path} if 'document' in kwargs else {**kwargs, 'voice': temp_path})
+                file_key = "photo" if "photo" in send_kwargs else "document" if "document" in send_kwargs else "voice"
+                send_kwargs[file_key] = temp_path
+                await send_func(**send_kwargs)
                 
         except Exception as e:
             logger.error(f"Failed to forward to TG: {e}", exc_info=True)
