@@ -45,6 +45,7 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 def get_tg_handlers():
     return [
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tg_message),
+        # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
+        MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
         CommandHandler('bind', handle_bind_command)
     ]
