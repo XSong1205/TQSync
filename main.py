@@ -58,7 +58,7 @@ async def main():
     token = config_loader.get('telegram.bot_token')
     application = Application.builder().token(token).build()
     
-    # 初始化同步引擎
+    # 初始化同步引擎 (必须在添加 Handler 之前完成)
     global global_sync_engine
     global_sync_engine = SyncEngine(application.bot)
     
