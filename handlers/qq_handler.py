@@ -1,5 +1,8 @@
 import aiohttp
+import logging
 from config.config_loader import config_loader
+
+logger = logging.getLogger(__name__)
 
 class OneBotClient:
     def __init__(self):
@@ -16,11 +19,15 @@ class OneBotClient:
         url = f"{self.base_url}/send_group_msg"
         payload = {
             "group_id": group_id,
-            "message": message
+            "message": message,
+            "auto_escape": False
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=payload, headers=self.headers) as resp:
-                return await resp.json()
+                result = await resp.json()
+                if result.get('retcode') != 0:
+                    logger.error(f"OneBot API Error: {result}")
+                return result
 
 # 全局实例
 onebot_client = OneBotClient()
