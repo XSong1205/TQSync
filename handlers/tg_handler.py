@@ -128,6 +128,23 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except RuntimeError as e:
             print(f"Error: {e}")
 
+async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Usage: /setprefix <nickname>")
+        return
+    
+    new_prefix = " ".join(context.args)
+    tg_user = update.effective_user
+    binding = await db.get_binding_by_tg(tg_user.id)
+    
+    if not binding:
+        await update.message.reply_text("You are not bound to a QQ account yet. Use /bind first.")
+        return
+    
+    uid = binding[4]
+    await db.update_custom_prefix(uid, new_prefix)
+    await update.message.reply_text(f"Your unified display name has been updated to: {new_prefix}")
+
 async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /bind <qq_number>")
@@ -144,5 +161,6 @@ def get_tg_handlers():
     return [
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
-        CommandHandler('bind', handle_bind_command)
+        CommandHandler('bind', handle_bind_command),
+        CommandHandler('setprefix', handle_setprefix_command)
     ]

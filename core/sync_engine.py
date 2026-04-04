@@ -58,15 +58,23 @@ class SyncEngine:
             logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
 
     async def get_display_name(self, tg_user_id: int = None, qq_user_id: int = None, fallback_name: str = "Unknown"):
-        """根据绑定关系获取统一显示名称"""
+        """根据绑定关系获取统一显示名称，优先使用自定义前缀"""
+        uid = None
+        binding = None
+        
         if tg_user_id:
             binding = await db.get_binding_by_tg(tg_user_id)
-            if binding:
-                return binding[3] or binding[2] or fallback_name  # qq_nickname or tg_username
-        if qq_user_id:
+        elif qq_user_id:
             binding = await db.get_binding_by_qq(qq_user_id)
-            if binding:
-                return binding[3] or binding[2] or fallback_name
+        
+        if binding:
+            uid = binding[4] # uid 是第 5 列 (0-based index 4)
+            custom_prefix = await db.get_custom_prefix_by_uid(uid)
+            if custom_prefix:
+                return custom_prefix
+            # 回退到绑定的昵称或用户名
+            return binding[3] or binding[2] or fallback_name
+        
         return f"{fallback_name} [Unbound]"
 
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = ""):

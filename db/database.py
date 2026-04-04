@@ -1,5 +1,6 @@
 import aiosqlite
 import os
+import uuid
 from config.config_loader import config_loader
 
 class Database:
@@ -15,9 +16,18 @@ class Database:
                     qq_user_id INTEGER UNIQUE,
                     tg_username TEXT,
                     qq_nickname TEXT,
+                    uid TEXT,
+                    custom_prefix TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            # 尝试添加新列以兼容旧数据库
+            try:
+                await db.execute('ALTER TABLE bindings ADD COLUMN uid TEXT')
+                await db.execute('ALTER TABLE bindings ADD COLUMN custom_prefix TEXT')
+            except aiosqlite.OperationalError:
+                pass # 列已存在
+            
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS message_mapping (
                     local_msg_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,11 +81,37 @@ class Database:
 
     async def add_binding(self, tg_user_id: int, qq_user_id: int, tg_username: str = None, qq_nickname: str = None):
         async with aiosqlite.connect(self.db_path) as db:
+            # 检查是否已存在 UID，如果不存在则生成一个新的
+            existing_uid = None
+            if tg_user_id:
+                async with db.execute('SELECT uid FROM bindings WHERE tg_user_id = ?', (tg_user_id,)) as cursor:
+                    row = await cursor.fetchone()
+                    if row: existing_uid = row[0]
+            if not existing_uid and qq_user_id:
+                async with db.execute('SELECT uid FROM bindings WHERE qq_user_id = ?', (qq_user_id,)) as cursor:
+                    row = await cursor.fetchone()
+                    if row: existing_uid = row[0]
+            
+            final_uid = existing_uid or str(uuid.uuid4())
+
             await db.execute('''
-                INSERT OR REPLACE INTO bindings (tg_user_id, qq_user_id, tg_username, qq_nickname)
-                VALUES (?, ?, ?, ?)
-            ''', (tg_user_id, qq_user_id, tg_username, qq_nickname))
+                INSERT OR REPLACE INTO bindings (tg_user_id, qq_user_id, tg_username, qq_nickname, uid)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (tg_user_id, qq_user_id, tg_username, qq_nickname, final_uid))
             await db.commit()
+
+    async def update_custom_prefix(self, uid: str, prefix: str):
+        """根据 UID 更新自定义前缀"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute('UPDATE bindings SET custom_prefix = ? WHERE uid = ?', (prefix, uid))
+            await db.commit()
+
+    async def get_custom_prefix_by_uid(self, uid: str):
+        """根据 UID 获取自定义前缀"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT custom_prefix FROM bindings WHERE uid = ? LIMIT 1', (uid,)) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else None
 
     async def delete_binding(self, tg_user_id: int = None, qq_user_id: int = None):
         async with aiosqlite.connect(self.db_path) as db:
