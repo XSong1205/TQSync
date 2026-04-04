@@ -1,5 +1,7 @@
 from telegram import Bot
 import logging
+import base64
+import aiohttp
 from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
 from db.database import db
@@ -24,7 +26,7 @@ class SyncEngine:
         return cls._instance
 
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
-        """将 Telegram 图片转发到 QQ (使用消息段数组实现图文混排)"""
+        """将 Telegram 图片转发到 QQ (采用 Base64 中转方案以确保稳定性)"""
         binding = await db.get_binding_by_tg(tg_user_id)
         nickname = binding[3] if binding and binding[3] else tg_username
         
@@ -35,9 +37,20 @@ class SyncEngine:
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            logger.info(f"Forwarding image from TG to QQ. URL: {file_url}")
+            logger.info(f"Downloading image from TG: {file_url}")
 
-            # 2. 构造 OneBot v11 消息段数组 (Array Message)
+            # 2. 下载图片到内存并转为 Base64
+            async with aiohttp.ClientSession() as session:
+                async with session.get(file_url) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"Failed to download image from TG, status: {resp.status}")
+                    image_bytes = await resp.read()
+            
+            base64_str = base64.b64encode(image_bytes).decode('utf-8')
+            base64_data = f"base64://{base64_str}"
+            logger.info(f"Image converted to Base64. Length: {len(base64_str)}")
+
+            # 3. 构造 OneBot v11 消息段数组
             message_array = [
                 {
                     "type": "text",
@@ -48,14 +61,16 @@ class SyncEngine:
                 {
                     "type": "image",
                     "data": {
-                        "file": file_url
+                        "file": base64_data
                     }
                 }
             ]
             
-            # 3. 调用 OneBot API 发送
+            logger.info(f"Sending payload to NapCat: {message_array}")
+            
+            # 4. 调用 OneBot API 发送
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"Image forwarded to QQ successfully. Result: {result}")
+            logger.info(f"NapCat Response: {result}")
 
         except Exception as e:
             logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
