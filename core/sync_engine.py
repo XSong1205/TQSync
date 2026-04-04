@@ -38,7 +38,6 @@ class SyncEngine:
             logger.info(f"Forwarding image from TG to QQ. URL: {file_url}")
 
             # 2. 构造 OneBot v11 消息段数组 (Array Message)
-            # 这种格式比 CQ 码字符串更稳定，且能完美支持图文混排
             message_array = [
                 {
                     "type": "text",
@@ -55,8 +54,8 @@ class SyncEngine:
             ]
             
             # 3. 调用 OneBot API 发送
-            await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info("Image forwarded to QQ successfully.")
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"Image forwarded to QQ successfully. Result: {result}")
 
         except Exception as e:
             logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
