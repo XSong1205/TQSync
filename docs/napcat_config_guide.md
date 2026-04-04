@@ -21,7 +21,8 @@
     *   **上报地址 (URL)**: `http://<你的TQSync服务器IP>:8080/webhook/qq`
         *   如果 TQSync 和 NapCat 在同一台电脑，可以使用 `http://127.0.0.1:8080/webhook/qq`。
     *   **密钥 (Secret/Token)**: 留空（除非你在 TQSync 配置中设置了验证）。
-    *   **消息格式**: 选择 `string` (CQ码) 或 `array` (推荐 array，但 TQSync 目前主要处理文本，两者皆可)。
+    *   **消息格式**: 选择 `string` (CQ码) 或 `array` (推荐 array)。
+        *   *注意：此选项仅影响 QQ 发给 TQSync 的格式。TQSync 发给 QQ 时会自动使用标准的数组格式，无需在此处额外配置。*
 5.  点击 **“保存”** 或 **“启用”**。
 
 ## 3. 验证配置
