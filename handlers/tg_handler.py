@@ -3,6 +3,9 @@ from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler
 from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
@@ -10,17 +13,22 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user = update.effective_user
     engine = SyncEngine.get_instance()
+    msg = update.message
     
+    # 诊断日志：打印媒体类型
+    logger.info(f"Received TG message - Photo: {bool(msg.photo)}, Video: {bool(msg.video)}, Doc: {bool(msg.document)}, Anim: {bool(msg.animation)}, Voice: {bool(msg.voice)}")
+
     # 处理图片消息
-    if update.message.photo:
-        file_id = update.message.photo[-1].file_id
-        caption = update.message.caption or ""
+    if msg.photo:
+        file_id = msg.photo[-1].file_id
+        caption = msg.caption or ""
         await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
         return
 
-    # 处理视频消息
-    if update.message.video:
-        file_id = update.message.video.file_id
+    # 处理视频消息 (优先于 document 判断)
+    if msg.video:
+        file_id = msg.video.file_id
+        logger.info(f"Detected video from {user.username}, forwarding to QQ...")
         await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
         return
 

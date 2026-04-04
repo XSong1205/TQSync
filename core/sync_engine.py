@@ -216,41 +216,49 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file"):
-        """将 QQ 文件转发到 Telegram"""
+    async def _send_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, send_func, **kwargs):
+        """通用文件转发到 Telegram 方法，支持本地路径中转"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        temp_path = None
         
         try:
-            await self.bot.send_document(chat_id=self.tg_group_id, document=file_url, caption=prefix, filename=file_name)
-        except Exception as e:
-            logger.error(f"Failed to forward file to TG: {e}")
+            # 判断是否为本地路径或内网地址
+            if file_url.startswith(("file:///", "/", "C:\\", "D:\\")) or "127.0.0.1" in file_url or "localhost" in file_url:
+                # 处理本地路径
+                local_path = file_url.replace("file://", "")
+                if os.path.exists(local_path):
+                    temp_path = local_path  # 直接使用，不移动，避免权限问题
+                else:
+                    raise FileNotFoundError(f"Local file not found: {local_path}")
+            else:
+                # 如果是公网 URL，直接传给 PTB（PTB 会自己下载）
+                temp_path = file_url
 
-    async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, record_url: str):
-        """将 QQ 语音转发到 Telegram"""
-        binding = await db.get_binding_by_qq(qq_user_id)
-        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        
-        try:
-            await self.bot.send_voice(chat_id=self.tg_group_id, voice=record_url, caption=prefix)
+            # 打开文件并发送
+            if os.path.exists(temp_path) and not temp_path.startswith("http"):
+                with open(temp_path, 'rb') as f:
+                    await send_func(chat_id=self.tg_group_id, caption=prefix, **{**kwargs, 'photo': f} if 'photo' in kwargs else {**kwargs, 'document': f} if 'document' in kwargs else {**kwargs, 'voice': f})
+            else:
+                await send_func(chat_id=self.tg_group_id, caption=prefix, **{**kwargs, 'photo': temp_path} if 'photo' in kwargs else {**kwargs, 'document': temp_path} if 'document' in kwargs else {**kwargs, 'voice': temp_path})
+                
         except Exception as e:
-            logger.error(f"Failed to forward voice to TG: {e}")
+            logger.error(f"Failed to forward to TG: {e}", exc_info=True)
 
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = ""):
-        """将 QQ 图片转发到 Telegram (支持图文混排)"""
+        """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        
-        try:
-            # 组合标题和说明文字
-            full_caption = prefix
-            if caption:
-                full_caption += f"\n{caption}"
-                
-            # Telegram send_photo 支持 URL 和 Caption
-            await self.bot.send_photo(chat_id=self.tg_group_id, photo=image_url, caption=full_caption)
-        except Exception as e:
-            logger.error(f"Failed to forward image to TG: {e}")
+        full_caption = f"{prefix}\n{caption}" if caption else prefix
+        await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, caption=full_caption)
+
+    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file"):
+        """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
+        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, filename=file_name)
+
+    async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, record_url: str):
+        """将 QQ 语音转发到 Telegram (支持本地文件中转)"""
+        await self._send_file_to_tg(qq_user_id, qq_nickname, record_url, self.bot.send_voice)
 
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
         binding = await db.get_binding_by_tg(tg_user_id)
