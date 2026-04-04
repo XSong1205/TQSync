@@ -125,6 +125,117 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
+    async def forward_gif_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+        """将 Telegram GIF 转发到 QQ (尝试作为视频发送)"""
+        binding = await db.get_binding_by_tg(tg_user_id)
+        nickname = binding[3] if binding and binding[3] else tg_username
+        temp_path = None
+        
+        try:
+            file = await self.bot.get_file(file_id)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            ext = os.path.splitext(file_url)[1] or '.gif'
+            temp_filename = f"gif_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            # 优先尝试 video 消息段，因为 NapCat 对 GIF 的支持通常通过视频实现
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一个动图\n"}},
+                {"type": "video", "data": {"file": temp_path}}
+            ]
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"GIF sent to QQ. Result: {result}")
+
+        except Exception as e:
+            logger.error(f"Failed to forward GIF to QQ: {e}", exc_info=True)
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
+
+    async def forward_file_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, filename: str):
+        """将 Telegram 通用文件转发到 QQ (卡片形式)"""
+        binding = await db.get_binding_by_tg(tg_user_id)
+        nickname = binding[3] if binding and binding[3] else tg_username
+        temp_path = None
+        
+        try:
+            file = await self.bot.get_file(file_id)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            ext = os.path.splitext(filename)[1]
+            temp_filename = f"file_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一个文件: {filename}\n"}},
+                {"type": "file", "data": {"file": temp_path}}
+            ]
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"File sent to QQ. Result: {result}")
+
+        except Exception as e:
+            logger.error(f"Failed to forward file to QQ: {e}", exc_info=True)
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
+
+    async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+        """将 Telegram 语音转发到 QQ (保持原格式)"""
+        binding = await db.get_binding_by_tg(tg_user_id)
+        nickname = binding[3] if binding and binding[3] else tg_username
+        temp_path = None
+        
+        try:
+            file = await self.bot.get_file(file_id)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            ext = os.path.splitext(file_url)[1] or '.ogg'
+            temp_filename = f"voice_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一条语音\n"}},
+                {"type": "record", "data": {"file": temp_path}}
+            ]
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"Voice sent to QQ. Result: {result}")
+
+        except Exception as e:
+            logger.error(f"Failed to forward voice to QQ: {e}", exc_info=True)
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
+
+    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file"):
+        """将 QQ 文件转发到 Telegram"""
+        binding = await db.get_binding_by_qq(qq_user_id)
+        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        
+        try:
+            await self.bot.send_document(chat_id=self.tg_group_id, document=file_url, caption=prefix, filename=file_name)
+        except Exception as e:
+            logger.error(f"Failed to forward file to TG: {e}")
+
+    async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, record_url: str):
+        """将 QQ 语音转发到 Telegram"""
+        binding = await db.get_binding_by_qq(qq_user_id)
+        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        
+        try:
+            await self.bot.send_voice(chat_id=self.tg_group_id, voice=record_url, caption=prefix)
+        except Exception as e:
+            logger.error(f"Failed to forward voice to TG: {e}")
+
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = ""):
         """将 QQ 图片转发到 Telegram (支持图文混排)"""
         binding = await db.get_binding_by_qq(qq_user_id)

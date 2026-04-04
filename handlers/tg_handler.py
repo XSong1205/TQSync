@@ -24,6 +24,25 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
         return
 
+    # 处理 GIF 动图
+    if update.message.animation:
+        file_id = update.message.animation.file_id
+        await engine.forward_gif_to_qq(user.id, user.username or str(user.id), file_id)
+        return
+
+    # 处理通用文件
+    if update.message.document:
+        file_id = update.message.document.file_id
+        filename = update.message.document.file_name or "unknown_file"
+        await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
+        return
+
+    # 处理语音消息
+    if update.message.voice:
+        file_id = update.message.voice.file_id
+        await engine.forward_voice_to_qq(user.id, user.username or str(user.id), file_id)
+        return
+
     # 处理文本消息
     text = update.message.text
     if text:

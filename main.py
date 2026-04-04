@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
@@ -33,22 +35,36 @@ async def handle_qq_webhook(request):
             message_array = data.get('message', [])
             text_parts = []
             image_urls = []
+            record_url = None
+            file_url = None
+            file_name = "unknown_file"
             
             for msg_part in message_array:
-                if msg_part.get('type') == 'text':
+                msg_type = msg_part.get('type')
+                if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
-                elif msg_part.get('type') == 'image':
-                    image_url = msg_part['data'].get('url') or msg_part['data'].get('file')
-                    if image_url:
-                        image_urls.append(image_url)
+                elif msg_type == 'image':
+                    url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    if url: image_urls.append(url)
+                elif msg_type == 'record' and not record_url:
+                    record_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                elif msg_type == 'file' and not file_url:
+                    file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    file_name = msg_part['data'].get('name', 'unknown_file')
+                elif msg_type == 'video' and not image_urls:
+                    # 某些情况下 GIF 会被识别为 video
+                    url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    if url: image_urls.append(url)
             
             combined_text = "".join(text_parts).strip()
             
             if image_urls:
-                # 如果有图片，调用图文混排转发
                 await engine.forward_image_to_tg(qq_id, nickname, image_urls[0], combined_text)
+            elif record_url:
+                await engine.forward_voice_to_tg(qq_id, nickname, record_url)
+            elif file_url:
+                await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name)
             elif combined_text:
-                # 纯文本转发
                 await engine.forward_to_tg(qq_id, nickname, combined_text)
         
         return web.Response(text="ok")
@@ -69,6 +85,22 @@ async def start_qq_webhook():
     
     # 保持运行
     while True:
+        await asyncio.sleep(3600)
+
+async def cleanup_temp_files():
+    """定时清理 /temp 目录下超过 24 小时的文件"""
+    temp_dir = os.path.join(os.getcwd(), 'temp')
+    while True:
+        try:
+            if os.path.exists(temp_dir):
+                now = time.time()
+                for fname in os.listdir(temp_dir):
+                    fpath = os.path.join(temp_dir, fname)
+                    if os.path.isfile(fpath) and (now - os.path.getmtime(fpath)) > 86400:
+                        os.remove(fpath)
+                        logger.info(f"Cleaned up expired temp file: {fname}")
+        except Exception as e:
+            logger.error(f"Temp cleanup error: {e}")
         await asyncio.sleep(3600)
 
 async def main():
@@ -109,6 +141,9 @@ async def main():
     server = uvicorn.Server(config)
     api_task = asyncio.create_task(server.serve())
     
+    # 启动临时文件清理任务
+    cleanup_task = asyncio.create_task(cleanup_temp_files())
+    
     logger.info("TQSync is running...")
     
     # 发送启动成功通知
@@ -116,7 +151,7 @@ async def main():
     await engine.send_startup_notification()
     
     # 等待所有任务
-    await asyncio.gather(updater_task, webhook_task, api_task)
+    await asyncio.gather(updater_task, webhook_task, api_task, cleanup_task)
 
 if __name__ == '__main__':
     try:
