@@ -7,10 +7,21 @@ from db.database import db
 logger = logging.getLogger(__name__)
 
 class SyncEngine:
+    _instance = None
+
     def __init__(self, bot: Bot):
+        if SyncEngine._instance is not None:
+            return
         self.bot = bot
         self.tg_group_id = config_loader.get('telegram.group_id')
         self.qq_group_id = config_loader.get('qq.group_id')
+        SyncEngine._instance = self
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            raise RuntimeError("SyncEngine has not been initialized. Call SyncEngine(bot) first.")
+        return cls._instance
 
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
         binding = await db.get_binding_by_tg(tg_user_id)

@@ -7,7 +7,7 @@ import uvicorn
 
 from config.config_loader import config_loader
 from db.database import db
-from core.sync_engine import SyncEngine, sync_engine as global_sync_engine
+from core.sync_engine import SyncEngine
 from handlers.tg_handler import get_tg_handlers
 from api.admin_api import app as admin_app
 
@@ -28,7 +28,8 @@ async def handle_qq_webhook(request):
             text = data['raw_message']
             
             # 转发到 TG
-            await global_sync_engine.forward_to_tg(qq_id, nickname, text)
+            engine = SyncEngine.get_instance()
+            await engine.forward_to_tg(qq_id, nickname, text)
         
         return web.Response(text="ok")
     except Exception as e:
@@ -58,8 +59,7 @@ async def main():
     token = config_loader.get('telegram.bot_token')
     application = Application.builder().token(token).build()
     
-    # 初始化同步引擎 (必须在添加 Handler 之前完成)
-    global global_sync_engine
+    # 初始化同步引擎 (单例模式)
     global_sync_engine = SyncEngine(application.bot)
     
     # 注册 TG 处理器
@@ -82,7 +82,8 @@ async def main():
     logger.info("TQSync is running...")
     
     # 发送启动成功通知
-    await global_sync_engine.send_startup_notification()
+    engine = SyncEngine.get_instance()
+    await engine.send_startup_notification()
     
     # 等待所有任务
     await asyncio.gather(updater_task, webhook_task, api_task)
