@@ -35,7 +35,6 @@ async def handle_qq_webhook(request):
             message_array = data.get('message', [])
             text_parts = []
             image_urls = []
-            record_url = None
             file_url = None
             file_name = "unknown_file"
             
@@ -46,8 +45,6 @@ async def handle_qq_webhook(request):
                 elif msg_type == 'image':
                     url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     if url: image_urls.append(url)
-                elif msg_type == 'record' and not record_url:
-                    record_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     file_name = msg_part['data'].get('name', 'unknown_file')
@@ -60,8 +57,6 @@ async def handle_qq_webhook(request):
             
             if image_urls:
                 await engine.forward_image_to_tg(qq_id, nickname, image_urls[0], combined_text)
-            elif record_url:
-                await engine.forward_voice_to_tg(qq_id, nickname, record_url)
             elif file_url:
                 await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name)
             elif combined_text:
