@@ -57,8 +57,8 @@ class SyncEngine:
         except Exception as e:
             logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
 
-    async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
-        """将 Telegram 图片转发到 QQ (本地文件中转方案)"""
+    async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = ""):
+        """将 Telegram 图片转发到 QQ (本地文件中转方案，支持 Caption 图文混排)"""
         binding = await db.get_binding_by_tg(tg_user_id)
         nickname = binding[3] if binding and binding[3] else tg_username
         temp_path = None
@@ -75,14 +75,19 @@ class SyncEngine:
             temp_filename = f"img_{uuid.uuid4().hex}{ext}"
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
-            # 3. 构造消息段 (使用 file:/// 协议或绝对路径)
+            # 3. 构造消息段 (实现图文混排：文字在上，图片在下)
             message_array = [
-                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一张图片\n"}},
-                {"type": "image", "data": {"file": temp_path}}
+                {"type": "text", "data": {"text": f"[TG] {nickname}\n"}},
             ]
             
+            # 如果有 Caption，则添加在图片上方
+            if caption:
+                message_array.append({"type": "text", "data": {"text": f"{caption}\n"}})
+            
+            message_array.append({"type": "image", "data": {"file": temp_path}})
+            
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"Image sent to QQ. Result: {result}")
+            logger.info(f"Image with caption sent to QQ. Result: {result}")
 
         except Exception as e:
             logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
