@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler
 from config.config_loader import config_loader
-from core.sync_engine import sync_engine
+import core.sync_engine as sync_module
 from db.database import db
 
 async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -11,7 +11,12 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
     
-    await sync_engine.forward_to_qq(user.id, user.username or str(user.id), text)
+    # 动态获取最新的 sync_engine 实例
+    engine = sync_module.sync_engine
+    if engine:
+        await engine.forward_to_qq(user.id, user.username or str(user.id), text)
+    else:
+        print("Error: Sync engine not initialized yet.")
 
 async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
