@@ -125,6 +125,36 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
+    async def forward_file_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, filename: str):
+        """将 Telegram 通用文件转发到 QQ (卡片形式)"""
+        binding = await db.get_binding_by_tg(tg_user_id)
+        nickname = binding[3] if binding and binding[3] else tg_username
+        temp_path = None
+        
+        try:
+            file = await self.bot.get_file(file_id)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            ext = os.path.splitext(filename)[1]
+            temp_filename = f"file_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一个文件: {filename}\n"}},
+                {"type": "file", "data": {"file": temp_path}}
+            ]
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"File sent to QQ. Result: {result}")
+
+        except Exception as e:
+            logger.error(f"Failed to forward file to QQ: {e}", exc_info=True)
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
+
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = ""):
         """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
