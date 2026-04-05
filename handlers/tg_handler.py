@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息删除事件，同步撤回到 QQ"""
-    logger.info(f"Received deleted message update: {update}")
+    logger.info(f"收到 Telegram 删除消息事件: {update}")
     
     # PTB v21+ 中，deleted_message_ids 位于 update.channel_post 或 update.message 之外，直接在 update 对象上
     deleted_ids = getattr(update, 'deleted_message_ids', [])
     
     if not deleted_ids:
-        logger.warning("No deleted_message_ids found in update")
+        logger.warning("更新中未找到 deleted_message_ids")
         return
 
     # 检查聊天 ID (优先使用 effective_chat)
@@ -27,21 +27,21 @@ async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_T
         chat_id = update.chat.id
     
     if chat_id != config_loader.get('telegram.group_id'):
-        logger.warning(f"Chat ID mismatch: {chat_id} vs {config_loader.get('telegram.group_id')}")
+        logger.warning(f"群组 ID 不匹配: {chat_id} vs {config_loader.get('telegram.group_id')}")
         return
     
     for msg_id in deleted_ids:
-        logger.info(f"Processing deletion for TG msg_id: {msg_id}")
+        logger.info(f"正在处理 TG 消息撤回 (ID: {msg_id})")
         qq_msg_id = await db.get_qq_msg_id_by_tg(msg_id)
         if qq_msg_id:
             try:
                 await onebot_client.delete_msg(qq_msg_id)
-                logger.info(f"Synced deletion from TG (msg_id: {msg_id}) to QQ (msg_id: {qq_msg_id})")
+                logger.info(f"已同步撤回：TG (ID: {msg_id}) -> QQ (ID: {qq_msg_id})")
                 await db.delete_mapping_by_tg(msg_id)
             except Exception as e:
-                logger.error(f"Failed to delete message in QQ: {e}")
+                logger.error(f"在 QQ 端执行撤回失败: {e}")
         else:
-            logger.warning(f"No mapping found for TG msg_id: {msg_id}")
+            logger.warning(f"未找到 TG 消息 ID {msg_id} 对应的 QQ 映射记录")
 
 async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
@@ -52,45 +52,57 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     
     # 诊断日志：打印媒体类型
-    logger.info(f"Received TG message - Photo: {bool(msg.photo)}, Video: {bool(msg.video)}, Doc: {bool(msg.document)}, Anim: {bool(msg.animation)}, Voice: {bool(msg.voice)}")
+    logger.debug(f"收到 TG 消息 - 图片: {bool(msg.photo)}, 视频: {bool(msg.video)}, 文件: {bool(msg.document)}")
 
     # 处理图片消息
     if msg.photo:
         file_id = msg.photo[-1].file_id
         caption = msg.caption or ""
-        result = await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
-        if result and result.get('data', {}).get('message_id'):
-            await db.save_message_mapping(
-                tg_message_id=update.message.message_id,
-                qq_message_id=result['data']['message_id'],
-                sender_tg_id=user.id
-            )
+        try:
+            result = await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
+            if result and result.get('data', {}).get('message_id'):
+                await db.save_message_mapping(
+                    tg_message_id=update.message.message_id,
+                    qq_message_id=result['data']['message_id'],
+                    sender_tg_id=user.id
+                )
+        except Exception as e:
+            logger.error(f"同步图片至 QQ 失败: {e}")
+            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
         return
 
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
-        logger.info(f"Detected video from {user.username}, forwarding to QQ...")
-        result = await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
-        if result and result.get('data', {}).get('message_id'):
-            await db.save_message_mapping(
-                tg_message_id=update.message.message_id,
-                qq_message_id=result['data']['message_id'],
-                sender_tg_id=user.id
-            )
+        logger.info(f"检测到来自 {user.username} 的视频，正在转发至 QQ...")
+        try:
+            result = await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
+            if result and result.get('data', {}).get('message_id'):
+                await db.save_message_mapping(
+                    tg_message_id=update.message.message_id,
+                    qq_message_id=result['data']['message_id'],
+                    sender_tg_id=user.id
+                )
+        except Exception as e:
+            logger.error(f"同步视频至 QQ 失败: {e}")
+            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
         return
 
     # 处理通用文件
     if msg.document:
         file_id = msg.document.file_id
         filename = msg.document.file_name or "unknown_file"
-        result = await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
-        if result and result.get('data', {}).get('message_id'):
-            await db.save_message_mapping(
-                tg_message_id=update.message.message_id,
-                qq_message_id=result['data']['message_id'],
-                sender_tg_id=user.id
-            )
+        try:
+            result = await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
+            if result and result.get('data', {}).get('message_id'):
+                await db.save_message_mapping(
+                    tg_message_id=update.message.message_id,
+                    qq_message_id=result['data']['message_id'],
+                    sender_tg_id=user.id
+                )
+        except Exception as e:
+            logger.error(f"同步文件至 QQ 失败: {e}")
+            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
         return
 
     # 处理文本消息

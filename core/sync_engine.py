@@ -32,7 +32,7 @@ class SyncEngine:
         os.makedirs(temp_dir, exist_ok=True)
         
         file_path = os.path.join(temp_dir, filename)
-        logger.info(f"Downloading to local temp: {file_path}")
+        logger.info(f"正在下载文件至本地中转: {file_path}")
         
         # 全局禁用 SSL 验证以适配国内代理环境
         connector = aiohttp.TCPConnector(ssl=False)
@@ -53,9 +53,9 @@ class SyncEngine:
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-                logger.info(f"Cleaned up temp file: {file_path}")
+                logger.info(f"已清理临时文件: {file_path}")
         except Exception as e:
-            logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
+            logger.warning(f"清理临时文件失败 {file_path}: {e}")
 
     async def get_display_name(self, tg_user_id: int = None, qq_user_id: int = None, fallback_name: str = "Unknown"):
         """根据绑定关系获取统一显示名称，优先使用自定义前缀"""
@@ -107,11 +107,11 @@ class SyncEngine:
             message_array.append({"type": "image", "data": {"file": temp_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"Image with caption sent to QQ. Result: {result}")
+            logger.info(f"图片已成功发送至 QQ。结果: {result}")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
+            logger.error(f"转发图片至 QQ 失败: {e}", exc_info=True)
             return None
         finally:
             if temp_path:
@@ -139,11 +139,11 @@ class SyncEngine:
             ]
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"Video sent to QQ. Result: {result}")
+            logger.info(f"视频已成功发送至 QQ。结果: {result}")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to forward video to QQ: {e}", exc_info=True)
+            logger.error(f"转发视频至 QQ 失败: {e}", exc_info=True)
             return None
         finally:
             if temp_path:
@@ -171,11 +171,11 @@ class SyncEngine:
             ]
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"File sent to QQ. Result: {result}")
+            logger.info(f"文件已成功发送至 QQ。结果: {result}")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to forward file to QQ: {e}", exc_info=True)
+            logger.error(f"转发文件至 QQ 失败: {e}", exc_info=True)
             return None
         finally:
             if temp_path:
@@ -246,7 +246,7 @@ class SyncEngine:
                 raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
                 
         except Exception as e:
-            logger.error(f"Failed to forward to TG: {e}", exc_info=True)
+            logger.error(f"转发消息至 Telegram 失败: {e}", exc_info=True)
 
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
