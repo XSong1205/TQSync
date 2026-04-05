@@ -41,6 +41,12 @@ async def handle_qq_webhook(request):
 
         # 仅处理群消息
         if data.get('message_type') == 'group':
+            # [新增] 校验群组 ID，防止同步非目标群组的消息
+            target_group_id = config_loader.get('qq.group_id')
+            if data.get('group_id') != target_group_id:
+                logger.debug(f"忽略非目标群组消息: {data.get('group_id')}")
+                return web.Response(text="ok")
+            
             sender = data.get('sender', {})
             qq_id = data['user_id']
             nickname = sender.get('card') or sender.get('nickname') or str(qq_id)
