@@ -49,8 +49,11 @@ async def get_status(api_key: bool = Depends(verify_api_key)):
     try:
         from main import start_time
         current_start_time = start_time
-    except (ImportError, AttributeError):
-        current_start_time = time.time() # 兜底方案
+        # 简单的合理性检查：如果时间戳小于 2024-01-01，则认为无效
+        if current_start_time < 1704067200:
+            raise ValueError("Invalid start_time detected")
+    except (ImportError, AttributeError, ValueError):
+        current_start_time = time.time()
         
     uptime_seconds = int(time.time() - current_start_time)
     if uptime_seconds < 0: uptime_seconds = 0

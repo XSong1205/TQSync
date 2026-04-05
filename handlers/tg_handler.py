@@ -185,9 +185,12 @@ async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text(response)
 
 async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 使用 main.py 中定义的全局 start_time
     from main import start_time
-    response = await handle_status_command(start_time)
+    # 增加合理性检查，防止显示异常时长
+    if start_time < 1704067200: 
+        response = "系统时间记录异常，请尝试重启机器人。"
+    else:
+        response = await handle_status_command(start_time)
     await update.message.reply_text(response)
 
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

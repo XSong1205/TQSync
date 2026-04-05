@@ -213,7 +213,7 @@ async def cleanup_temp_files():
             logger.error(f"Temp cleanup error: {e}")
         await asyncio.sleep(3600)
 
-start_time = 0.0
+start_time = time.time()
 restart_event = asyncio.Event()
 background_tasks = []
 
@@ -229,7 +229,9 @@ async def graceful_restart():
 
 async def main():
     global start_time
+    # 再次确认赋值，防止模块加载时的时序问题
     start_time = time.time()
+    logger.info(f"系统启动时间戳: {start_time}")
     # 初始化数据库
     await db.init_db()
     
