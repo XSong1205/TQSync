@@ -4,6 +4,7 @@ from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
+from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic
 import logging
 
 logger = logging.getLogger(__name__)
@@ -173,33 +174,18 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except RuntimeError as e:
             print(f"Error: {e}")
 
-async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = (
-        "🤖 TQSync 帮助文档\n\n"
-        "可用命令：\n"
-        "/bind <qq_number> - 绑定您的 QQ 号以启用同步\n"
-        "/setprefix <nickname> - 设置您在双端显示的统一昵称\n"
-        "/help - 显示此帮助信息\n\n"
-        "提示：绑定后，您在 Telegram 和 QQ 的消息将自动双向同步。"
-    )
-    await update.message.reply_text(help_text)
-
 async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /setprefix <nickname>")
         return
     
-    new_prefix = " ".join(context.args)
     tg_user = update.effective_user
-    binding = await db.get_binding_by_tg(tg_user.id)
-    
-    if not binding:
-        await update.message.reply_text("You are not bound to a QQ account yet. Use /bind first.")
-        return
-    
-    uid = binding[4]
-    await db.update_custom_prefix(uid, new_prefix)
-    await update.message.reply_text(f"Your unified display name has been updated to: {new_prefix}")
+    response = await handle_setprefix_command_logic(tg_user.id, 'tg', context.args)
+    await update.message.reply_text(response)
+
+async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    response = await handle_help_command_logic()
+    await update.message.reply_text(response)
 
 async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:

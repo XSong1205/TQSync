@@ -12,6 +12,7 @@ from config.config_loader import config_loader
 from db.database import db
 from core.sync_engine import SyncEngine
 from handlers.tg_handler import get_tg_handlers
+from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command
 from api.admin_api import app as admin_app
 
 logging.basicConfig(
@@ -73,6 +74,28 @@ async def handle_qq_webhook(request):
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     file_name = msg_part['data'].get('name', 'unknown_file')
             
+            combined_text = "".join(text_parts).strip()
+            
+            # 指令识别与路由
+            if combined_text.startswith('/'):
+                parts = combined_text.split()
+                cmd = parts[0].lower()
+                args = parts[1:]
+                response = ""
+                
+                if cmd == '/bind':
+                    response = await handle_bind_command(qq_id, args)
+                elif cmd == '/setprefix':
+                    response = await handle_setprefix_command(qq_id, 'qq', args)
+                elif cmd == '/help':
+                    response = await handle_help_command()
+                else:
+                    response = "Unknown command. Use /help for more info."
+                
+                if response:
+                    await onebot_client.send_group_msg(engine.qq_group_id, response)
+                return web.Response(text="ok")
+
             # 解析回复逻辑 (QQ -> TG)
             reply_to_tg_id = None
             for msg_part in message_array:
@@ -84,6 +107,17 @@ async def handle_qq_webhook(request):
                             logger.info(f"检测到 QQ 回复，映射到 TG 消息 ID: {reply_to_tg_id}")
                         break
 
+            # 解析回复逻辑 (QQ -> TG)
+            reply_to_tg_id = None
+            for msg_part in message_array:
+                if msg_part.get('type') == 'reply':
+                    original_qq_id = int(msg_part['data'].get('id', 0))
+                    if original_qq_id:
+                        reply_to_tg_id = await db.get_tg_msg_id_by_qq(original_qq_id)
+                        if reply_to_tg_id:
+                            logger.info(f"检测到 QQ 回复，映射到 TG 消息 ID: {reply_to_tg_id}")
+                        break
+            
             combined_text = "".join(text_parts).strip()
             
             # 构造 TG 的 HTML 消息以支持 @
