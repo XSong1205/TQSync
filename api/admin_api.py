@@ -37,9 +37,11 @@ class BindingUpdate(BaseModel):
     qq_nickname: Optional[str] = None
 
 @app.post("/admin/restart")
-def restart_service(api_key: bool = Depends(verify_api_key)):
-    # 简单重启：退出当前进程，由外部管理器（如 systemd 或 docker）负责重启
-    os.execv(sys.executable, ['python'] + sys.argv)
+async def trigger_restart(api_key: bool = Depends(verify_api_key)):
+    from main import graceful_restart
+    # 异步触发重启，避免 API 请求因进程关闭而报错
+    asyncio.create_task(graceful_restart())
+    return {"status": "restarting", "message": "系统正在优雅重启..."}
 
 @app.get("/admin/status")
 async def get_status(api_key: bool = Depends(verify_api_key)):

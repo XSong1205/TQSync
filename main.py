@@ -214,6 +214,18 @@ async def cleanup_temp_files():
         await asyncio.sleep(3600)
 
 start_time = 0.0
+restart_event = asyncio.Event()
+background_tasks = []
+
+async def graceful_restart():
+    """优雅重启：取消所有后台任务并重新加载进程"""
+    logger.info("正在触发优雅重启...")
+    restart_event.set()
+    for task in background_tasks:
+        task.cancel()
+    # 等待一小段时间让任务清理资源
+    await asyncio.sleep(1)
+    os.execv(sys.executable, ['python'] + sys.argv)
 
 async def main():
     global start_time
@@ -261,9 +273,11 @@ async def main():
     await application.initialize()
     await application.start()
     updater_task = asyncio.create_task(application.updater.start_polling(drop_pending_updates=True))
+    background_tasks.append(updater_task)
     
     # 启动 QQ Webhook
     webhook_task = asyncio.create_task(start_qq_webhook())
+    background_tasks.append(webhook_task)
     
     # 启动 Admin API (使用 uvicorn 的 serve 方法在协程中运行)
     from fastapi.staticfiles import StaticFiles
@@ -273,9 +287,11 @@ async def main():
     config = uvicorn.Config(admin_app, host=config_loader.get('server.host', '0.0.0.0'), port=config_loader.get('server.admin_api_port', 8081), log_level="info")
     server = uvicorn.Server(config)
     api_task = asyncio.create_task(server.serve())
+    background_tasks.append(api_task)
     
     # 启动临时文件清理任务
     cleanup_task = asyncio.create_task(cleanup_temp_files())
+    background_tasks.append(cleanup_task)
     
     logger.info("TQSync is running...")
     
@@ -283,8 +299,15 @@ async def main():
     engine = SyncEngine.get_instance()
     await engine.send_startup_notification()
     
-    # 等待所有任务
-    await asyncio.gather(updater_task, webhook_task, api_task, cleanup_task)
+    # 等待重启信号或任务结束
+    try:
+        await restart_event.wait()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        logger.info("TQSync 正在关闭...")
+        # 确保数据库连接关闭
+        await db.close()
 
 if __name__ == '__main__':
     try:

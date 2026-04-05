@@ -130,4 +130,8 @@ class Database:
         """提供内部连接方法供外部使用（用于 status 统计）"""
         return aiosqlite.connect(self.db_path)
 
+    async def close(self):
+        """关闭数据库连接池（虽然 aiosqlite 是短连接，但预留接口以备未来扩展）"""
+        pass
+
 db = Database()
