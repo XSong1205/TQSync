@@ -237,13 +237,18 @@ async def main():
     token = config_loader.get('telegram.bot_token')
     proxy_url = config_loader.get('telegram.proxy_url')
     
-    # 配置请求超时时间，防止大文件获取时超时 (连接5s, 读取10s)
-    request = HTTPXRequest(connection_pool_size=8, read_timeout=10.0, connect_timeout=5.0)
+    # 配置请求超时时间，防止大文件获取时超时 (连接10s, 读取30s)
+    request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
     
     builder = Application.builder().token(token).request(request)
     if proxy_url:
         logger.info(f"Using Telegram proxy: {proxy_url}")
+        # 确保代理地址包含协议头，否则 PTB 可能会报错
+        if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
+            proxy_url = f"http://{proxy_url}"
         builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
+    else:
+        logger.warning("未配置 Telegram 代理，国内服务器可能无法连接！")
     
     application = builder.build()
     
