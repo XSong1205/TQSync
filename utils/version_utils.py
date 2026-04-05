@@ -4,7 +4,10 @@ import os
 def get_version():
     """从 VERSION 文件读取版本号"""
     try:
-        with open(os.path.join(os.path.dirname(__file__), '..', 'VERSION'), 'r') as f:
+        # 向上查找两层目录到达项目根目录
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        version_path = os.path.join(root_dir, 'VERSION')
+        with open(version_path, 'r') as f:
             return f.read().strip()
     except Exception:
         return "Unknown"
