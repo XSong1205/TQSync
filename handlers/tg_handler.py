@@ -16,16 +16,18 @@ async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_T
     deleted_ids = getattr(update, 'deleted_message_ids', [])
     
     if not deleted_ids:
+        logger.warning("No deleted_message_ids found in update")
         return
 
-    # 检查聊天 ID (PTB v21 中可能在 update.chat 或通过其他方式获取)
+    # 检查聊天 ID (优先使用 effective_chat)
     chat_id = None
-    if hasattr(update, 'chat'):
+    if update.effective_chat:
+        chat_id = update.effective_chat.id
+    elif hasattr(update, 'chat'):
         chat_id = update.chat.id
-    elif hasattr(update, 'channel_post') and update.channel_post:
-        chat_id = update.channel_post.chat.id
     
     if chat_id != config_loader.get('telegram.group_id'):
+        logger.warning(f"Chat ID mismatch: {chat_id} vs {config_loader.get('telegram.group_id')}")
         return
     
     for msg_id in deleted_ids:
@@ -56,21 +58,39 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.photo:
         file_id = msg.photo[-1].file_id
         caption = msg.caption or ""
-        await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
+        result = await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
+        if result and result.get('data', {}).get('message_id'):
+            await db.save_message_mapping(
+                tg_message_id=update.message.message_id,
+                qq_message_id=result['data']['message_id'],
+                sender_tg_id=user.id
+            )
         return
 
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
         logger.info(f"Detected video from {user.username}, forwarding to QQ...")
-        await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
+        result = await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
+        if result and result.get('data', {}).get('message_id'):
+            await db.save_message_mapping(
+                tg_message_id=update.message.message_id,
+                qq_message_id=result['data']['message_id'],
+                sender_tg_id=user.id
+            )
         return
 
     # 处理通用文件
     if msg.document:
         file_id = msg.document.file_id
         filename = msg.document.file_name or "unknown_file"
-        await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
+        result = await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
+        if result and result.get('data', {}).get('message_id'):
+            await db.save_message_mapping(
+                tg_message_id=update.message.message_id,
+                qq_message_id=result['data']['message_id'],
+                sender_tg_id=user.id
+            )
         return
 
     # 处理文本消息

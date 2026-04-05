@@ -108,9 +108,11 @@ class SyncEngine:
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             logger.info(f"Image with caption sent to QQ. Result: {result}")
+            return result
 
         except Exception as e:
             logger.error(f"Failed to forward image to QQ: {e}", exc_info=True)
+            return None
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
@@ -138,9 +140,11 @@ class SyncEngine:
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             logger.info(f"Video sent to QQ. Result: {result}")
+            return result
 
         except Exception as e:
             logger.error(f"Failed to forward video to QQ: {e}", exc_info=True)
+            return None
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
@@ -168,9 +172,11 @@ class SyncEngine:
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             logger.info(f"File sent to QQ. Result: {result}")
+            return result
 
         except Exception as e:
             logger.error(f"Failed to forward file to QQ: {e}", exc_info=True)
+            return None
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
