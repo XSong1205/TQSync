@@ -3,115 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TQSync 控制面板</title>
+    <title>TQSync 智能同步控制台</title>
     <!-- Element Plus CSS -->
     <link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
     <style>
-        body { margin: 0; font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif; background-color: #f5f7fa; }
+        :root {
+            --primary-color: #409EFF;
+            --bg-color: #f0f2f5;
+            --sidebar-bg: #001529;
+            --text-color: #303133;
+        }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); }
         .container { display: flex; height: 100vh; }
-        .sidebar { width: 240px; background-color: #304156; color: white; }
-        .logo { height: 60px; line-height: 60px; text-align: center; font-size: 20px; font-weight: bold; border-bottom: 1px solid #1f2d3d; }
-        .main-content { flex: 1; padding: 20px; overflow-y: auto; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; }
-        .status-item { margin-bottom: 15px; font-size: 16px; }
-        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 999; }
-        .login-box { background: white; padding: 30px; border-radius: 8px; width: 300px; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column; box-shadow: 2px 0 8px rgba(0,0,0,0.15); transition: width 0.3s; }
+        .logo { height: 64px; line-height: 64px; text-align: center; font-size: 22px; font-weight: 700; background: linear-gradient(90deg, #1890ff, #36cfc9); -webkit-background-clip: text; color: transparent; letter-spacing: 1px; }
+        .el-menu { border-right: none !important; }
+        .el-menu-item.is-active { background-color: var(--primary-color) !important; color: white !important; border-radius: 4px; margin: 0 8px; }
+        
+        /* Main Content */
+        .main-content { flex: 1; padding: 24px; overflow-y: auto; }
+        .page-header { margin-bottom: 24px; }
+        .page-title { font-size: 24px; font-weight: 600; color: #1f2d3d; }
+        
+        /* Cards & Dashboard */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-4px); }
+        .stat-info h4 { margin: 0 0 8px 0; font-size: 14px; color: #909399; font-weight: normal; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #303133; }
+        .stat-icon { font-size: 48px; opacity: 0.2; }
+        
+        /* Login */
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        .login-box { background: white; padding: 40px; border-radius: 12px; width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Terminal Logs */
+        .terminal-window { background: #1e1e1e; border-radius: 8px; padding: 16px; height: 500px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.6; color: #d4d4d4; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+        .log-line { border-bottom: 1px solid #333; padding: 2px 0; }
+        .log-info { color: #4ec9b0; }
+        .log-error { color: #f44747; }
+        .log-warn { color: #cca700; }
     </style>
 </head>
 <body>
     <div id="app">
-        <!-- 登录遮罩 -->
+        <!-- Login -->
         <div class="login-overlay" v-if="!isLoggedIn">
             <div class="login-box">
-                <h3 style="text-align: center;">TQSync 管理登录</h3>
-                <el-input v-model="apiKeyInput" placeholder="请输入 API Key" show-password></el-input>
-                <el-button type="primary" style="width: 100%; margin-top: 15px;" @click="login">进入系统</el-button>
+                <h2 style="text-align: center; margin-bottom: 30px; color: #303133;">TQSync 管理登录</h2>
+                <el-input v-model="apiKeyInput" placeholder="请输入 API Key" show-password size="large" prefix-icon="Lock"></el-input>
+                <el-button type="primary" size="large" style="width: 100%; margin-top: 20px;" @click="login" :loading="isLoading">进入系统</el-button>
             </div>
         </div>
 
         <div class="container" v-show="isLoggedIn">
-            <!-- 侧边栏 -->
             <div class="sidebar">
-                <div class="logo">TQSync Panel</div>
-                <el-menu :default-active="activeMenu" background-color="#304156" text-color="#bfcbd9" active-text-color="#409EFF" @select="handleSelect">
-                    <el-menu-item index="dashboard">仪表盘</el-menu-item>
-                    <el-menu-item index="bindings">用户绑定管理</el-menu-item>
-                    <el-menu-item index="settings">系统设置</el-menu-item>
-                    <el-menu-item index="logs">运行日志</el-menu-item>
+                <div class="logo">TQSync Console</div>
+                <el-menu :default-active="activeMenu" background-color="#001529" text-color="rgba(255,255,255,0.65)" active-text-color="#fff" @select="handleSelect">
+                    <el-menu-item index="dashboard"><el-icon><Odometer /></el-icon><span>仪表盘</span></el-menu-item>
+                    <el-menu-item index="bindings"><el-icon><User /></el-icon><span>用户绑定</span></el-menu-item>
+                    <el-menu-item index="settings"><el-icon><Setting /></el-icon><span>系统设置</span></el-menu-item>
+                    <el-menu-item index="logs"><el-icon><Document /></el-icon><span>运行日志</span></el-menu-item>
                 </el-menu>
             </div>
 
-            <!-- 主内容区 -->
             <div class="main-content">
-                <!-- 仪表盘 -->
+                <!-- Dashboard -->
                 <div v-if="activeMenu === 'dashboard'">
-                    <el-card>
-                        <template #header><span>系统状态</span></template>
-                        <div class="status-item"><strong>运行时长:</strong> {{ status.uptime || '加载中...' }}</div>
-                        <div class="status-item"><strong>绑定用户数:</strong> {{ status.bound_users || 0 }} 人</div>
-                        <div class="status-item"><strong>目标 QQ 群:</strong> {{ status.qq_group_id || '-' }}</div>
-                        <div class="status-item"><strong>目标 TG 群:</strong> {{ status.tg_group_id || '-' }}</div>
-                        <el-button type="danger" @click="restartService" style="margin-top: 20px;">重启机器人服务</el-button>
+                    <div class="page-header"><div class="page-title">系统概览</div></div>
+                    <div class="dashboard-grid">
+                        <div class="stat-card">
+                            <div class="stat-info"><h4>运行时长</h4><div class="stat-value">{{ status.uptime || '-' }}</div></div>
+                            <el-icon class="stat-icon" color="#409EFF"><Timer /></el-icon>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-info"><h4>绑定用户</h4><div class="stat-value">{{ status.bound_users || 0 }}</div></div>
+                            <el-icon class="stat-icon" color="#67C23A"><UserFilled /></el-icon>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-info"><h4>QQ 目标群</h4><div class="stat-value">{{ status.qq_group_id || '-' }}</div></div>
+                            <el-icon class="stat-icon" color="#E6A23C"><ChatDotRound /></el-icon>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-info"><h4>TG 目标群</h4><div class="stat-value">{{ status.tg_group_id || '-' }}</div></div>
+                            <el-icon class="stat-icon" color="#F56C6C"><Promotion /></el-icon>
+                        </div>
+                    </div>
+                    <el-card shadow="hover">
+                        <template #header><div class="card-header"><span>快捷操作</span></div></template>
+                        <el-button type="danger" icon="RefreshRight" @click="restartService" plain>重启机器人服务</el-button>
                     </el-card>
                 </div>
 
-                <!-- 用户绑定管理 -->
+                <!-- Bindings -->
                 <div v-if="activeMenu === 'bindings'">
-                    <el-card>
+                    <div class="page-header"><div class="page-title">用户绑定管理</div></div>
+                    <el-card shadow="never">
                         <template #header>
                             <div class="card-header">
                                 <span>绑定列表</span>
-                                <el-button type="primary" size="small" @click="loadBindings">刷新</el-button>
+                                <el-button type="primary" icon="Refresh" size="small" @click="loadBindings">刷新数据</el-button>
                             </div>
                         </template>
-                        <el-table :data="bindings" style="width: 100%">
-                            <el-table-column prop="tg_user_id" label="TG User ID"></el-table-column>
-                            <el-table-column prop="qq_user_id" label="QQ User ID"></el-table-column>
-                            <el-table-column prop="tg_username" label="TG Username"></el-table-column>
-                            <el-table-column label="操作" width="100">
+                        <el-table :data="bindings" stripe style="width: 100%" empty-text="暂无绑定数据">
+                            <el-table-column prop="tg_user_id" label="Telegram ID" width="150"></el-table-column>
+                            <el-table-column prop="qq_user_id" label="QQ 号" width="150"></el-table-column>
+                            <el-table-column prop="tg_username" label="TG 用户名"></el-table-column>
+                            <el-table-column label="操作" width="120" align="center">
                                 <template #default="scope">
-                                    <el-button size="small" type="danger" @click="deleteBinding(scope.row.tg_user_id)">删除</el-button>
+                                    <el-popconfirm title="确定删除此绑定吗？" @confirm="deleteBinding(scope.row.tg_user_id)">
+                                        <template #reference>
+                                            <el-button size="small" type="danger" icon="Delete" circle></el-button>
+                                        </template>
+                                    </el-popconfirm>
                                 </template>
                             </el-table-column>
                         </el-table>
                     </el-card>
                 </div>
 
-                <!-- 系统设置 -->
+                <!-- Settings -->
                 <div v-if="activeMenu === 'settings'">
-                    <el-card>
-                        <template #header><span>配置修改</span></template>
-                        <el-form label-width="120px">
-                            <el-form-item label="TG Group ID">
-                                <el-input v-model="settings.telegram.group_id"></el-input>
+                    <div class="page-header"><div class="page-title">系统配置</div></div>
+                    <el-card shadow="never">
+                        <el-form label-position="top">
+                            <el-row :gutter="20">
+                                <el-col :span="12">
+                                    <el-form-item label="Telegram Group ID">
+                                        <el-input v-model="settings.telegram.group_id" placeholder="-100..."></el-input>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="12">
+                                    <el-form-item label="QQ Group ID">
+                                        <el-input v-model="settings.qq.group_id" placeholder="123456..."></el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item label="代理地址 (Proxy URL)">
+                                <el-input v-model="settings.telegram.proxy_url" placeholder="http://127.0.0.1:7890"></el-input>
                             </el-form-item>
-                            <el-form-item label="QQ Group ID">
-                                <el-input v-model="settings.qq.group_id"></el-input>
-                            </el-form-item>
-                            <el-form-item label="Proxy URL">
-                                <el-input v-model="settings.telegram.proxy_url"></el-input>
-                            </el-form-item>
-                            <el-button type="success" @click="saveSettings">保存配置</el-button>
+                            <el-button type="primary" icon="Check" @click="saveSettings">保存更改</el-button>
                         </el-form>
                     </el-card>
                 </div>
 
-                <!-- 运行日志 -->
+                <!-- Logs -->
                 <div v-if="activeMenu === 'logs'">
-                    <el-card>
-                        <template #header><span>最近日志</span></template>
-                        <div style="height: 400px; overflow-y: auto; background: #2d2d2d; color: #ccc; padding: 10px; font-family: monospace;">
-                            <div v-for="(log, index) in logs" :key="index">{{ log }}</div>
+                    <div class="page-header"><div class="page-title">实时日志监控</div></div>
+                    <div class="terminal-window">
+                        <div v-for="(log, index) in logs" :key="index" class="log-line">
+                            <span v-if="log.includes('ERROR')" class="log-error">[ERR] </span>
+                            <span v-else-if="log.includes('WARN')" class="log-warn">[WRN] </span>
+                            <span v-else class="log-info">[INF] </span>
+                            {{ log }}
                         </div>
-                    </el-card>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Vue 3 & Element Plus & Axios -->
     <script src="//unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="//unpkg.com/element-plus"></script>
+    <script src="//unpkg.com/@element-plus/icons-vue"></script>
     <script src="//unpkg.com/axios/dist/axios.min.js"></script>
 
     <script>
@@ -121,25 +178,30 @@
         createApp({
             setup() {
                 const isLoggedIn = ref(false);
+                const isLoading = ref(false);
                 const apiKeyInput = ref('');
                 const activeMenu = ref('dashboard');
                 const status = ref({});
                 const bindings = ref([]);
-                const logs = ref([]);
+                const logs = ref(["System initializing...", "Waiting for webhook connections..."]);
                 const settings = ref({ telegram: {}, qq: {} });
 
-                // 初始化 API 客户端
-                const api = axios.create({
-                    baseURL: window.location.origin,
-                    headers: { 'X-API-Key': '' }
-                });
+                const api = axios.create({ baseURL: window.location.origin, headers: { 'X-API-Key': '' } });
 
-                const login = () => {
+                const login = async () => {
                     if (!apiKeyInput.value) return ElMessage.error('请输入 API Key');
-                    localStorage.setItem('tqsync_api_key', apiKeyInput.value);
-                    api.defaults.headers['X-API-Key'] = apiKeyInput.value;
-                    isLoggedIn.value = true;
-                    loadStatus();
+                    isLoading.value = true;
+                    try {
+                        api.defaults.headers['X-API-Key'] = apiKeyInput.value;
+                        await api.get('/admin/status'); // Test connection
+                        localStorage.setItem('tqsync_api_key', apiKeyInput.value);
+                        isLoggedIn.value = true;
+                        loadStatus();
+                    } catch (e) {
+                        ElMessage.error('API Key 无效或连接失败');
+                    } finally {
+                        isLoading.value = false;
+                    }
                 };
 
                 const handleSelect = (key) => {
@@ -152,9 +214,7 @@
                     try {
                         const res = await api.get('/admin/status');
                         status.value = res.data;
-                    } catch (e) {
-                        if (e.response?.status === 401) logout();
-                    }
+                    } catch (e) { if (e.response?.status === 401) logout(); }
                 };
 
                 const loadBindings = async () => {
@@ -165,52 +225,41 @@
                 };
 
                 const deleteBinding = async (id) => {
-                    if (!confirm('确定要删除此绑定吗？')) return;
                     try {
                         await api.delete(`/admin/bindings/${id}`);
-                        ElMessage.success('删除成功');
+                        ElMessage.success('绑定已解除');
                         loadBindings();
-                    } catch (e) { ElMessage.error('删除失败'); }
+                    } catch (e) { ElMessage.error('操作失败'); }
                 };
 
                 const restartService = async () => {
-                    if (!confirm('确定要重启机器人吗？')) return;
                     try {
                         await api.post('/admin/restart');
-                        ElMessage.success('重启指令已发送');
+                        ElMessage.success({ message: '重启指令已下发，服务将在数秒后恢复', duration: 3000 });
                     } catch (e) { ElMessage.error('重启失败'); }
                 };
 
                 const loadLogs = async () => {
                     try {
                         const res = await api.get('/admin/logs');
-                        logs.value = res.data.logs;
+                        logs.value = res.data.logs || logs.value;
                     } catch (e) { console.error(e); }
                 };
 
-                const saveSettings = async () => {
-                    ElMessage.info('配置保存功能待后端完善...');
-                };
-
-                const logout = () => {
-                    isLoggedIn.value = false;
-                    localStorage.removeItem('tqsync_api_key');
-                };
+                const saveSettings = () => ElMessage.info('配置修改功能正在开发中...');
+                const logout = () => { isLoggedIn.value = false; localStorage.removeItem('tqsync_api_key'); };
 
                 onMounted(() => {
                     const savedKey = localStorage.getItem('tqsync_api_key');
-                    if (savedKey) {
-                        apiKeyInput.value = savedKey;
-                        login();
-                    }
+                    if (savedKey) { apiKeyInput.value = savedKey; login(); }
                 });
 
                 return {
-                    isLoggedIn, apiKeyInput, activeMenu, status, bindings, logs, settings,
+                    isLoggedIn, isLoading, apiKeyInput, activeMenu, status, bindings, logs, settings,
                     login, handleSelect, loadStatus, loadBindings, deleteBinding, restartService, loadLogs, saveSettings
                 };
             }
-        }).use(ElementPlus).mount('#app');
+        }).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');
     </script>
 </body>
 </html>
