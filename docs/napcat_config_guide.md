@@ -35,7 +35,7 @@
     *  **Host/Port**：保持和config.yaml一致
     *  **CORS/WebSocket**:启用
     *  **Token**:保持和上面的一致
-
+5.  点击 **启用** 按钮并保存。
 
 ## 4. 验证配置
 
