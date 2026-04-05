@@ -16,8 +16,8 @@ server:
   qq_webhook_port: 8080  # 接收 Napcat Webhook 的端口
   admin_api_port: 8081   # 管理 API 及 Web 面板的端口
   webhook_path: "/webhook/qq"  # Webhook 路径
-  admin_api_key: "your_secure_admin_key_here"  # 访问管理面板所需的 API Key
-  admin_user_ids: []  # 管理员用户 ID 列表 (支持 Telegram User ID 和 QQ User ID)，例如: [123456789, 987654321]
+  admin_api_key: "your_secure_admin_key_here"  # 管理面板 API Key (默认为 Level 1 管理员权限)
+  admin_user_ids: []  # 机器人指令管理员 ID 列表 (支持 Telegram User ID 和 QQ User ID)，例如: [123456789, 987654321]
 
 database:
   path: "db/tqsync.db"

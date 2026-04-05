@@ -20,12 +20,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def verify_api_key(x_api_key: str = Header(None)):
-    """简单的 API Key 验证依赖项"""
+# 权限等级定义
+PERM_LEVEL_USER = 0   # 普通用户：仅查看状态
+PERM_LEVEL_ADMIN = 1  # 管理员：所有操作
+
+def get_permission_level(x_api_key: str = Header(None)):
+    """获取当前 API Key 的权限等级"""
     correct_key = config_loader.get('server.admin_api_key')
     if not correct_key or x_api_key != correct_key:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-    return True
+        return -1  # 无效 Key
+    return PERM_LEVEL_ADMIN  # 管理面板 Key 默认为 Level 1
+
+def require_permission(level: int):
+    """权限校验依赖项工厂"""
+    async def permission_checker(x_api_key: str = Header(None)):
+        current_level = get_permission_level(x_api_key)
+        if current_level < level:
+            raise HTTPException(status_code=403, detail="Forbidden: Insufficient permissions")
+        return True
+    return permission_checker
 
 class ConfigUpdate(BaseModel):
     key: str
@@ -37,15 +50,15 @@ class BindingUpdate(BaseModel):
     tg_username: Optional[str] = None
     qq_nickname: Optional[str] = None
 
-@app.post("/admin/restart")
-async def trigger_restart(api_key: bool = Depends(verify_api_key)):
+@app.post("/admin/restart", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def trigger_restart():
     from main import graceful_restart
     # 异步触发重启，避免 API 请求因进程关闭而报错
     asyncio.create_task(graceful_restart())
     return {"status": "restarting", "message": "系统正在优雅重启..."}
 
-@app.get("/admin/status")
-async def get_status(api_key: bool = Depends(verify_api_key)):
+@app.get("/admin/status", dependencies=[Depends(require_permission(PERM_LEVEL_USER))])
+async def get_status():
     try:
         from main import start_time
         current_start_time = start_time
@@ -68,13 +81,13 @@ async def get_status(api_key: bool = Depends(verify_api_key)):
         "tg_group_id": config_loader.get('telegram.group_id')
     }
 
-@app.get("/admin/logs")
-async def get_logs(api_key: bool = Depends(verify_api_key)):
+@app.get("/admin/logs", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_logs():
     # 这里可以对接一个内存中的日志队列，目前先返回一个简单的示例
     return {"logs": ["System running...", "Webhook server started"]}
 
-@app.put("/admin/config/{config_key}")
-def update_config(config_key: str, update: ConfigUpdate, api_key: bool = Depends(verify_api_key)):
+@app.put("/admin/config/{config_key}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+def update_config(config_key: str, update: ConfigUpdate):
     try:
         # 尝试转换类型
         value = update.value
@@ -88,30 +101,30 @@ def update_config(config_key: str, update: ConfigUpdate, api_key: bool = Depends
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/bindings")
-async def get_bindings(api_key: bool = Depends(verify_api_key)):
+@app.get("/admin/bindings", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_bindings():
     bindings = await db.get_all_bindings()
     return [{"tg_user_id": b[0], "qq_user_id": b[1], "tg_username": b[2], "qq_nickname": b[3]} for b in bindings]
 
-@app.delete("/admin/bindings/{tg_user_id}")
-async def delete_binding(tg_user_id: int, api_key: bool = Depends(verify_api_key)):
+@app.delete("/admin/bindings/{tg_user_id}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def delete_binding(tg_user_id: int):
     await db.delete_binding(tg_user_id=tg_user_id)
     return {"status": "success"}
 
-@app.put("/admin/bindings")
-async def add_binding(binding: BindingUpdate, api_key: bool = Depends(verify_api_key)):
+@app.put("/admin/bindings", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def add_binding(binding: BindingUpdate):
     await db.add_binding(binding.tg_user_id, binding.qq_user_id, binding.tg_username, binding.tg_username)
     return {"status": "success"}
 
-@app.get("/admin/admins")
-async def get_admins(api_key: bool = Depends(verify_api_key)):
+@app.get("/admin/admins", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_admins():
     admins = config_loader.get('server.admin_user_ids', [])
     if not isinstance(admins, list):
         admins = []
     return {"admins": admins}
 
-@app.post("/admin/admins")
-async def toggle_admin(user_id: int, api_key: bool = Depends(verify_api_key)):
+@app.post("/admin/admins", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def toggle_admin(user_id: int):
     admins = config_loader.get('server.admin_user_ids', [])
     if not isinstance(admins, list):
         admins = []
