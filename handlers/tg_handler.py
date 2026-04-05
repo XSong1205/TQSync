@@ -4,8 +4,9 @@ from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
-from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic
+from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,12 @@ async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT
     response = await handle_setprefix_command_logic(tg_user.id, 'tg', context.args)
     await update.message.reply_text(response)
 
+async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 使用 main.py 中定义的全局 start_time
+    from main import start_time
+    response = await handle_status_command(start_time)
+    await update.message.reply_text(response)
+
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = await handle_help_command_logic()
     await update.message.reply_text(response)
@@ -205,5 +212,6 @@ def get_tg_handlers():
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
         CommandHandler('setprefix', handle_setprefix_command),
-        CommandHandler('help', handle_help_command)
+        CommandHandler('help', handle_help_command),
+        CommandHandler('status', handle_status_command_tg)
     ]

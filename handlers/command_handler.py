@@ -1,5 +1,10 @@
 from db.database import db
+from config.config_loader import config_loader
 import logging
+import time
+import os
+import subprocess
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,53 @@ async def handle_setprefix_command(user_id: int, platform: str, args: list):
     
     await db.update_custom_prefix(uid, new_prefix)
     return f"Your unified display name has been updated to: {new_prefix}"
+
+async def handle_status_command(start_time: float):
+    """处理 /status 指令，返回系统状态字符串"""
+    # 1. 获取最后更新时间
+    last_update = "Unknown"
+    try:
+        result = subprocess.run(['git', 'log', '-1', '--format=%ci'], 
+                                capture_output=True, text=True, check=True)
+        git_time_str = result.stdout.strip()
+        last_update = git_time_str.split('+')[0].strip()
+    except Exception:
+        try:
+            mtime = os.path.getmtime('main.py')
+            last_update = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            pass
+
+    # 2. 计算运行时长
+    uptime_seconds = int(time.time() - start_time)
+    hours, remainder = divmod(uptime_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    uptime_str = f"{hours}小时 {minutes}分 {seconds}秒"
+
+    # 3. 获取同步统计 (通过 message_mapping 表行数近似)
+    async with db._Database__get_connection() as conn:
+        cursor = await conn.execute('SELECT COUNT(*) FROM message_mapping')
+        sync_count = (await cursor.fetchone())[0]
+
+    # 4. 获取绑定人数
+    bindings = await db.get_all_bindings()
+    user_count = len(bindings)
+
+    # 5. 获取配置信息
+    qq_gid = config_loader.get('qq.group_id')
+    tg_gid = config_loader.get('telegram.group_id')
+
+    return (
+        f"📊 TQSync 运行状态报告\n"
+        f"--------------------------\n"
+        f"🕒 上次更新: {last_update}\n"
+        f"⏱️ 运行时长: {uptime_str}\n"
+        f"🔗 已同步消息: {sync_count} 条\n"
+        f"👥 绑定用户数: {user_count} 人\n"
+        f"💬 目标 QQ 群: {qq_gid}\n"
+        f"✈️ 目标 TG 群: {tg_gid}\n"
+        f"--------------------------"
+    )
 
 async def handle_help_command():
     """处理 /help 指令"""

@@ -126,4 +126,8 @@ class Database:
             async with db.execute('SELECT * FROM bindings') as cursor:
                 return await cursor.fetchall()
 
+    def _Database__get_connection(self):
+        """提供内部连接方法供外部使用（用于 status 统计）"""
+        return aiosqlite.connect(self.db_path)
+
 db = Database()
