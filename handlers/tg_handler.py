@@ -195,6 +195,15 @@ async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT
 
 async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from main import graceful_restart
+    from config.config_loader import config_loader
+    
+    admin_ids = config_loader.get('server.admin_user_ids', [])
+    user_id = update.effective_user.id
+    
+    if admin_ids and user_id not in admin_ids:
+        await update.message.reply_text("⛔ 权限不足：仅管理员可执行重启操作")
+        return
+        
     await update.message.reply_text("🔄 正在执行优雅重启，服务将在数秒后恢复...")
     asyncio.create_task(graceful_restart())
 

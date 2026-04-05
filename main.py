@@ -99,6 +99,11 @@ async def handle_qq_webhook(request):
                 elif cmd == '/status':
                     response = await handle_status_command(start_time)
                 elif cmd == '/reboot':
+                    admin_ids = config_loader.get('server.admin_user_ids', [])
+                    if admin_ids and qq_id not in admin_ids:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "⛔ 权限不足：仅管理员可执行重启操作")
+                        return web.Response(text="ok")
+                    
                     await onebot_client.send_group_msg(engine.qq_group_id, "🔄 正在执行优雅重启，服务将在数秒后恢复...")
                     asyncio.create_task(graceful_restart())
                     return web.Response(text="ok")
