@@ -13,6 +13,8 @@ HELP_TEXT = (
     "可用命令：\n"
     "/bind <qq_number> - 绑定您的 QQ 号以启用同步\n"
     "/setprefix <nickname> - 设置您在双端显示的统一昵称\n"
+    "/status - 查看机器人运行状态\n"
+    "/reboot - 远程重启机器人（管理员）\n"
     "/help - 显示此帮助信息\n\n"
     "提示：绑定后，您在 Telegram 和 QQ 的消息将自动双向同步。"
 )

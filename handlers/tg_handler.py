@@ -193,6 +193,11 @@ async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT
         response = await handle_status_command(start_time)
     await update.message.reply_text(response)
 
+async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from main import graceful_restart
+    await update.message.reply_text("🔄 正在执行优雅重启，服务将在数秒后恢复...")
+    asyncio.create_task(graceful_restart())
+
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = await handle_help_command_logic()
     await update.message.reply_text(response)
@@ -216,5 +221,6 @@ def get_tg_handlers():
         CommandHandler('bind', handle_bind_command),
         CommandHandler('setprefix', handle_setprefix_command),
         CommandHandler('help', handle_help_command),
-        CommandHandler('status', handle_status_command_tg)
+        CommandHandler('status', handle_status_command_tg),
+        CommandHandler('reboot', handle_reboot_command_tg)
     ]

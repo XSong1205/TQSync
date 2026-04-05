@@ -98,6 +98,10 @@ async def handle_qq_webhook(request):
                     response = await handle_help_command()
                 elif cmd == '/status':
                     response = await handle_status_command(start_time)
+                elif cmd == '/reboot':
+                    await onebot_client.send_group_msg(engine.qq_group_id, "🔄 正在执行优雅重启，服务将在数秒后恢复...")
+                    asyncio.create_task(graceful_restart())
+                    return web.Response(text="ok")
                 else:
                     response = "Unknown command. Use /help for more info."
                 
