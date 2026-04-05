@@ -61,8 +61,8 @@ async def trigger_restart():
 @app.get("/admin/status", dependencies=[Depends(require_permission(PERM_LEVEL_USER))])
 async def get_status():
     try:
-        from main import start_time
-        current_start_time = start_time
+        from main import GLOBAL_START_TIME
+        current_start_time = GLOBAL_START_TIME
         # 简单的合理性检查：如果时间戳小于 2024-01-01，则认为无效
         if current_start_time < 1704067200:
             raise ValueError("Invalid start_time detected")

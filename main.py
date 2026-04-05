@@ -22,6 +22,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 记录全局启动时间，用于 Web 面板显示运行时长
+GLOBAL_START_TIME = time.time()
+
 async def handle_qq_webhook(request):
     try:
         data = await request.json()
