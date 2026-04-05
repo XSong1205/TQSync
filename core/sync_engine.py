@@ -3,6 +3,8 @@ import logging
 import os
 import uuid
 import aiohttp
+import subprocess
+from datetime import datetime
 from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
 from db.database import db
@@ -270,18 +272,46 @@ class SyncEngine:
 
     async def send_startup_notification(self):
         """向两个平台发送启动成功通知"""
-        message = "🚀 TQSync 机器人已成功启动并正在运行！"
         
+        # 1. 获取最后更新时间
+        last_update = "Unknown"
+        try:
+            result = subprocess.run(['git', 'log', '-1', '--format=%ci'], 
+                                    capture_output=True, text=True, check=True)
+            git_time_str = result.stdout.strip()
+            last_update = git_time_str.split('+')[0].strip()
+        except Exception:
+            try:
+                mtime = os.path.getmtime('main.py')
+                last_update = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                pass
+
+        # 2. 获取配置信息
+        qq_gid = config_loader.get('qq.group_id')
+        tg_gid = config_loader.get('telegram.group_id')
+
+        # 3. 构造消息
+        message = (
+            f"🚀 TQSync 机器人已成功启动并正在运行！\n"
+            f"--------------------------\n"
+            f"🕒 最后更新: {last_update}\n"
+            f"💬 目标 QQ 群: {qq_gid}\n"
+            f"✈️ 目标 TG 群: {tg_gid}\n"
+            f"--------------------------"
+        )
+        
+        # 4. 发送通知
         # 发送到 Telegram
         try:
-            await self.bot.send_message(chat_id=self.tg_group_id, text=f"[System] {message}")
+            await self.bot.send_message(chat_id=self.tg_group_id, text=message)
             logger.info("Startup notification sent to Telegram.")
         except Exception as e:
             logger.error(f"Failed to send startup notification to Telegram: {e}")
             
         # 发送到 QQ
         try:
-            await onebot_client.send_group_msg(self.qq_group_id, f"[System] {message}")
+            await onebot_client.send_group_msg(self.qq_group_id, message)
             logger.info("Startup notification sent to QQ.")
         except Exception as e:
             logger.error(f"Failed to send startup notification to QQ: {e}")
