@@ -102,3 +102,26 @@ async def delete_binding(tg_user_id: int, api_key: bool = Depends(verify_api_key
 async def add_binding(binding: BindingUpdate, api_key: bool = Depends(verify_api_key)):
     await db.add_binding(binding.tg_user_id, binding.qq_user_id, binding.tg_username, binding.tg_username)
     return {"status": "success"}
+
+@app.get("/admin/admins")
+async def get_admins(api_key: bool = Depends(verify_api_key)):
+    admins = config_loader.get('server.admin_user_ids', [])
+    if not isinstance(admins, list):
+        admins = []
+    return {"admins": admins}
+
+@app.post("/admin/admins")
+async def toggle_admin(user_id: int, api_key: bool = Depends(verify_api_key)):
+    admins = config_loader.get('server.admin_user_ids', [])
+    if not isinstance(admins, list):
+        admins = []
+    
+    if user_id in admins:
+        admins.remove(user_id)
+        msg = f"已取消用户 {user_id} 的管理员权限"
+    else:
+        admins.append(user_id)
+        msg = f"已将用户 {user_id} 设为管理员"
+    
+    config_loader.update_config('server.admin_user_ids', admins)
+    return {"status": "success", "message": msg, "admins": admins}
