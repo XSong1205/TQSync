@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TQSync 控制面板</title>
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
+    <style>
+        body { margin: 0; font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif; background-color: #f5f7fa; }
+        .container { display: flex; height: 100vh; }
+        .sidebar { width: 240px; background-color: #304156; color: white; }
+        .logo { height: 60px; line-height: 60px; text-align: center; font-size: 20px; font-weight: bold; border-bottom: 1px solid #1f2d3d; }
+        .main-content { flex: 1; padding: 20px; overflow-y: auto; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .status-item { margin-bottom: 15px; font-size: 16px; }
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        .login-box { background: white; padding: 30px; border-radius: 8px; width: 300px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录遮罩 -->
+        <div class="login-overlay" v-if="!isLoggedIn">
+            <div class="login-box">
+                <h3 style="text-align: center;">TQSync 管理登录</h3>
+                <el-input v-model="apiKeyInput" placeholder="请输入 API Key" show-password></el-input>
+                <el-button type="primary" style="width: 100%; margin-top: 15px;" @click="login">进入系统</el-button>
+            </div>
+        </div>
+
+        <div class="container" v-show="isLoggedIn">
+            <!-- 侧边栏 -->
+            <div class="sidebar">
+                <div class="logo">TQSync Panel</div>
+                <el-menu :default-active="activeMenu" background-color="#304156" text-color="#bfcbd9" active-text-color="#409EFF" @select="handleSelect">
+                    <el-menu-item index="dashboard">仪表盘</el-menu-item>
+                    <el-menu-item index="bindings">用户绑定管理</el-menu-item>
+                    <el-menu-item index="settings">系统设置</el-menu-item>
+                    <el-menu-item index="logs">运行日志</el-menu-item>
+                </el-menu>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="main-content">
+                <!-- 仪表盘 -->
+                <div v-if="activeMenu === 'dashboard'">
+                    <el-card>
+                        <template #header><span>系统状态</span></template>
+                        <div class="status-item"><strong>运行时长:</strong> {{ status.uptime || '加载中...' }}</div>
+                        <div class="status-item"><strong>绑定用户数:</strong> {{ status.bound_users || 0 }} 人</div>
+                        <div class="status-item"><strong>目标 QQ 群:</strong> {{ status.qq_group_id || '-' }}</div>
+                        <div class="status-item"><strong>目标 TG 群:</strong> {{ status.tg_group_id || '-' }}</div>
+                        <el-button type="danger" @click="restartService" style="margin-top: 20px;">重启机器人服务</el-button>
+                    </el-card>
+                </div>
+
+                <!-- 用户绑定管理 -->
+                <div v-if="activeMenu === 'bindings'">
+                    <el-card>
+                        <template #header>
+                            <div class="card-header">
+                                <span>绑定列表</span>
+                                <el-button type="primary" size="small" @click="loadBindings">刷新</el-button>
+                            </div>
+                        </template>
+                        <el-table :data="bindings" style="width: 100%">
+                            <el-table-column prop="tg_user_id" label="TG User ID"></el-table-column>
+                            <el-table-column prop="qq_user_id" label="QQ User ID"></el-table-column>
+                            <el-table-column prop="tg_username" label="TG Username"></el-table-column>
+                            <el-table-column label="操作" width="100">
+                                <template #default="scope">
+                                    <el-button size="small" type="danger" @click="deleteBinding(scope.row.tg_user_id)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </el-card>
+                </div>
+
+                <!-- 系统设置 -->
+                <div v-if="activeMenu === 'settings'">
+                    <el-card>
+                        <template #header><span>配置修改</span></template>
+                        <el-form label-width="120px">
+                            <el-form-item label="TG Group ID">
+                                <el-input v-model="settings.telegram.group_id"></el-input>
+                            </el-form-item>
+                            <el-form-item label="QQ Group ID">
+                                <el-input v-model="settings.qq.group_id"></el-input>
+                            </el-form-item>
+                            <el-form-item label="Proxy URL">
+                                <el-input v-model="settings.telegram.proxy_url"></el-input>
+                            </el-form-item>
+                            <el-button type="success" @click="saveSettings">保存配置</el-button>
+                        </el-form>
+                    </el-card>
+                </div>
+
+                <!-- 运行日志 -->
+                <div v-if="activeMenu === 'logs'">
+                    <el-card>
+                        <template #header><span>最近日志</span></template>
+                        <div style="height: 400px; overflow-y: auto; background: #2d2d2d; color: #ccc; padding: 10px; font-family: monospace;">
+                            <div v-for="(log, index) in logs" :key="index">{{ log }}</div>
+                        </div>
+                    </el-card>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vue 3 & Element Plus & Axios -->
+    <script src="//unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="//unpkg.com/element-plus"></script>
+    <script src="//unpkg.com/axios/dist/axios.min.js"></script>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        const ElMessage = ElementPlus.ElMessage;
+
+        createApp({
+            setup() {
+                const isLoggedIn = ref(false);
+                const apiKeyInput = ref('');
+                const activeMenu = ref('dashboard');
+                const status = ref({});
+                const bindings = ref([]);
+                const logs = ref([]);
+                const settings = ref({ telegram: {}, qq: {} });
+
+                // 初始化 API 客户端
+                const api = axios.create({
+                    baseURL: window.location.origin,
+                    headers: { 'X-API-Key': '' }
+                });
+
+                const login = () => {
+                    if (!apiKeyInput.value) return ElMessage.error('请输入 API Key');
+                    localStorage.setItem('tqsync_api_key', apiKeyInput.value);
+                    api.defaults.headers['X-API-Key'] = apiKeyInput.value;
+                    isLoggedIn.value = true;
+                    loadStatus();
+                };
+
+                const handleSelect = (key) => {
+                    activeMenu.value = key;
+                    if (key === 'bindings') loadBindings();
+                    if (key === 'logs') loadLogs();
+                };
+
+                const loadStatus = async () => {
+                    try {
+                        const res = await api.get('/admin/status');
+                        status.value = res.data;
+                    } catch (e) {
+                        if (e.response?.status === 401) logout();
+                    }
+                };
+
+                const loadBindings = async () => {
+                    try {
+                        const res = await api.get('/admin/bindings');
+                        bindings.value = res.data;
+                    } catch (e) { console.error(e); }
+                };
+
+                const deleteBinding = async (id) => {
+                    if (!confirm('确定要删除此绑定吗？')) return;
+                    try {
+                        await api.delete(`/admin/bindings/${id}`);
+                        ElMessage.success('删除成功');
+                        loadBindings();
+                    } catch (e) { ElMessage.error('删除失败'); }
+                };
+
+                const restartService = async () => {
+                    if (!confirm('确定要重启机器人吗？')) return;
+                    try {
+                        await api.post('/admin/restart');
+                        ElMessage.success('重启指令已发送');
+                    } catch (e) { ElMessage.error('重启失败'); }
+                };
+
+                const loadLogs = async () => {
+                    try {
+                        const res = await api.get('/admin/logs');
+                        logs.value = res.data.logs;
+                    } catch (e) { console.error(e); }
+                };
+
+                const saveSettings = async () => {
+                    ElMessage.info('配置保存功能待后端完善...');
+                };
+
+                const logout = () => {
+                    isLoggedIn.value = false;
+                    localStorage.removeItem('tqsync_api_key');
+                };
+
+                onMounted(() => {
+                    const savedKey = localStorage.getItem('tqsync_api_key');
+                    if (savedKey) {
+                        apiKeyInput.value = savedKey;
+                        login();
+                    }
+                });
+
+                return {
+                    isLoggedIn, apiKeyInput, activeMenu, status, bindings, logs, settings,
+                    login, handleSelect, loadStatus, loadBindings, deleteBinding, restartService, loadLogs, saveSettings
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

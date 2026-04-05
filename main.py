@@ -266,6 +266,10 @@ async def main():
     webhook_task = asyncio.create_task(start_qq_webhook())
     
     # 启动 Admin API (使用 uvicorn 的 serve 方法在协程中运行)
+    from fastapi.staticfiles import StaticFiles
+    if os.path.exists("web"):
+        admin_app.mount("/", StaticFiles(directory="web", html=True), name="web")
+    
     config = uvicorn.Config(admin_app, host=config_loader.get('server.host', '0.0.0.0'), port=config_loader.get('server.admin_api_port', 8081), log_level="info")
     server = uvicorn.Server(config)
     api_task = asyncio.create_task(server.serve())
