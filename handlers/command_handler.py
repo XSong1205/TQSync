@@ -1,3 +1,4 @@
+from utils.version_utils import get_full_version_string
 from db.database import db
 from config.config_loader import config_loader
 import logging
@@ -118,6 +119,7 @@ async def handle_status_command(start_time: float):
     return (
         f"📊 TQSync 运行状态报告\n"
         f"--------------------------\n"
+        f"📦 版本信息: {get_full_version_string()}\n"
         f"🕒 上次更新: {last_update}\n"
         f"⏱️ 运行时长: {uptime_str}\n"
         f"🔗 已同步消息: {sync_count} 条\n"

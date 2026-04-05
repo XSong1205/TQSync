@@ -5,6 +5,7 @@ import uuid
 import aiohttp
 import subprocess
 from datetime import datetime
+from utils.version_utils import get_full_version_string
 from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
 from db.database import db
@@ -292,8 +293,9 @@ class SyncEngine:
         tg_gid = config_loader.get('telegram.group_id')
 
         # 3. 构造消息
+        version_str = get_full_version_string()
         message = (
-            f"🚀 TQSync 机器人已成功启动并正在运行！\n"
+            f"🚀 TQSync {version_str} 已成功启动并正在运行！\n"
             f"--------------------------\n"
             f"🕒 最后更新: {last_update}\n"
             f"💬 目标 QQ 群: {qq_gid}\n"

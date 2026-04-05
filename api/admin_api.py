@@ -6,6 +6,7 @@ import sys
 import os
 import time
 import asyncio
+from utils.version_utils import get_full_version_string
 from config.config_loader import config_loader
 from db.database import db
 
@@ -75,6 +76,7 @@ async def get_status():
     
     bindings = await db.get_all_bindings()
     return {
+        "version": get_full_version_string(),
         "uptime": f"{hours}h {minutes}m {seconds}s",
         "bound_users": len(bindings),
         "qq_group_id": config_loader.get('qq.group_id'),
