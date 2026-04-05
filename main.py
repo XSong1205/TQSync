@@ -73,6 +73,17 @@ async def handle_qq_webhook(request):
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     file_name = msg_part['data'].get('name', 'unknown_file')
             
+            # 解析回复逻辑 (QQ -> TG)
+            reply_to_tg_id = None
+            for msg_part in message_array:
+                if msg_part.get('type') == 'reply':
+                    original_qq_id = int(msg_part['data'].get('id', 0))
+                    if original_qq_id:
+                        reply_to_tg_id = await db.get_tg_msg_id_by_qq(original_qq_id)
+                        if reply_to_tg_id:
+                            logger.info(f"检测到 QQ 回复，映射到 TG 消息 ID: {reply_to_tg_id}")
+                        break
+
             combined_text = "".join(text_parts).strip()
             
             # 构造 TG 的 HTML 消息以支持 @
@@ -83,7 +94,7 @@ async def handle_qq_webhook(request):
                     html_text += f"<a href='tg://user?id={tid}'>@User</a> "
                 html_text += combined_text
                 try:
-                    result = await engine.bot.send_message(chat_id=engine.tg_group_id, text=html_text, parse_mode='HTML')
+                    result = await engine.bot.send_message(chat_id=engine.tg_group_id, text=html_text, parse_mode='HTML', reply_to_message_id=reply_to_tg_id)
                     if result:
                         await db.save_message_mapping(
                             tg_message_id=result.message_id,
@@ -97,7 +108,7 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
                 try:
-                    await engine.forward_image_to_tg(qq_id, nickname, image_url, combined_text)
+                    await engine.forward_image_to_tg(qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id)
                 except Exception as e:
                     logger.error(f"同步图片至 Telegram 失败: {e}")
                     error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
@@ -105,7 +116,7 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif video_url:
                 try:
-                    await engine.forward_video_to_tg(qq_id, nickname, video_url, combined_text)
+                    await engine.forward_video_to_tg(qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id)
                 except Exception as e:
                     logger.error(f"同步视频至 Telegram 失败: {e}")
                     error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
@@ -113,7 +124,7 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif file_url:
                 try:
-                    await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name)
+                    await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
                 except Exception as e:
                     logger.error(f"同步文件至 Telegram 失败: {e}")
                     error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
@@ -121,7 +132,7 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif combined_text:
                 try:
-                    result = await engine.forward_to_tg(qq_id, nickname, combined_text)
+                    result = await engine.forward_to_tg(qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id)
                     if result:
                         await db.save_message_mapping(
                             tg_message_id=result.message_id,

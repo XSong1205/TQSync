@@ -181,23 +181,23 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = ""):
+    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None):
         """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
         full_caption = f"{prefix}\n{caption}" if caption else prefix
-        await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, "photo", caption=full_caption)
+        await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, "photo", caption=full_caption, reply_to_message_id=reply_to_message_id)
 
-    async def forward_video_to_tg(self, qq_user_id: int, qq_nickname: str, video_url: str, caption: str = ""):
+    async def forward_video_to_tg(self, qq_user_id: int, qq_nickname: str, video_url: str, caption: str = "", reply_to_message_id: int = None):
         """将 QQ 视频转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
         full_caption = f"{prefix}\n{caption}" if caption else prefix
-        await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption)
+        await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption, reply_to_message_id=reply_to_message_id)
 
-    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file"):
+    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file", reply_to_message_id: int = None):
         """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
-        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name)
+        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, reply_to_message_id=reply_to_message_id)
 
     async def _send_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, send_func, file_key: str, **kwargs):
         """通用文件转发到 Telegram 方法，支持本地路径中转"""
@@ -224,6 +224,10 @@ class SyncEngine:
                 send_kwargs["caption"] = kwargs.pop("caption")
             else:
                 send_kwargs["caption"] = prefix
+            
+            # 处理回复 ID
+            if "reply_to_message_id" in kwargs:
+                send_kwargs["reply_to_message_id"] = kwargs.pop("reply_to_message_id")
                 
             send_kwargs.update(kwargs)
 
@@ -254,11 +258,11 @@ class SyncEngine:
         result = await onebot_client.send_group_msg(self.qq_group_id, message)
         return result
 
-    async def forward_to_tg(self, qq_user_id: int, qq_nickname: str, text: str):
+    async def forward_to_tg(self, qq_user_id: int, qq_nickname: str, text: str, reply_to_message_id: int = None):
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
         message = f"[QQ] {display_name}: {text}"
         try:
-            result = await self.bot.send_message(chat_id=self.tg_group_id, text=message)
+            result = await self.bot.send_message(chat_id=self.tg_group_id, text=message, reply_to_message_id=reply_to_message_id)
             return result
         except Exception as e:
             print(f"Error sending to TG: {e}")

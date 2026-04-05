@@ -54,6 +54,15 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 诊断日志：打印媒体类型
     logger.debug(f"收到 TG 消息 - 图片: {bool(msg.photo)}, 视频: {bool(msg.video)}, 文件: {bool(msg.document)}")
 
+    # 解析回复逻辑 (TG -> QQ)
+    reply_segment = []
+    if msg.reply_to_message:
+        original_tg_id = msg.reply_to_message.message_id
+        original_qq_id = await db.get_qq_msg_id_by_tg(original_tg_id)
+        if original_qq_id:
+            reply_segment.append({"type": "reply", "data": {"id": str(original_qq_id)}})
+            logger.info(f"检测到 TG 回复，映射到 QQ 消息 ID: {original_qq_id}")
+
     # 处理图片消息
     if msg.photo:
         file_id = msg.photo[-1].file_id
@@ -61,11 +70,13 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             result = await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
             if result and result.get('data', {}).get('message_id'):
+                qq_msg_id = result['data']['message_id']
                 await db.save_message_mapping(
                     tg_message_id=update.message.message_id,
-                    qq_message_id=result['data']['message_id'],
+                    qq_message_id=qq_msg_id,
                     sender_tg_id=user.id
                 )
+                # 如果是回复消息，需要更新被回复消息的映射（如果需要更复杂的引用链）
         except Exception as e:
             logger.error(f"同步图片至 QQ 失败: {e}")
             await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
@@ -147,7 +158,9 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 message_array.append({"type": "text", "data": {"text": text}})
 
             display_name = await engine.get_display_name(tg_user_id=user.id, fallback_name=user.username or str(user.id))
-            final_message = [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}] + message_array
+            
+            # 构造最终消息数组：回复段 + 前缀 + 内容
+            final_message = reply_segment + [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}] + message_array
             
             result = await onebot_client.send_group_msg(engine.qq_group_id, final_message)
             # 存储映射关系（如果是纯文本）
