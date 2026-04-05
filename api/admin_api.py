@@ -5,6 +5,7 @@ from typing import Optional, List
 import sys
 import os
 import time
+import asyncio
 from config.config_loader import config_loader
 from db.database import db
 
@@ -45,8 +46,14 @@ async def trigger_restart(api_key: bool = Depends(verify_api_key)):
 
 @app.get("/admin/status")
 async def get_status(api_key: bool = Depends(verify_api_key)):
-    from main import start_time
-    uptime_seconds = int(time.time() - start_time)
+    try:
+        from main import start_time
+        current_start_time = start_time
+    except (ImportError, AttributeError):
+        current_start_time = time.time() # 兜底方案
+        
+    uptime_seconds = int(time.time() - current_start_time)
+    if uptime_seconds < 0: uptime_seconds = 0
     hours, remainder = divmod(uptime_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     
