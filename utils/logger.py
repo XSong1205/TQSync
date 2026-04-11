@@ -19,10 +19,17 @@ os.makedirs(log_dir, exist_ok=True)
 
 # 文件输出（JSON，适合机器人服务端）
 def json_formatter(record):
-    # 获取必要的字段，提供默认值以防万一
-    time_str = record["time"].strftime("%Y-%m-%d %H:%M:%S")
-    level_name = record["level"].name
-    message = record["message"]
+    # 安全获取字段，防止 KeyError
+    time_obj = record.get("time")
+    if time_obj and hasattr(time_obj, 'strftime'):
+        time_str = time_obj.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        time_str = str(time_obj) if time_obj else "Unknown"
+
+    level_obj = record.get("level")
+    level_name = level_obj.name if level_obj else "UNKNOWN"
+    
+    message = record.get("message", "")
     module_name = record.get("module", "unknown")
     line_no = record.get("line", 0)
     extra_data = record.get("extra", {})
