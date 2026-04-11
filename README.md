@@ -2,7 +2,8 @@
 
 TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegram 群组与 QQ 群之间的双向消息同步。
 
-
+<img width="488" height="93" alt="PixPin_2026-04-11_10-05-02" src="https://github.com/user-attachments/assets/007c113b-13bb-4424-894a-77b0bcc64350" />
+这个不是我的TQSync😭撞名了，正在想新名字
 
 > [!TIP]
 > Next 分支功能已经足够强大，且兼容性、速度大幅提升，新用户建议使用 Next 版。目前重构版仍处于早期阶段，如有 Bug 敬请谅解！
