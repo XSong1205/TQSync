@@ -79,8 +79,10 @@ async def handle_setprefix_command(user_id: int, platform: str, args: list):
     await db.update_custom_prefix(uid, new_prefix)
     return f"Your unified display name has been updated to: {new_prefix}"
 
-async def handle_status_command(start_time: float):
+async def handle_status_command():
     """处理 /status 指令，返回系统状态字符串"""
+    from main import GLOBAL_START_TIME
+    
     # 1. 获取最后更新时间
     last_update = "Unknown"
     try:
@@ -96,7 +98,8 @@ async def handle_status_command(start_time: float):
             pass
 
     # 2. 计算运行时长
-    uptime_seconds = int(time.time() - start_time)
+    uptime_seconds = int(time.time() - GLOBAL_START_TIME)
+    if uptime_seconds < 0: uptime_seconds = 0
     hours, remainder = divmod(uptime_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     uptime_str = f"{hours}小时 {minutes}分 {seconds}秒"

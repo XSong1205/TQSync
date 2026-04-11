@@ -8,6 +8,9 @@ from telegram.request import HTTPXRequest
 from aiohttp import web
 import uvicorn
 
+# 记录全局启动时间，必须在模块加载时立即执行
+GLOBAL_START_TIME = time.time()
+
 from config.config_loader import config_loader
 from db.database import db
 from core.sync_engine import SyncEngine
@@ -18,7 +21,7 @@ from api.admin_api import app as admin_app
 from utils.logger import logger
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
-GLOBAL_START_TIME = time.time()
+# GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
 
 async def handle_qq_webhook(request):
     try:
@@ -113,7 +116,7 @@ async def handle_qq_webhook(request):
                 elif cmd == '/help':
                     response = await handle_help_command()
                 elif cmd == '/status':
-                    response = await handle_status_command(GLOBAL_START_TIME)
+                    response = await handle_status_command()
                 elif cmd == '/reboot':
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
@@ -228,10 +231,23 @@ async def graceful_restart():
     """优雅重启：取消所有后台任务并重新加载进程"""
     logger.info("正在触发优雅重启...")
     restart_event.set()
+    
+    # 1. 取消所有后台异步任务
     for task in background_tasks:
-        task.cancel()
-    # 等待一小段时间让任务清理资源
-    await asyncio.sleep(1)
+        if not task.done():
+            task.cancel()
+    
+    # 2. 等待一小段时间让资源释放（如数据库连接）
+    await asyncio.sleep(0.5)
+    
+    # 3. 显式关闭数据库连接
+    try:
+        await db.close()
+    except:
+        pass
+        
+    # 4. 使用 execv 替换当前进程
+    logger.info("正在重新启动进程...")
     os.execv(sys.executable, ['python'] + sys.argv)
 
 async def main():

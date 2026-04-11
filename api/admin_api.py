@@ -6,6 +6,7 @@ import sys
 import os
 import time
 import asyncio
+import psutil
 from utils.version_utils import get_full_version_string
 from config.config_loader import config_loader
 from db.database import db
@@ -76,18 +77,53 @@ async def get_status():
     minutes, seconds = divmod(remainder, 60)
     
     bindings = await db.get_all_bindings()
+    
+    # 性能监控数据
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    cpu_percent = process.cpu_percent(interval=0.1)
+    
+    # 数据库文件大小
+    db_size = 0
+    if os.path.exists('data/tqsync.db'):
+        db_size = os.path.getsize('data/tqsync.db')
+    
     return {
         "version": get_full_version_string(),
         "uptime": f"{hours}h {minutes}m {seconds}s",
         "bound_users": len(bindings),
         "qq_group_id": config_loader.get('qq.group_id'),
-        "tg_group_id": config_loader.get('telegram.group_id')
+        "tg_group_id": config_loader.get('telegram.group_id'),
+        "cpu_usage": f"{cpu_percent:.1f}%",
+        "memory_usage": f"{mem_info.rss / 1024 / 1024:.1f} MB",
+        "db_size": f"{db_size / 1024:.1f} KB"
     }
 
 @app.get("/admin/logs", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
-async def get_logs():
-    # 这里可以对接一个内存中的日志队列，目前先返回一个简单的示例
-    return {"logs": ["System running...", "Webhook server started"]}
+async def get_logs(lines: int = 50):
+    log_file = os.path.join(os.getcwd(), 'logs', 'tqsync.log')
+    try:
+        if not os.path.exists(log_file):
+            return {"logs": ["Log file not found."]}
+        
+        with open(log_file, 'r', encoding='utf-8') as f:
+            all_lines = f.readlines()
+            last_n_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+            
+        # 如果是 JSON 格式，尝试提取 message 字段以便前端显示更清晰
+        clean_logs = []
+        for line in last_n_lines:
+            try:
+                import json
+                log_obj = json.loads(line)
+                clean_logs.append(f"{log_obj.get('time', '')} [{log_obj.get('level', '')}] {log_obj.get('message', '')}")
+            except:
+                clean_logs.append(line.strip())
+                
+        return {"logs": clean_logs}
+    except Exception as e:
+        logger.error(f"Failed to read logs: {e}")
+        return {"logs": [f"Error reading logs: {str(e)}"]}
 
 @app.put("/admin/config/{config_key}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 def update_config(config_key: str, update: ConfigUpdate):
