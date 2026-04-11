@@ -9,6 +9,7 @@ import asyncio
 from utils.version_utils import get_full_version_string
 from config.config_loader import config_loader
 from db.database import db
+from utils.logger import logger
 
 app = FastAPI(title="TQSync Admin API")
 

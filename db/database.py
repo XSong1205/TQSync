@@ -3,8 +3,7 @@ import os
 import uuid
 import asyncio
 from config.config_loader import config_loader
-
-logger = __import__('logging').getLogger(__name__)
+from utils.logger import logger
 
 class Database:
     def __init__(self):

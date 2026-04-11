@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import sys
 import time
@@ -16,12 +15,7 @@ from handlers.tg_handler import get_tg_handlers
 from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command
 from handlers.qq_handler import onebot_client
 from api.admin_api import app as admin_app
-
-logging.basicConfig(
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+from utils.logger import logger
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 GLOBAL_START_TIME = time.time()
@@ -53,11 +47,11 @@ async def handle_qq_webhook(request):
                 return web.json_response({})
             
             sender = data.get('sender', {})
-            qq_id = data['user_id']
+            qq_id = int(data['user_id'])  # 强制转为整数，防止类型不匹配
             
             # [关键修复] 过滤掉 Bot 自身发送的消息，防止死循环
             bot_qq_id = await onebot_client.get_bot_id()
-            if bot_qq_id and qq_id == bot_qq_id:
+            if bot_qq_id and qq_id == int(bot_qq_id):
                 logger.debug("忽略 Bot 自身消息，防止同步死循环")
                 return web.json_response({})
                 
@@ -112,14 +106,14 @@ async def handle_qq_webhook(request):
                 elif cmd == '/reboot':
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
-                        await onebot_client.send_group_msg(engine.qq_group_id, "⛔ 权限不足：仅管理员可执行重启操作")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
                     
-                    await onebot_client.send_group_msg(engine.qq_group_id, "🔄 正在执行优雅重启，服务将在数秒后恢复...")
+                    await onebot_client.send_group_msg(engine.qq_group_id, "正在重启，请稍候...")
                     asyncio.create_task(graceful_restart())
                     return web.json_response({})
                 else:
-                    response = "Unknown command. Use /help for more info."
+                    response = "未知命令。使用 /help 获取更多帮助。"
                 
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)

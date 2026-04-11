@@ -1,8 +1,6 @@
 import aiohttp
-import logging
 from config.config_loader import config_loader
-
-logger = logging.getLogger(__name__)
+from utils.logger import logger
 
 class OneBotClient:
     def __init__(self):

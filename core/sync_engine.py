@@ -1,5 +1,4 @@
 from telegram import Bot
-import logging
 import os
 import uuid
 import aiohttp
@@ -9,8 +8,7 @@ from utils.version_utils import get_full_version_string
 from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
 from db.database import db
-
-logger = logging.getLogger(__name__)
+from utils.logger import logger
 
 class SyncEngine:
     _instance = None

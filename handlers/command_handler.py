@@ -1,13 +1,11 @@
 from utils.version_utils import get_full_version_string
 from db.database import db
 from config.config_loader import config_loader
-import logging
 import time
 import os
 import subprocess
 from datetime import datetime
-
-logger = logging.getLogger(__name__)
+from utils.logger import logger
 
 HELP_TEXT = (
     "🤖 TQSync 帮助文档\n\n"

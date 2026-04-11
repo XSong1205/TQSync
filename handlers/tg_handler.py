@@ -5,10 +5,8 @@ from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
 from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command
-import logging
 import time
-
-logger = logging.getLogger(__name__)
+from utils.logger import logger
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息删除事件，同步撤回到 QQ"""
