@@ -100,7 +100,7 @@ async def handle_qq_webhook(request):
                 elif cmd == '/help':
                     response = await handle_help_command()
                 elif cmd == '/status':
-                    response = await handle_status_command(start_time)
+                    response = await handle_status_command(GLOBAL_START_TIME)
                 elif cmd == '/reboot':
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
