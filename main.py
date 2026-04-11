@@ -90,6 +90,8 @@ async def handle_qq_webhook(request):
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     file_name = msg_part['data'].get('name', 'unknown_file')
+                elif msg_type == 'record':
+                    voice_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                 elif msg_type == 'forward':
                     is_forward = True
                     forward_content = msg_part.get('data', {})
@@ -100,6 +102,12 @@ async def handle_qq_webhook(request):
             if is_forward and forward_content:
                 logger.info(f"检测到来自 {nickname} 的合并转发消息，已加入异步同步队列")
                 engine.enqueue_sync_task(engine.forward_merged_to_tg, qq_id, nickname, forward_content)
+                return web.json_response({})
+            
+            # 处理语音消息 (Record)
+            if voice_url:
+                logger.info(f"检测到来自 {nickname} 的语音消息，已加入异步同步队列")
+                engine.enqueue_sync_task(engine.forward_voice_to_tg, qq_id, nickname, voice_url, reply_to_message_id=reply_to_tg_id)
                 return web.json_response({})
             
             # 指令识别与路由

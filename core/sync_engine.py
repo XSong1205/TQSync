@@ -5,8 +5,12 @@ import json
 import base64
 import re
 import io
+import gzip
+import json
 import aiofiles
 import ffmpeg
+from lottie import objects, exporters
+from PIL import Image
 import aiohttp
 import asyncio
 import subprocess
@@ -232,6 +236,40 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
+    async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
+        """使用 lottie + Pillow 将 TGS 贴纸转换为 GIF"""
+        logger.info(f"正在转换 Lottie 贴纸: {tgs_path} -> {gif_path}")
+        loop = asyncio.get_event_loop()
+        
+        def _render():
+            try:
+                # 1. 解压并加载 Lottie JSON
+                with gzip.open(tgs_path, "rb") as f:
+                    data = json.loads(f.read().decode("utf-8"))
+                animation = objects.Animation.from_dict(data)
+                
+                # 2. 渲染帧
+                frames = exporters.render_frames(animation, width=width, height=height, fps=fps)
+                
+                # 3. 转成 Pillow Image 并保存
+                pil_frames = [Image.fromarray(frame) for frame in frames]
+                if pil_frames:
+                    pil_frames[0].save(
+                        gif_path,
+                        save_all=True,
+                        append_images=pil_frames[1:],
+                        duration=int(1000 / fps),
+                        loop=0,
+                        transparency=0,
+                        disposal=2
+                    )
+            except Exception as e:
+                logger.error(f"Lottie 渲染失败: {e}")
+                raise
+
+        await loop.run_in_executor(None, _render)
+        logger.info("Lottie 贴纸转换成功")
+
     async def convert_webm_to_gif(self, input_path: str, output_path: str):
         """使用 FFmpeg 将 WebM 贴纸转换为 GIF"""
         logger.info(f"正在转换贴纸格式: {input_path} -> {output_path}")
@@ -255,6 +293,52 @@ class SyncEngine:
             logger.error("未找到 FFmpeg 可执行文件。请确保已安装 FFmpeg 并将其添加到系统环境变量 PATH 中。")
             raise
 
+    async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+        """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
+        display_name = await self.get_display_name(tg_user_id, tg_username)
+        onebot_client = OneBotClient(self.config['napcat']['host'], self.config['napcat']['port'])
+
+        try:
+            file_url = await self.bot.get_file(file_id)
+            if isinstance(file_url, dict):
+                file_url = file_url.get('file_path', '')
+            if not file_url.startswith('http'):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            # 提取原始文件名或生成默认名
+            original_name = getattr(file_url, 'name', None) or f"voice_{tg_user_id}.ogg"
+            temp_filename = f"voice_{uuid.uuid4().hex}_{original_name}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            # 使用 FFmpeg 转换为 AMR (QQ 兼容格式)
+            amr_filename = f"voice_{uuid.uuid4().hex}.amr"
+            amr_path = os.path.join(os.getcwd(), 'temp', amr_filename)
+            
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: (
+                ffmpeg.input(temp_path)
+                .output(amr_path, acodec='libopencore_amrnb', ar=8000, ab=12.2)
+                .overwrite_output()
+                .run(quiet=True)
+            ))
+            
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一条语音\n"}},
+                {"type": "record", "data": {"file": amr_path}}
+            ]
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"语音已转发至 QQ 群 {self.qq_group_id}")
+            return result
+        except Exception as e:
+            logger.error(f"转发语音至 QQ 失败: {e}")
+            return None
+        finally:
+            if 'temp_path' in locals() and temp_path:
+                self._cleanup_temp(temp_path)
+            if 'amr_path' in locals() and amr_path:
+                self._cleanup_temp(amr_path)
+
     async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False):
         """将 Telegram 贴纸转发到 QQ (支持静态和动态)"""
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
@@ -268,12 +352,8 @@ class SyncEngine:
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
             # 动态贴纸通常是 .webm，静态是 .png 或 .webp
-            # 注意：.tgs 是 Lottie 格式，FFmpeg 无法直接处理
+            # 注意：.tgs 是 Lottie 格式，现在支持转换
             ext = os.path.splitext(file_url)[1] or ('.webm' if is_animated else '.png')
-            
-            if ext == '.tgs':
-                logger.warning(f"跳过 Lottie 贴纸 (.tgs) 同步，当前不支持该格式转换: {file_url}")
-                return None
 
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
             temp_path = await self._download_to_temp(file_url, temp_filename)
@@ -285,11 +365,23 @@ class SyncEngine:
             final_send_path = temp_path
             
             # 根据类型选择消息段：动态贴纸转换为 GIF 后作为图片发送
-            if is_animated or ext == '.webm':
+            if is_animated or ext in ['.webm', '.tgs']:
                 gif_filename = f"sticker_{uuid.uuid4().hex}.gif"
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
-                await self.convert_webm_to_gif(temp_path, gif_path)
-                final_send_path = gif_path
+                
+                try:
+                    if ext == '.tgs':
+                        await self.tgs_to_gif(temp_path, gif_path)
+                    else:
+                        await self.convert_webm_to_gif(temp_path, gif_path)
+                    final_send_path = gif_path
+                except Exception as e:
+                    logger.error(f"贴纸转换失败: {e}")
+                    # 转换失败时尝试发送原始文件（如果 QQ 支持）或发送提示文本
+                    message_array.append({"type": "text", "data": {"text": "(贴纸转换失败，请查看日志)"}})
+                    result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+                    return result
+                
                 message_array.append({"type": "image", "data": {"file": final_send_path}})
             else:
                 message_array.append({"type": "image", "data": {"file": final_send_path}})
@@ -306,6 +398,48 @@ class SyncEngine:
                 self._cleanup_temp(temp_path)
             if gif_path:
                 self._cleanup_temp(gif_path)
+
+    async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, reply_to_message_id: int = None):
+        """转发 QQ 语音消息到 Telegram (带 FFmpeg 转码)"""
+        display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
+        
+        try:
+            # 提取原始文件名或生成默认名
+            original_name = os.path.basename(file_url).split('?')[0] or f"voice_{qq_user_id}.amr"
+            temp_filename = f"voice_{uuid.uuid4().hex}_{original_name}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            # 使用 FFmpeg 转换为 OGG Opus (Telegram 兼容格式)
+            ogg_filename = f"voice_{uuid.uuid4().hex}.ogg"
+            ogg_path = os.path.join(os.getcwd(), 'temp', ogg_filename)
+            
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: (
+                ffmpeg.input(temp_path)
+                .output(ogg_path, acodec='libopus', ar=48000, ab='64k')
+                .overwrite_output()
+                .run(quiet=True)
+            ))
+            
+            caption = f"[QQ] {display_name} 发送了一条语音"
+            with open(ogg_path, 'rb') as audio_file:
+                result = await self.bot.send_voice(
+                    chat_id=self.tg_group_id,
+                    voice=audio_file,
+                    caption=caption,
+                    reply_to_message_id=reply_to_message_id
+                )
+            
+            logger.info(f"语音已转发至 TG 群 {self.tg_group_id}")
+            return result
+        except Exception as e:
+            logger.error(f"转发语音至 Telegram 失败: {e}")
+            return None
+        finally:
+            if 'temp_path' in locals() and temp_path:
+                self._cleanup_temp(temp_path)
+            if 'ogg_path' in locals() and ogg_path:
+                self._cleanup_temp(ogg_path)
 
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None):
         """将 QQ 图片转发到 Telegram (支持本地文件中转)"""

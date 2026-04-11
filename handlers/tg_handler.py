@@ -98,6 +98,13 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated)
         return
 
+    # 处理语音消息 (Voice/Audio)
+    if msg.voice or msg.audio:
+        file_id = (msg.voice or msg.audio).file_id
+        logger.info(f"检测到来自 {user.username} 的语音消息，已加入异步同步队列")
+        engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id)
+        return
+
     # 处理文本消息
     text = update.message.text
     if text:
