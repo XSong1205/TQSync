@@ -19,31 +19,46 @@ os.makedirs(log_dir, exist_ok=True)
 
 # 文件输出（JSON，适合机器人服务端）
 def json_formatter(record):
-    # 安全获取字段，防止 KeyError
-    time_obj = record.get("time")
-    if time_obj and hasattr(time_obj, 'strftime'):
-        time_str = time_obj.strftime("%Y-%m-%d %H:%M:%S")
-    else:
-        time_str = str(time_obj) if time_obj else "Unknown"
+    try:
+        # 安全获取字段，防止 KeyError
+        time_obj = record.get("time")
+        if time_obj and hasattr(time_obj, 'strftime'):
+            time_str = time_obj.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            time_str = str(time_obj) if time_obj else "Unknown"
 
-    level_obj = record.get("level")
-    level_name = level_obj.name if level_obj else "UNKNOWN"
-    
-    message = record.get("message", "")
-    module_name = record.get("module", "unknown")
-    line_no = record.get("line", 0)
-    extra_data = record.get("extra", {})
-    
-    # 构造 JSON 字典
-    payload = {
-        "time": time_str,
-        "level": level_name,
-        "message": message,
-        "module": module_name,
-        "line": line_no,
-        "extra": extra_data,
-    }
-    return json.dumps(payload, ensure_ascii=False) + "\n"
+        level_obj = record.get("level")
+        level_name = level_obj.name if level_obj else "UNKNOWN"
+        
+        message = record.get("message", "")
+        module_name = record.get("module", "unknown")
+        line_no = record.get("line", 0)
+        
+        # 处理 extra 字段，确保可序列化
+        extra_data = {}
+        raw_extra = record.get("extra", {})
+        if isinstance(raw_extra, dict):
+            for k, v in raw_extra.items():
+                try:
+                    # 尝试序列化，如果失败则转为字符串
+                    json.dumps(v)
+                    extra_data[k] = v
+                except (TypeError, ValueError):
+                    extra_data[k] = str(v)
+        
+        # 构造 JSON 字典
+        payload = {
+            "time": time_str,
+            "level": level_name,
+            "message": message,
+            "module": module_name,
+            "line": line_no,
+            "extra": extra_data,
+        }
+        return json.dumps(payload, ensure_ascii=False, default=str) + "\n"
+    except Exception as e:
+        # 极端情况下的兜底日志，防止 Logging error 刷屏
+        return json.dumps({"error": "Log formatting failed", "details": str(e)}, ensure_ascii=False) + "\n"
 
 logger.add(os.path.join(log_dir, "tqsync.log"), level="INFO", rotation="20 MB",
            retention="7 days", format=json_formatter, encoding="utf-8")
