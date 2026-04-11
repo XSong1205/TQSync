@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sys
 import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -53,6 +54,13 @@ async def handle_qq_webhook(request):
             
             sender = data.get('sender', {})
             qq_id = data['user_id']
+            
+            # [关键修复] 过滤掉 Bot 自身发送的消息，防止死循环
+            bot_qq_id = await onebot_client.get_bot_id()
+            if bot_qq_id and qq_id == bot_qq_id:
+                logger.debug("忽略 Bot 自身消息，防止同步死循环")
+                return web.json_response({})
+                
             nickname = sender.get('card') or sender.get('nickname') or str(qq_id)
             
             engine = SyncEngine.get_instance()

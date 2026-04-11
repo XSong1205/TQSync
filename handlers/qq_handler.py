@@ -11,6 +11,22 @@ class OneBotClient:
         self.headers = {}
         if self.access_token:
             self.headers['Authorization'] = f'Bearer {self.access_token}'
+        self._bot_id = None
+
+    async def get_bot_id(self) -> int:
+        """获取当前登录的 Bot QQ 号"""
+        if self._bot_id is None:
+            try:
+                url = f"{self.base_url}/get_login_info"
+                connector = aiohttp.TCPConnector(ssl=False)
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(url, headers=self.headers) as resp:
+                        res = await resp.json()
+                        if res.get('retcode') == 0:
+                            self._bot_id = res['data']['user_id']
+            except Exception as e:
+                logger.warning(f"获取 Bot QQ ID 失败: {e}")
+        return self._bot_id
 
     async def send_group_msg(self, group_id: int, message):
         """

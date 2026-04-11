@@ -50,6 +50,10 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user = update.effective_user
+    # 忽略 Bot 自身的消息，防止同步循环
+    if user.is_bot:
+        return
+    
     engine = SyncEngine.get_instance()
     msg = update.message
     
