@@ -57,19 +57,36 @@ class Database:
                 logger.warning(f"DB save mapping failed (attempt {attempt+1}): {e}")
                 if attempt < 2: await asyncio.sleep(0.5)
 
-    async def get_qq_msg_id_by_tg(self, tg_message_id: int):
-        """根据 TG 消息 ID 查找 QQ 消息 ID"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute('SELECT qq_message_id FROM message_mapping WHERE tg_message_id = ?', (tg_message_id,)) as cursor:
-                row = await cursor.fetchone()
-                return row[0] if row else None
-
     async def get_tg_msg_id_by_qq(self, qq_message_id: int):
-        """根据 QQ 消息 ID 查找 TG 消息 ID"""
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute('SELECT tg_message_id FROM message_mapping WHERE qq_message_id = ?', (qq_message_id,)) as cursor:
-                row = await cursor.fetchone()
-                return row[0] if row else None
+        """根据 QQ 消息 ID 查找 TG 消息 ID (增加重试机制)"""
+        for attempt in range(3):
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute('SELECT tg_message_id FROM message_mapping WHERE qq_message_id = ?', (qq_message_id,)) as cursor:
+                        row = await cursor.fetchone()
+                        result = row[0] if row else None
+                        if result:
+                            logger.debug(f"DB 映射查询成功: QQ {qq_message_id} -> TG {result}")
+                        else:
+                            logger.debug(f"DB 中未找到 QQ 消息 {qq_message_id} 的映射")
+                        return result
+            except Exception as e:
+                logger.warning(f"DB get_tg_msg_id_by_qq failed (attempt {attempt+1}): {e}")
+                if attempt < 2: await asyncio.sleep(0.2)
+        return None
+
+    async def get_qq_msg_id_by_tg(self, tg_message_id: int):
+        """根据 TG 消息 ID 查找 QQ 消息 ID (增加重试机制)"""
+        for attempt in range(3):
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute('SELECT qq_message_id FROM message_mapping WHERE tg_message_id = ?', (tg_message_id,)) as cursor:
+                        row = await cursor.fetchone()
+                        return row[0] if row else None
+            except Exception as e:
+                logger.warning(f"DB get_qq_msg_id_by_tg failed (attempt {attempt+1}): {e}")
+                if attempt < 2: await asyncio.sleep(0.2)
+        return None
 
     async def delete_mapping_by_tg(self, tg_message_id: int):
         """删除映射记录（用于撤回同步）"""

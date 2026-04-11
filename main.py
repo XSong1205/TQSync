@@ -125,9 +125,12 @@ async def handle_qq_webhook(request):
                 if msg_part.get('type') == 'reply':
                     original_qq_id = int(msg_part['data'].get('id', 0))
                     if original_qq_id:
+                        logger.debug(f"正在查询 QQ 回复映射: original_qq_id={original_qq_id}")
                         reply_to_tg_id = await db.get_tg_msg_id_by_qq(original_qq_id)
                         if reply_to_tg_id:
-                            logger.info(f"检测到 QQ 回复，映射到 TG 消息 ID: {reply_to_tg_id}")
+                            logger.info(f"✅ 成功映射 QQ 回复到 TG 消息 ID: {reply_to_tg_id}")
+                        else:
+                            logger.warning(f"⚠️ 未能找到 QQ 消息 {original_qq_id} 对应的 TG 映射，回复将作为普通消息发送")
                         break
             
             combined_text = "".join(text_parts).strip()
