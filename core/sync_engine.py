@@ -91,8 +91,7 @@ class SyncEngine:
 
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = ""):
         """将 Telegram 图片转发到 QQ (本地文件中转方案，支持 Caption 图文混排)"""
-        binding = await db.get_binding_by_tg(tg_user_id)
-        nickname = binding[3] if binding and binding[3] else tg_username
+        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
         
         try:
@@ -109,7 +108,7 @@ class SyncEngine:
             
             # 3. 构造消息段 (实现图文混排：文字在上，图片在下)
             message_array = [
-                {"type": "text", "data": {"text": f"[TG] {nickname}\n"}},
+                {"type": "text", "data": {"text": f"[TG] {display_name}\n"}},
             ]
             
             # 如果有 Caption，则添加在图片上方
@@ -131,8 +130,7 @@ class SyncEngine:
 
     async def forward_video_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
         """将 Telegram 视频转发到 QQ"""
-        binding = await db.get_binding_by_tg(tg_user_id)
-        nickname = binding[3] if binding and binding[3] else tg_username
+        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
         
         try:
@@ -146,7 +144,7 @@ class SyncEngine:
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
             message_array = [
-                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一个视频\n"}},
+                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}},
                 {"type": "video", "data": {"file": temp_path}}
             ]
             
@@ -163,8 +161,7 @@ class SyncEngine:
 
     async def forward_file_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, filename: str):
         """将 Telegram 通用文件转发到 QQ (卡片形式)"""
-        binding = await db.get_binding_by_tg(tg_user_id)
-        nickname = binding[3] if binding and binding[3] else tg_username
+        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
         
         try:
@@ -178,7 +175,7 @@ class SyncEngine:
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
             message_array = [
-                {"type": "text", "data": {"text": f"[TG] {nickname} 发送了一个文件: {filename}\n"}},
+                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}},
                 {"type": "file", "data": {"file": temp_path}}
             ]
             
