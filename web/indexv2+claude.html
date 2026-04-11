@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>TQSync 控制台</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
+    <style>
+        :root {
+            --primary: #6EE7B7;
+            --primary-dim: rgba(110,231,183,0.12);
+            --primary-glow: rgba(110,231,183,0.25);
+            --sidebar-w: 220px;
+            --bg: #0D1117;
+            --surface: #161B22;
+            --surface2: #1C2128;
+            --border: rgba(255,255,255,0.06);
+            --border-hover: rgba(110,231,183,0.3);
+            --text: #E6EDF3;
+            --text-muted: #7D8590;
+            --text-dim: #484F58;
+            --accent-blue: #79C0FF;
+            --accent-orange: #FFA657;
+            --accent-red: #FF7B72;
+            --accent-purple: #D2A8FF;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'Sora', sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            font-family: var(--sans);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── Scrollbar ─── */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(110,231,183,0.3); }
+
+        .app-wrapper { display: flex; height: 100vh; overflow: hidden; }
+
+        /* ─── Sidebar ─── */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+        }
+
+        .logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border);
+            gap: 10px;
+        }
+
+        .logo-mark {
+            width: 28px; height: 28px;
+            border-radius: 7px;
+            background: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .logo-mark svg { width: 16px; height: 16px; }
+
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1;
+        }
+
+        .logo-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            letter-spacing: 0.02em;
+        }
+
+        .logo-version {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-family: var(--mono);
+            margin-top: 3px;
+        }
+
+        /* Override Element Plus menu */
+        .sidebar .el-menu {
+            border-right: none !important;
+            background: transparent !important;
+            padding: 12px 8px;
+            flex: 1;
+        }
+
+        .sidebar .el-menu-item {
+            height: 40px !important;
+            line-height: 40px !important;
+            border-radius: 8px !important;
+            margin-bottom: 2px !important;
+            padding: 0 12px !important;
+            font-size: 13px !important;
+            font-family: var(--sans) !important;
+            color: var(--text-muted) !important;
+            background: transparent !important;
+            transition: all 0.15s ease !important;
+        }
+
+        .sidebar .el-menu-item:hover {
+            background: rgba(255,255,255,0.05) !important;
+            color: var(--text) !important;
+        }
+
+        .sidebar .el-menu-item.is-active {
+            background: var(--primary-dim) !important;
+            color: var(--primary) !important;
+        }
+
+        .sidebar .el-menu-item .el-icon {
+            font-size: 15px !important;
+            margin-right: 8px !important;
+        }
+
+        .sidebar-footer {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .status-dot {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: var(--mono);
+        }
+
+        .dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 6px var(--primary);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--primary); }
+            50% { opacity: 0.5; box-shadow: 0 0 12px var(--primary); }
+        }
+
+        /* ─── Main ─── */
+        .main-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+        .top-bar {
+            height: 56px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .top-bar-left { display: flex; align-items: center; gap: 12px; }
+
+        .breadcrumb {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .page-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .top-bar-right { display: flex; align-items: center; gap: 10px; }
+
+        /* Override restart button */
+        .restart-btn.el-button {
+            background: rgba(255,123,114,0.1) !important;
+            border: 1px solid rgba(255,123,114,0.3) !important;
+            color: var(--accent-red) !important;
+            font-family: var(--sans) !important;
+            font-size: 12px !important;
+            border-radius: 8px !important;
+            height: 32px !important;
+            padding: 0 14px !important;
+            transition: all 0.15s ease !important;
+        }
+
+        .restart-btn.el-button:hover {
+            background: rgba(255,123,114,0.2) !important;
+            border-color: rgba(255,123,114,0.5) !important;
+        }
+
+        .content { flex: 1; padding: 24px; overflow-y: auto; }
+
+        /* ─── Stat Cards ─── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 20px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.2s, transform 0.2s;
+            cursor: default;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            right: 0; height: 1px;
+            background: var(--card-accent, transparent);
+            opacity: 0.6;
+        }
+
+        .stat-card:hover {
+            border-color: var(--card-accent, var(--border-hover));
+            transform: translateY(-1px);
+        }
+
+        .stat-card.c-green { --card-accent: #6EE7B7; }
+        .stat-card.c-blue  { --card-accent: #79C0FF; }
+        .stat-card.c-orange{ --card-accent: #FFA657; }
+        .stat-card.c-purple{ --card-accent: #D2A8FF; }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            font-family: var(--mono);
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text);
+            font-family: var(--mono);
+            line-height: 1;
+        }
+
+        .stat-icon-bg {
+            position: absolute;
+            right: 16px;
+            bottom: 12px;
+            font-size: 32px;
+            opacity: 0.06;
+        }
+
+        /* ─── Info Cards ─── */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 14px;
+        }
+
+        .info-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .info-card-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-family: var(--mono);
+        }
+
+        .info-card-body { padding: 16px 20px; }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 0;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .info-row:last-child { border-bottom: none; }
+
+        .info-key { color: var(--text-muted); }
+
+        .info-val {
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 12px;
+            background: var(--surface2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        /* ─── Log Box ─── */
+        .log-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .log-title {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-family: var(--mono);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .log-count {
+            background: var(--primary-dim);
+            color: var(--primary);
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-family: var(--mono);
+        }
+
+        .log-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+            font-family: var(--mono);
+            font-size: 12px;
+            padding: 0;
+        }
+
+        .log-line {
+            padding: 5px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: #9aaabb;
+            line-height: 1.7;
+            transition: background 0.1s;
+        }
+
+        .log-line:hover { background: rgba(255,255,255,0.025); }
+
+        .log-line:last-child { border-bottom: none; }
+
+        /* Log color hints */
+        .log-line:where([data-level="ERROR"], :has(.err)) { color: var(--accent-red); }
+
+        /* ─── Bindings Table ─── */
+        .table-wrap .el-table {
+            background: transparent !important;
+            --el-table-bg-color: var(--surface) !important;
+            --el-table-tr-bg-color: var(--surface) !important;
+            --el-table-header-bg-color: var(--surface2) !important;
+            --el-table-row-hover-bg-color: var(--surface2) !important;
+            --el-table-border-color: var(--border) !important;
+            --el-table-text-color: var(--text) !important;
+            --el-table-header-text-color: var(--text-muted) !important;
+            font-family: var(--mono) !important;
+            font-size: 13px !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
+        }
+
+        .table-wrap .el-table th {
+            font-size: 11px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.06em !important;
+            font-weight: 500 !important;
+        }
+
+        .table-wrap .el-button--danger {
+            background: rgba(255,123,114,0.1) !important;
+            border-color: rgba(255,123,114,0.3) !important;
+            color: var(--accent-red) !important;
+        }
+
+        /* ─── Mobile ─── */
+        .hamburger {
+            display: none;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+
+        .hamburger:hover { background: rgba(255,255,255,0.07); }
+
+        .hamburger svg { width: 18px; height: 18px; stroke: var(--text-muted); }
+
+        .mask {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(2px);
+            z-index: 999;
+            display: none;
+        }
+
+        .mask.show { display: block; }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                height: 100%;
+                transform: translateX(-100%);
+            }
+            .sidebar.mobile-open { transform: translateX(0); }
+            .hamburger { display: block; }
+            .content { padding: 16px; }
+        }
+
+        /* ─── Element Plus overrides ─── */
+        .el-card {
+            background: var(--surface) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+        }
+
+        .el-card__header {
+            border-bottom: 1px solid var(--border) !important;
+            font-size: 12px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.08em !important;
+            color: var(--text-muted) !important;
+            font-family: var(--mono) !important;
+            padding: 14px 20px !important;
+        }
+
+        .el-card p { 
+            margin: 0 0 8px; 
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .el-card p:last-child { margin-bottom: 0; }
+
+        .el-card p strong,
+        .el-card p span {
+            color: var(--text);
+            font-family: var(--mono);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="app-wrapper">
+            <div class="mask" :class="{ show: mobileOpen }" @click="mobileOpen = false"></div>
+
+            <!-- Sidebar -->
+            <div class="sidebar" :class="{ 'mobile-open': mobileOpen }">
+                <div class="logo">
+                    <div class="logo-mark">
+                        <svg viewBox="0 0 16 16" fill="none">
+                            <path d="M3 8h10M8 3v10M3 5l2-2M11 5l2-2M3 11l2 2M11 11l2 2" stroke="#0D1117" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">TQSync</span>
+                        <span class="logo-version">v{{ status.version || '—' }}</span>
+                    </div>
+                </div>
+
+                <el-menu :default-active="activeTab" @select="handleMenu">
+                    <el-menu-item index="dash">
+                        <el-icon><Odometer /></el-icon><span>仪表盘</span>
+                    </el-menu-item>
+                    <el-menu-item index="logs">
+                        <el-icon><Document /></el-icon><span>运行日志</span>
+                    </el-menu-item>
+                    <el-menu-item index="binds">
+                        <el-icon><User /></el-icon><span>用户绑定</span>
+                    </el-menu-item>
+                </el-menu>
+
+                <div class="sidebar-footer">
+                    <div class="status-dot">
+                        <div class="dot"></div>
+                        <span>系统运行中</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="main-container">
+                <div class="top-bar">
+                    <div class="top-bar-left">
+                        <div class="hamburger" @click="mobileOpen = !mobileOpen" id="menu-btn" style="display:none">
+                            <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <line x1="2" y1="5" x2="16" y2="5" stroke-width="1.5" stroke-linecap="round"/>
+                                <line x1="2" y1="9" x2="16" y2="9" stroke-width="1.5" stroke-linecap="round"/>
+                                <line x1="2" y1="13" x2="16" y2="13" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <span class="breadcrumb">TQSync /</span>
+                        <span class="page-title">{{ pageTitle }}</span>
+                    </div>
+                    <div class="top-bar-right">
+                        <el-button class="restart-btn" size="small" type="danger" plain @click="doRestart">
+                            ↺ 重启服务
+                        </el-button>
+                    </div>
+                </div>
+
+                <div class="content">
+                    <!-- Dashboard -->
+                    <div v-if="activeTab === 'dash'">
+                        <div class="stat-grid">
+                            <div class="stat-card c-green">
+                                <div class="stat-label">运行时长</div>
+                                <div class="stat-value">{{ status.uptime || '—' }}</div>
+                                <div class="stat-icon-bg">⏱</div>
+                            </div>
+                            <div class="stat-card c-blue">
+                                <div class="stat-label">CPU 负载</div>
+                                <div class="stat-value">{{ status.cpu_usage || '0%' }}</div>
+                                <div class="stat-icon-bg">⚙</div>
+                            </div>
+                            <div class="stat-card c-orange">
+                                <div class="stat-label">内存占用</div>
+                                <div class="stat-value">{{ status.memory_usage || '—' }}</div>
+                                <div class="stat-icon-bg">◈</div>
+                            </div>
+                            <div class="stat-card c-purple">
+                                <div class="stat-label">已同步消息</div>
+                                <div class="stat-value">{{ status.sync_count || 0 }}</div>
+                                <div class="stat-icon-bg">⇄</div>
+                            </div>
+                        </div>
+
+                        <div class="info-grid">
+                            <div class="info-card">
+                                <div class="info-card-header">基础信息</div>
+                                <div class="info-card-body">
+                                    <div class="info-row">
+                                        <span class="info-key">版本</span>
+                                        <span class="info-val">{{ status.version || '—' }}</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-key">绑定用户</span>
+                                        <span class="info-val">{{ status.bound_users ?? '—' }}</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-key">QQ 群</span>
+                                        <span class="info-val">{{ status.qq_group_id || '—' }}</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-key">TG 群</span>
+                                        <span class="info-val">{{ status.tg_group_id || '—' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="info-card">
+                                <div class="info-card-header">存储监控</div>
+                                <div class="info-card-body">
+                                    <div class="info-row">
+                                        <span class="info-key">数据库大小</span>
+                                        <span class="info-val">{{ status.db_size || '—' }}</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-key">磁盘使用率</span>
+                                        <span class="info-val">{{ status.disk_usage || '—' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logs -->
+                    <div v-if="activeTab === 'logs'">
+                        <div class="log-header">
+                            <div class="log-title">
+                                <span>实时输出</span>
+                                <span class="log-count">{{ logs.length }} 条</span>
+                            </div>
+                        </div>
+                        <div class="log-box">
+                            <div
+                                v-for="(l, i) in logs"
+                                :key="i"
+                                class="log-line"
+                                :style="getLogStyle(l)"
+                            >{{ l }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Bindings -->
+                    <div v-if="activeTab === 'binds'" class="table-wrap">
+                        <el-table :data="bindings" style="width: 100%">
+                            <el-table-column prop="tg_user_id" label="Telegram ID"></el-table-column>
+                            <el-table-column prop="qq_user_id" label="QQ 号码"></el-table-column>
+                            <el-table-column label="操作" width="80" align="center">
+                                <template #default="scope">
+                                    <el-popconfirm title="确认解除绑定？" @confirm="unbind(scope.row.tg_user_id)">
+                                        <template #reference>
+                                            <el-button size="small" type="danger" icon="Delete" circle></el-button>
+                                        </template>
+                                    </el-popconfirm>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="//unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="//unpkg.com/element-plus"></script>
+    <script src="//unpkg.com/@element-plus/icons-vue"></script>
+    <script src="//unpkg.com/axios/dist/axios.min.js"></script>
+    <script>
+        const { createApp, ref, onMounted, computed } = Vue;
+        const ElMessage = ElementPlus.ElMessage;
+
+        createApp({
+            setup() {
+                const isLoggedIn = ref(false);
+                const apiKey = ref(localStorage.getItem('tqsync_api_key') || '');
+                const activeTab = ref('dash');
+                const mobileOpen = ref(false);
+                const status = ref({});
+                const startTimeRef = ref(0);
+                const logs = ref([]);
+                const bindings = ref([]);
+
+                const api = axios.create({ baseURL: window.location.origin });
+
+                const checkScreen = () => {
+                    const btn = document.getElementById('menu-btn');
+                    if (btn) btn.style.display = window.innerWidth <= 768 ? 'block' : 'none';
+                };
+                window.addEventListener('resize', checkScreen);
+
+                const fetchStatus = async () => {
+                    try {
+                        api.defaults.headers['X-API-Key'] = apiKey.value;
+                        const res = await api.get('/admin/status');
+                        status.value = { ...status.value, ...res.data };
+                        if (startTimeRef.value === 0 && res.data.uptime_seconds) {
+                            startTimeRef.value = Date.now() / 1000 - res.data.uptime_seconds;
+                        }
+                        isLoggedIn.value = true;
+                    } catch (e) {
+                        if (e.response?.status === 403) {
+                            isLoggedIn.value = false;
+                            ElMessage.error("API Key 无效");
+                        }
+                    }
+                };
+
+                const updateUptimeDisplay = () => {
+                    if (startTimeRef.value > 0) {
+                        const now = Date.now() / 1000;
+                        const diff = Math.floor(now - startTimeRef.value);
+                        const h = Math.floor(diff / 3600);
+                        const m = Math.floor((diff % 3600) / 60);
+                        const s = diff % 60;
+                        status.value.uptime = `${h}h ${m}m ${s}s`;
+                    }
+                };
+
+                const fetchLogs = async () => {
+                    if (activeTab.value !== 'logs') return;
+                    try {
+                        const res = await api.get('/admin/logs?lines=100');
+                        logs.value = res.data.logs;
+                    } catch (e) {}
+                };
+
+                const fetchBindings = async () => {
+                    try {
+                        const res = await api.get('/admin/bindings');
+                        bindings.value = res.data;
+                    } catch (e) {}
+                };
+
+                const handleMenu = (idx) => {
+                    activeTab.value = idx;
+                    mobileOpen.value = false;
+                    if (idx === 'logs') fetchLogs();
+                    if (idx === 'binds') fetchBindings();
+                };
+
+                const doRestart = async () => {
+                    try {
+                        await api.post('/admin/restart');
+                        ElMessage.success("重启指令已发送");
+                    } catch (e) { ElMessage.error("重启失败"); }
+                };
+
+                const unbind = async (id) => {
+                    try {
+                        await api.delete(`/admin/bindings/${id}`);
+                        ElMessage.success("已解除绑定");
+                        fetchBindings();
+                    } catch (e) { ElMessage.error("操作失败"); }
+                };
+
+                const getLogStyle = (line) => {
+                    if (/error|ERROR|失败/i.test(line)) return { color: '#FF7B72' };
+                    if (/warn|WARN|warning/i.test(line)) return { color: '#FFA657' };
+                    if (/success|SUCCESS|成功|INFO/i.test(line)) return { color: '#6EE7B7' };
+                    if (/^\[.*?\]/.test(line)) return { color: '#79C0FF' };
+                    return {};
+                };
+
+                const pageTitle = computed(() => ({
+                    dash: '系统仪表盘', logs: '实时日志', binds: '用户管理'
+                })[activeTab.value]);
+
+                onMounted(() => {
+                    checkScreen();
+                    if (apiKey.value) fetchStatus();
+                    setInterval(() => {
+                        if (isLoggedIn.value) {
+                            fetchStatus();
+                            if (activeTab.value === 'logs') fetchLogs();
+                        }
+                    }, 5000);
+                    setInterval(updateUptimeDisplay, 1000);
+                });
+
+                return {
+                    isLoggedIn, apiKey, activeTab, mobileOpen,
+                    status, logs, bindings, pageTitle,
+                    fetchStatus, handleMenu, doRestart, unbind, getLogStyle
+                };
+            }
+        }).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');
+    </script>
+</body>
+</html>

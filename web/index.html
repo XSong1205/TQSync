@@ -1,768 +1,812 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex, nofollow">
-    <title>TQSync 控制台</title>
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
-    <style>
-        :root {
-            --primary: #6EE7B7;
-            --primary-dim: rgba(110,231,183,0.12);
-            --primary-glow: rgba(110,231,183,0.25);
-            --sidebar-w: 220px;
-            --bg: #0D1117;
-            --surface: #161B22;
-            --surface2: #1C2128;
-            --border: rgba(255,255,255,0.06);
-            --border-hover: rgba(110,231,183,0.3);
-            --text: #E6EDF3;
-            --text-muted: #7D8590;
-            --text-dim: #484F58;
-            --accent-blue: #79C0FF;
-            --accent-orange: #FFA657;
-            --accent-red: #FF7B72;
-            --accent-purple: #D2A8FF;
-            --mono: 'JetBrains Mono', monospace;
-            --sans: 'Sora', sans-serif;
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-            margin: 0;
-            background: var(--bg);
-            font-family: var(--sans);
-            color: var(--text);
-            -webkit-font-smoothing: antialiased;
-        }
-
-        /* ─── Scrollbar ─── */
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(110,231,183,0.3); }
-
-        .app-wrapper { display: flex; height: 100vh; overflow: hidden; }
-
-        /* ─── Sidebar ─── */
-        .sidebar {
-            width: var(--sidebar-w);
-            background: var(--surface);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            z-index: 1000;
-            transition: transform 0.25s cubic-bezier(.4,0,.2,1);
-        }
-
-        .logo {
-            height: 64px;
-            display: flex;
-            align-items: center;
-            padding: 0 20px;
-            border-bottom: 1px solid var(--border);
-            gap: 10px;
-        }
-
-        .logo-mark {
-            width: 28px; height: 28px;
-            border-radius: 7px;
-            background: var(--primary);
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .logo-mark svg { width: 16px; height: 16px; }
-
-        .logo-text {
-            display: flex;
-            flex-direction: column;
-            line-height: 1;
-        }
-
-        .logo-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text);
-            letter-spacing: 0.02em;
-        }
-
-        .logo-version {
-            font-size: 10px;
-            color: var(--text-muted);
-            font-family: var(--mono);
-            margin-top: 3px;
-        }
-
-        /* Override Element Plus menu */
-        .sidebar .el-menu {
-            border-right: none !important;
-            background: transparent !important;
-            padding: 12px 8px;
-            flex: 1;
-        }
-
-        .sidebar .el-menu-item {
-            height: 40px !important;
-            line-height: 40px !important;
-            border-radius: 8px !important;
-            margin-bottom: 2px !important;
-            padding: 0 12px !important;
-            font-size: 13px !important;
-            font-family: var(--sans) !important;
-            color: var(--text-muted) !important;
-            background: transparent !important;
-            transition: all 0.15s ease !important;
-        }
-
-        .sidebar .el-menu-item:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: var(--text) !important;
-        }
-
-        .sidebar .el-menu-item.is-active {
-            background: var(--primary-dim) !important;
-            color: var(--primary) !important;
-        }
-
-        .sidebar .el-menu-item .el-icon {
-            font-size: 15px !important;
-            margin-right: 8px !important;
-        }
-
-        .sidebar-footer {
-            padding: 12px 16px;
-            border-top: 1px solid var(--border);
-        }
-
-        .status-dot {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-muted);
-            font-family: var(--mono);
-        }
-
-        .dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: var(--primary);
-            box-shadow: 0 0 6px var(--primary);
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--primary); }
-            50% { opacity: 0.5; box-shadow: 0 0 12px var(--primary); }
-        }
-
-        /* ─── Main ─── */
-        .main-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-
-        .top-bar {
-            height: 56px;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            padding: 0 24px;
-            justify-content: space-between;
-            flex-shrink: 0;
-        }
-
-        .top-bar-left { display: flex; align-items: center; gap: 12px; }
-
-        .breadcrumb {
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
-        .page-title {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text);
-        }
-
-        .top-bar-right { display: flex; align-items: center; gap: 10px; }
-
-        /* Override restart button */
-        .restart-btn.el-button {
-            background: rgba(255,123,114,0.1) !important;
-            border: 1px solid rgba(255,123,114,0.3) !important;
-            color: var(--accent-red) !important;
-            font-family: var(--sans) !important;
-            font-size: 12px !important;
-            border-radius: 8px !important;
-            height: 32px !important;
-            padding: 0 14px !important;
-            transition: all 0.15s ease !important;
-        }
-
-        .restart-btn.el-button:hover {
-            background: rgba(255,123,114,0.2) !important;
-            border-color: rgba(255,123,114,0.5) !important;
-        }
-
-        .content { flex: 1; padding: 24px; overflow-y: auto; }
-
-        /* ─── Stat Cards ─── */
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 14px;
-            margin-bottom: 20px;
-        }
-
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 18px 20px;
-            position: relative;
-            overflow: hidden;
-            transition: border-color 0.2s, transform 0.2s;
-            cursor: default;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0;
-            right: 0; height: 1px;
-            background: var(--card-accent, transparent);
-            opacity: 0.6;
-        }
-
-        .stat-card:hover {
-            border-color: var(--card-accent, var(--border-hover));
-            transform: translateY(-1px);
-        }
-
-        .stat-card.c-green { --card-accent: #6EE7B7; }
-        .stat-card.c-blue  { --card-accent: #79C0FF; }
-        .stat-card.c-orange{ --card-accent: #FFA657; }
-        .stat-card.c-purple{ --card-accent: #D2A8FF; }
-
-        .stat-label {
-            font-size: 11px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            margin-bottom: 10px;
-            font-family: var(--mono);
-        }
-
-        .stat-value {
-            font-size: 22px;
-            font-weight: 600;
-            color: var(--text);
-            font-family: var(--mono);
-            line-height: 1;
-        }
-
-        .stat-icon-bg {
-            position: absolute;
-            right: 16px;
-            bottom: 12px;
-            font-size: 32px;
-            opacity: 0.06;
-        }
-
-        /* ─── Info Cards ─── */
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 14px;
-        }
-
-        .info-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .info-card-header {
-            padding: 14px 20px;
-            border-bottom: 1px solid var(--border);
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            font-family: var(--mono);
-        }
-
-        .info-card-body { padding: 16px 20px; }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 7px 0;
-            font-size: 13px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .info-row:last-child { border-bottom: none; }
-
-        .info-key { color: var(--text-muted); }
-
-        .info-val {
-            color: var(--text);
-            font-family: var(--mono);
-            font-size: 12px;
-            background: var(--surface2);
-            padding: 2px 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-        }
-
-        /* ─── Log Box ─── */
-        .log-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 12px;
-        }
-
-        .log-title {
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            font-family: var(--mono);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .log-count {
-            background: var(--primary-dim);
-            color: var(--primary);
-            font-size: 10px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-family: var(--mono);
-        }
-
-        .log-box {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            height: calc(100vh - 200px);
-            overflow-y: auto;
-            font-family: var(--mono);
-            font-size: 12px;
-            padding: 0;
-        }
-
-        .log-line {
-            padding: 5px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
-            color: #9aaabb;
-            line-height: 1.7;
-            transition: background 0.1s;
-        }
-
-        .log-line:hover { background: rgba(255,255,255,0.025); }
-
-        .log-line:last-child { border-bottom: none; }
-
-        /* Log color hints */
-        .log-line:where([data-level="ERROR"], :has(.err)) { color: var(--accent-red); }
-
-        /* ─── Bindings Table ─── */
-        .table-wrap .el-table {
-            background: transparent !important;
-            --el-table-bg-color: var(--surface) !important;
-            --el-table-tr-bg-color: var(--surface) !important;
-            --el-table-header-bg-color: var(--surface2) !important;
-            --el-table-row-hover-bg-color: var(--surface2) !important;
-            --el-table-border-color: var(--border) !important;
-            --el-table-text-color: var(--text) !important;
-            --el-table-header-text-color: var(--text-muted) !important;
-            font-family: var(--mono) !important;
-            font-size: 13px !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 12px !important;
-            overflow: hidden !important;
-        }
-
-        .table-wrap .el-table th {
-            font-size: 11px !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.06em !important;
-            font-weight: 500 !important;
-        }
-
-        .table-wrap .el-button--danger {
-            background: rgba(255,123,114,0.1) !important;
-            border-color: rgba(255,123,114,0.3) !important;
-            color: var(--accent-red) !important;
-        }
-
-        /* ─── Mobile ─── */
-        .hamburger {
-            display: none;
-            cursor: pointer;
-            padding: 6px;
-            border-radius: 6px;
-            transition: background 0.15s;
-        }
-
-        .hamburger:hover { background: rgba(255,255,255,0.07); }
-
-        .hamburger svg { width: 18px; height: 18px; stroke: var(--text-muted); }
-
-        .mask {
-            position: fixed; top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(2px);
-            z-index: 999;
-            display: none;
-        }
-
-        .mask.show { display: block; }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                height: 100%;
-                transform: translateX(-100%);
-            }
-            .sidebar.mobile-open { transform: translateX(0); }
-            .hamburger { display: block; }
-            .content { padding: 16px; }
-        }
-
-        /* ─── Element Plus overrides ─── */
-        .el-card {
-            background: var(--surface) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 12px !important;
-        }
-
-        .el-card__header {
-            border-bottom: 1px solid var(--border) !important;
-            font-size: 12px !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.08em !important;
-            color: var(--text-muted) !important;
-            font-family: var(--mono) !important;
-            padding: 14px 20px !important;
-        }
-
-        .el-card p { 
-            margin: 0 0 8px; 
-            font-size: 13px;
-            color: var(--text-muted);
-        }
-
-        .el-card p:last-child { margin-bottom: 0; }
-
-        .el-card p strong,
-        .el-card p span {
-            color: var(--text);
-            font-family: var(--mono);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>TQSync 控制台</title>
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
+<style>
+:root {
+  --bg:      #080C12;
+  --bg1:     #0D1219;
+  --bg2:     #111820;
+  --bg3:     #161E28;
+  --border:  rgba(255,255,255,0.06);
+  --border2: rgba(255,255,255,0.10);
+  --text:    #DDE6F0;
+  --muted:   #6B7A8D;
+  --dim:     #3A4454;
+  --primary: #41E0A3;
+  --prim2:   rgba(65,224,163,0.15);
+  --prim3:   rgba(65,224,163,0.06);
+  --blue:    #60A5FA;
+  --orange:  #FB923C;
+  --purple:  #A78BFA;
+  --red:     #F87171;
+  --yellow:  #FBBF24;
+  --sans:    'Outfit', sans-serif;
+  --mono:    'JetBrains Mono', monospace;
+  --sw:      248px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:rgba(65,224,163,.4)}
+
+/* ═══ LOGIN ═══ */
+.login-screen{
+  position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  z-index:9999;background:var(--bg);
+  transition:opacity .4s ease,transform .4s ease;
+}
+.login-screen.fade-out{opacity:0;transform:scale(1.03);pointer-events:none}
+.login-grid{
+  position:absolute;inset:0;
+  background-image:linear-gradient(rgba(65,224,163,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(65,224,163,.035) 1px,transparent 1px);
+  background-size:52px 52px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 20%,transparent 100%);
+}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none;animation:ofloat 10s ease-in-out infinite}
+.orb1{width:380px;height:380px;background:rgba(65,224,163,.06);top:-120px;left:-100px;animation-delay:0s}
+.orb2{width:450px;height:450px;background:rgba(96,165,250,.045);bottom:-120px;right:-80px;animation-delay:-4s}
+.orb3{width:240px;height:240px;background:rgba(167,139,250,.05);top:38%;right:22%;animation-delay:-7s}
+@keyframes ofloat{0%,100%{transform:translate(0,0)}40%{transform:translate(18px,-22px)}70%{transform:translate(-14px,16px)}}
+
+.login-card{
+  position:relative;width:400px;
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:20px;padding:40px;
+  animation:linIn .55s cubic-bezier(.2,0,.1,1) both;
+}
+@keyframes linIn{from{opacity:0;transform:translateY(28px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+.login-card::before{
+  content:'';position:absolute;inset:0;border-radius:20px;
+  border:1px solid transparent;pointer-events:none;
+  background:linear-gradient(135deg,rgba(65,224,163,.18),transparent 55%) border-box;
+  -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:destination-out;mask-composite:exclude;
+}
+.l-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.l-mark{
+  width:40px;height:40px;border-radius:10px;background:var(--primary);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.l-mark svg{width:20px;height:20px}
+.l-brand{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+.l-brand em{color:var(--primary);font-style:normal}
+.l-sub{font-size:12px;color:var(--muted);margin-bottom:26px;line-height:1.6}
+.l-label{
+  display:block;font-size:10px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--muted);margin-bottom:7px;font-family:var(--mono);
+}
+.l-field{margin-bottom:14px}
+.l-input-w{position:relative;display:flex;align-items:center}
+.l-icon{
+  position:absolute;left:13px;z-index:1;pointer-events:none;
+  width:14px;height:14px;stroke:var(--dim);transition:stroke .2s;
+}
+.l-input{
+  width:100%;height:44px;background:var(--bg3);
+  border:1px solid var(--border2);border-radius:10px;
+  color:var(--text);font-family:var(--mono);font-size:13px;
+  padding:0 42px 0 38px;outline:none;letter-spacing:.04em;
+  transition:border-color .2s,box-shadow .2s;
+}
+.l-input::placeholder{color:var(--dim)}
+.l-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(65,224,163,.1)}
+.l-input:focus ~ .l-icon{stroke:var(--primary)}
+.l-eye{
+  position:absolute;right:12px;background:none;border:none;cursor:pointer;
+  color:var(--dim);padding:4px;transition:color .15s;
+  display:flex;align-items:center;
+}
+.l-eye:hover{color:var(--muted)}
+.l-eye svg{width:14px;height:14px}
+.l-err{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--red);margin-top:7px;
+  font-family:var(--mono);animation:shake .28s ease;
+}
+.l-err svg{width:12px;height:12px;flex-shrink:0}
+@keyframes shake{0%,100%{transform:translateX(0)}30%{transform:translateX(-6px)}70%{transform:translateX(6px)}}
+.l-btn{
+  width:100%;height:44px;background:var(--primary);
+  border:none;border-radius:10px;color:#041a0f;
+  font-family:var(--sans);font-size:14px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:8px;overflow:hidden;position:relative;
+  transition:opacity .2s,transform .15s;
+}
+.l-btn::after{
+  content:'';position:absolute;inset:0;
+  background:rgba(255,255,255,.15);
+  transform:translateX(-100%);transition:transform .35s;
+}
+.l-btn:hover::after{transform:translateX(100%)}
+.l-btn:hover{opacity:.92}
+.l-btn:active{transform:scale(.98)}
+.l-btn:disabled{opacity:.45;cursor:not-allowed}
+.l-spinner{width:15px;height:15px;border-radius:50%;border:2px solid rgba(4,26,15,.25);border-top-color:#041a0f;animation:spin .55s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.l-footer{
+  margin-top:22px;padding-top:18px;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.l-ftext{font-size:10px;color:var(--dim);font-family:var(--mono)}
+.l-badge{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-family:var(--mono)}
+.bdot{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ═══ APP SHELL ═══ */
+.app-wrapper{display:flex;height:100vh;overflow:hidden}
+
+.sidebar{
+  width:var(--sw);background:var(--bg1);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  z-index:1000;flex-shrink:0;
+  transition:transform .25s cubic-bezier(.4,0,.2,1);
+}
+.s-logo{
+  height:64px;display:flex;align-items:center;
+  padding:0 18px;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.s-mark{
+  width:30px;height:30px;border-radius:8px;background:var(--primary);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.s-mark svg{width:16px;height:16px}
+.s-texts{line-height:1}
+.s-name{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+.s-ver{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px}
+.s-nav{padding:10px 10px 0;flex:1;overflow-y:auto}
+.s-nlabel{
+  font-size:9px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--dim);
+  padding:0 10px;margin:14px 0 4px;font-family:var(--mono);
+}
+.sidebar .el-menu{border-right:none !important;background:transparent !important;padding:0}
+.sidebar .el-menu-item{
+  height:38px !important;line-height:38px !important;
+  border-radius:8px !important;margin-bottom:1px !important;
+  padding:0 10px !important;font-size:13px !important;
+  font-family:var(--sans) !important;color:var(--muted) !important;
+  background:transparent !important;transition:all .14s !important;
+}
+.sidebar .el-menu-item:hover{background:rgba(255,255,255,.04) !important;color:var(--text) !important}
+.sidebar .el-menu-item.is-active{background:var(--prim3) !important;color:var(--primary) !important}
+.sidebar .el-menu-item .el-icon{font-size:14px !important;margin-right:8px !important;opacity:.75}
+.sidebar .el-menu-item.is-active .el-icon{opacity:1}
+.s-bottom{padding:14px;border-top:1px solid var(--border);flex-shrink:0}
+.user-panel{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.u-info{display:flex;align-items:center;gap:8px}
+.u-avatar{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--prim2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:600;color:var(--primary);
+}
+.u-name{font-size:12px;font-weight:500;color:var(--text)}
+.u-role{font-size:10px;color:var(--dim);margin-top:2px;font-family:var(--mono)}
+.u-logout{
+  background:none;border:none;cursor:pointer;color:var(--dim);
+  padding:4px;border-radius:5px;transition:color .15s,background .15s;
+  display:flex;align-items:center;
+}
+.u-logout:hover{color:var(--red);background:rgba(248,113,113,.1)}
+.u-logout svg{width:14px;height:14px}
+
+.main-container{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{
+  height:56px;background:var(--bg1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 24px;
+  justify-content:space-between;flex-shrink:0;
+}
+.tb-left{display:flex;align-items:center;gap:10px}
+.ham{
+  background:none;border:none;cursor:pointer;padding:6px;
+  border-radius:6px;color:var(--muted);
+  transition:color .15s,background .15s;display:none;
+}
+.ham:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.ham svg{width:17px;height:17px;stroke:currentColor}
+.breadcrumb{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.page-title{font-size:14px;font-weight:500;color:var(--text)}
+.tb-right{display:flex;align-items:center;gap:8px}
+.uptime-badge{
+  display:flex;align-items:center;gap:7px;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:20px;padding:4px 12px 4px 8px;
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+}
+.up-dot{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:blink 2s ease-in-out infinite}
+.restart-btn{
+  background:rgba(248,113,113,.08) !important;
+  border:1px solid rgba(248,113,113,.22) !important;
+  color:var(--red) !important;
+  font-family:var(--sans) !important;font-size:12px !important;
+  border-radius:8px !important;height:32px !important;padding:0 14px !important;
+  transition:all .15s !important;
+}
+.restart-btn:hover{background:rgba(248,113,113,.16) !important;border-color:rgba(248,113,113,.4) !important}
+
+.content{flex:1;padding:24px;overflow-y:auto;overflow-x:hidden}
+
+/* section header */
+.sec-hd{display:flex;align-items:center;margin-bottom:16px;gap:0}
+.sec-title{
+  font-size:10px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--muted);font-family:var(--mono);
+  display:flex;align-items:center;gap:7px;white-space:nowrap;
+}
+.sec-title svg{width:11px;height:11px;stroke:var(--primary);opacity:.8}
+.sec-line{flex:1;height:1px;background:var(--border);margin-left:12px}
+
+/* stat grid */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:18px}
+.stat-card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:14px;padding:18px 20px;
+  position:relative;overflow:hidden;cursor:default;
+  transition:border-color .22s,transform .22s;
+}
+.stat-card:hover{transform:translateY(-2px);border-color:var(--border2)}
+.stat-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:var(--cc,transparent);opacity:.4;transition:opacity .2s;
+}
+.stat-card:hover::after{opacity:.9}
+.stat-card.cg{--cc:var(--primary)}
+.stat-card.cb{--cc:var(--blue)}
+.stat-card.co{--cc:var(--orange)}
+.stat-card.cp{--cc:var(--purple)}
+.s-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.s-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.05)}
+.s-icon svg{width:15px;height:15px}
+.cg .s-icon{background:rgba(65,224,163,.12)}.cg .s-icon svg{stroke:var(--primary)}
+.cb .s-icon{background:rgba(96,165,250,.12)}.cb .s-icon svg{stroke:var(--blue)}
+.co .s-icon{background:rgba(251,146,60,.12)}.co .s-icon svg{stroke:var(--orange)}
+.cp .s-icon{background:rgba(167,139,250,.12)}.cp .s-icon svg{stroke:var(--purple)}
+.s-badge{
+  font-size:10px;font-family:var(--mono);
+  padding:2px 7px;border-radius:4px;
+  background:rgba(65,224,163,.1);color:var(--primary);
+}
+.s-lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
+.s-val{font-size:22px;font-weight:600;color:var(--text);font-family:var(--mono);letter-spacing:-.02em;line-height:1}
+
+/* sparkline */
+.spark-card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:14px;padding:18px 20px;margin-bottom:18px;
+}
+.spark-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
+.spark-meta{font-size:11px;color:var(--muted);font-family:var(--mono);padding-top:2px}
+.spark-lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
+.spark-num{font-size:20px;font-weight:600;color:var(--primary);font-family:var(--mono)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:44px}
+.bar{
+  flex:1;min-width:5px;border-radius:2px 2px 0 0;
+  background:rgba(65,224,163,.15);
+  transition:height .5s cubic-bezier(.4,0,.2,1),background .2s;
+  cursor:default;
+}
+.bar:hover{background:rgba(65,224,163,.45)}
+.bar.peak{background:rgba(65,224,163,.3)}
+
+/* info cards */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:18px}
+.info-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.ic-hd{
+  padding:11px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+}
+.ic-hd svg{width:12px;height:12px;stroke:var(--primary);opacity:.75;flex-shrink:0}
+.ic-title{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-family:var(--mono)}
+.ic-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:9px 18px;transition:background .12s;
+}
+.ic-row:hover{background:rgba(255,255,255,.02)}
+.ic-key{font-size:12px;color:var(--muted)}
+.ic-val{
+  font-size:11px;font-family:var(--mono);color:var(--text);
+  background:var(--bg3);border:1px solid var(--border);
+  padding:2px 9px;border-radius:5px;max-width:150px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* log box */
+.log-wrap{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;
+  height:calc(100vh - 185px);display:flex;flex-direction:column;
+}
+.log-tb{
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.traffic{display:flex;gap:6px;margin-right:4px}
+.td{width:10px;height:10px;border-radius:50%}
+.td.r{background:#FF5F57}.td.y{background:#FEBC2E}.td.g{background:#28C840}
+.log-filter{
+  flex:1;height:27px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:6px;
+  color:var(--text);font-family:var(--mono);font-size:11px;
+  padding:0 10px;outline:none;transition:border-color .2s;
+}
+.log-filter:focus{border-color:var(--primary)}
+.log-filter::placeholder{color:var(--dim)}
+.l-cnt{
+  font-size:10px;font-family:var(--mono);
+  background:var(--prim2);color:var(--primary);
+  padding:2px 8px;border-radius:10px;white-space:nowrap;
+}
+.log-body{flex:1;overflow-y:auto;padding:6px 0}
+.log-line{
+  display:flex;gap:12px;padding:3px 16px;
+  font-family:var(--mono);font-size:11.5px;line-height:1.8;
+  transition:background .1s;
+}
+.log-line:hover{background:rgba(255,255,255,.02)}
+.log-i{color:var(--dim);min-width:28px;text-align:right;flex-shrink:0;user-select:none}
+.log-t{color:#8BA0B5;word-break:break-all}
+.ll-err .log-t{color:#F87171}
+.ll-warn .log-t{color:#FBBF24}
+.ll-ok .log-t{color:#6EE7B7}
+.ll-info .log-t{color:#93C5FD}
+.log-empty{padding:36px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
+
+/* bindings */
+.tbl-wrap .el-table{
+  background:transparent !important;
+  --el-table-bg-color:var(--bg2) !important;
+  --el-table-tr-bg-color:var(--bg2) !important;
+  --el-table-header-bg-color:var(--bg3) !important;
+  --el-table-row-hover-bg-color:rgba(255,255,255,.03) !important;
+  --el-table-border-color:var(--border) !important;
+  --el-table-text-color:var(--text) !important;
+  --el-table-header-text-color:var(--muted) !important;
+  font-family:var(--mono) !important;font-size:12px !important;
+  border:1px solid var(--border) !important;border-radius:14px !important;overflow:hidden !important;
+}
+.tbl-wrap .el-table th{font-size:10px !important;text-transform:uppercase !important;letter-spacing:.08em !important;font-weight:500 !important}
+.tbl-wrap .el-button--danger{background:rgba(248,113,113,.1) !important;border-color:rgba(248,113,113,.3) !important;color:var(--red) !important}
+.tbl-empty{padding:44px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
+.tbl-ei{
+  width:36px;height:36px;border:1px dashed var(--border2);
+  border-radius:9px;display:flex;align-items:center;
+  justify-content:center;margin:0 auto 10px;
+}
+.tbl-ei svg{width:17px;height:17px;stroke:var(--dim)}
+
+/* mobile */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:999;display:none}
+.mask.show{display:block}
+@media(max-width:768px){
+  .sidebar{position:fixed;height:100%;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .ham{display:flex !important}
+  .content{padding:16px}
+  .uptime-badge{display:none}
+}
+
+/* page anim */
+.page-in{animation:pin .28s ease both}
+@keyframes pin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
 </head>
 <body>
-    <div id="app">
-        <div class="app-wrapper">
-            <div class="mask" :class="{ show: mobileOpen }" @click="mobileOpen = false"></div>
+<div id="app">
 
-            <!-- Sidebar -->
-            <div class="sidebar" :class="{ 'mobile-open': mobileOpen }">
-                <div class="logo">
-                    <div class="logo-mark">
-                        <svg viewBox="0 0 16 16" fill="none">
-                            <path d="M3 8h10M8 3v10M3 5l2-2M11 5l2-2M3 11l2 2M11 11l2 2" stroke="#0D1117" stroke-width="1.5" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                    <div class="logo-text">
-                        <span class="logo-title">TQSync</span>
-                        <span class="logo-version">v{{ status.version || '—' }}</span>
-                    </div>
-                </div>
+<!-- ═══ LOGIN ═══ -->
+<div class="login-screen" v-if="!isLoggedIn" :class="{'fade-out':loggingIn}">
+  <div class="login-grid"></div>
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+  <div class="login-card">
+    <div class="l-logo">
+      <div class="l-mark">
+        <svg viewBox="0 0 20 20" fill="none">
+          <path d="M4 10h12M10 4v12M4 6.5l3-2.5M13 4l3 2.5M4 13.5l3 2.5M13 16l3-2.5" stroke="#0D1117" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="l-brand">TQ<em>Sync</em></div>
+    </div>
+    <p class="l-sub">输入管理员 API Token 以访问控制台面板</p>
+    <div class="l-field">
+      <label class="l-label">API Token</label>
+      <div class="l-input-w">
+        <svg class="l-icon" viewBox="0 0 14 14" fill="none">
+          <rect x="1.5" y="6.5" width="11" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M4.5 6.5V4.5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+        <input
+          class="l-input"
+          :type="showPw?'text':'password'"
+          v-model="inputKey"
+          placeholder="tqs_xxxxxxxxxxxx"
+          @keyup.enter="doLogin"
+          autocomplete="current-password"
+          spellcheck="false"
+        />
+        <button class="l-eye" type="button" @click="showPw=!showPw" tabindex="-1">
+          <svg v-if="!showPw" viewBox="0 0 14 14" fill="none">
+            <path d="M1 7S3.3 3 7 3s6 4 6 4-2.3 4-6 4-6-4-6-4z" stroke="currentColor" stroke-width="1.2"/>
+            <circle cx="7" cy="7" r="1.6" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+          <svg v-else viewBox="0 0 14 14" fill="none">
+            <path d="M2 2l10 10M6 6.3A1.6 1.6 0 008.8 9M3.5 4.5C2.3 5.4 1.4 6.6 1.4 7c.4 1 2 3.6 5.6 3.9M8 10.8c2-.7 3.6-2.5 4-3.8-.4-1-1-1.9-2-2.7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="l-err" v-if="loginErr">
+        <svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3M6 8.5v.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        {{ loginErr }}
+      </div>
+    </div>
+    <button class="l-btn" @click="doLogin" :disabled="loginLoading">
+      <div class="l-spinner" v-if="loginLoading"></div>
+      <template v-else>
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5h9M8 3l3.5 3.5L8 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        进入控制台
+      </template>
+    </button>
+    <div class="l-footer">
+      <span class="l-ftext">TQSync Admin Console</span>
+      <div class="l-badge"><div class="bdot"></div><span>服务在线</span></div>
+    </div>
+  </div>
+</div>
 
-                <el-menu :default-active="activeTab" @select="handleMenu">
-                    <el-menu-item index="dash">
-                        <el-icon><Odometer /></el-icon><span>仪表盘</span>
-                    </el-menu-item>
-                    <el-menu-item index="logs">
-                        <el-icon><Document /></el-icon><span>运行日志</span>
-                    </el-menu-item>
-                    <el-menu-item index="binds">
-                        <el-icon><User /></el-icon><span>用户绑定</span>
-                    </el-menu-item>
-                </el-menu>
+<!-- ═══ APP ═══ -->
+<div class="app-wrapper" v-if="isLoggedIn">
+  <div class="mask" :class="{show:mobileOpen}" @click="mobileOpen=false"></div>
 
-                <div class="sidebar-footer">
-                    <div class="status-dot">
-                        <div class="dot"></div>
-                        <span>系统运行中</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="main-container">
-                <div class="top-bar">
-                    <div class="top-bar-left">
-                        <div class="hamburger" @click="mobileOpen = !mobileOpen" id="menu-btn" style="display:none">
-                            <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <line x1="2" y1="5" x2="16" y2="5" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="2" y1="9" x2="16" y2="9" stroke-width="1.5" stroke-linecap="round"/>
-                                <line x1="2" y1="13" x2="16" y2="13" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </div>
-                        <span class="breadcrumb">TQSync /</span>
-                        <span class="page-title">{{ pageTitle }}</span>
-                    </div>
-                    <div class="top-bar-right">
-                        <el-button class="restart-btn" size="small" type="danger" plain @click="doRestart">
-                            ↺ 重启服务
-                        </el-button>
-                    </div>
-                </div>
-
-                <div class="content">
-                    <!-- Dashboard -->
-                    <div v-if="activeTab === 'dash'">
-                        <div class="stat-grid">
-                            <div class="stat-card c-green">
-                                <div class="stat-label">运行时长</div>
-                                <div class="stat-value">{{ status.uptime || '—' }}</div>
-                                <div class="stat-icon-bg">⏱</div>
-                            </div>
-                            <div class="stat-card c-blue">
-                                <div class="stat-label">CPU 负载</div>
-                                <div class="stat-value">{{ status.cpu_usage || '0%' }}</div>
-                                <div class="stat-icon-bg">⚙</div>
-                            </div>
-                            <div class="stat-card c-orange">
-                                <div class="stat-label">内存占用</div>
-                                <div class="stat-value">{{ status.memory_usage || '—' }}</div>
-                                <div class="stat-icon-bg">◈</div>
-                            </div>
-                            <div class="stat-card c-purple">
-                                <div class="stat-label">已同步消息</div>
-                                <div class="stat-value">{{ status.sync_count || 0 }}</div>
-                                <div class="stat-icon-bg">⇄</div>
-                            </div>
-                        </div>
-
-                        <div class="info-grid">
-                            <div class="info-card">
-                                <div class="info-card-header">基础信息</div>
-                                <div class="info-card-body">
-                                    <div class="info-row">
-                                        <span class="info-key">版本</span>
-                                        <span class="info-val">{{ status.version || '—' }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-key">绑定用户</span>
-                                        <span class="info-val">{{ status.bound_users ?? '—' }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-key">QQ 群</span>
-                                        <span class="info-val">{{ status.qq_group_id || '—' }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-key">TG 群</span>
-                                        <span class="info-val">{{ status.tg_group_id || '—' }}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="info-card">
-                                <div class="info-card-header">存储监控</div>
-                                <div class="info-card-body">
-                                    <div class="info-row">
-                                        <span class="info-key">数据库大小</span>
-                                        <span class="info-val">{{ status.db_size || '—' }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-key">磁盘使用率</span>
-                                        <span class="info-val">{{ status.disk_usage || '—' }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Logs -->
-                    <div v-if="activeTab === 'logs'">
-                        <div class="log-header">
-                            <div class="log-title">
-                                <span>实时输出</span>
-                                <span class="log-count">{{ logs.length }} 条</span>
-                            </div>
-                        </div>
-                        <div class="log-box">
-                            <div
-                                v-for="(l, i) in logs"
-                                :key="i"
-                                class="log-line"
-                                :style="getLogStyle(l)"
-                            >{{ l }}</div>
-                        </div>
-                    </div>
-
-                    <!-- Bindings -->
-                    <div v-if="activeTab === 'binds'" class="table-wrap">
-                        <el-table :data="bindings" style="width: 100%">
-                            <el-table-column prop="tg_user_id" label="Telegram ID"></el-table-column>
-                            <el-table-column prop="qq_user_id" label="QQ 号码"></el-table-column>
-                            <el-table-column label="操作" width="80" align="center">
-                                <template #default="scope">
-                                    <el-popconfirm title="确认解除绑定？" @confirm="unbind(scope.row.tg_user_id)">
-                                        <template #reference>
-                                            <el-button size="small" type="danger" icon="Delete" circle></el-button>
-                                        </template>
-                                    </el-popconfirm>
-                                </template>
-                            </el-table-column>
-                        </el-table>
-                    </div>
-                </div>
-            </div>
+  <div class="sidebar" :class="{open:mobileOpen}">
+    <div class="s-logo">
+      <div class="s-mark">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3v10M3 5l2-2M11 5l2-2M3 11l2 2M11 11l2 2" stroke="#0D1117" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+      <div class="s-texts">
+        <div class="s-name">TQSync</div>
+        <div class="s-ver">v{{ status.version || '—' }}</div>
+      </div>
+    </div>
+    <div class="s-nav">
+      <div class="s-nlabel">控制台</div>
+      <el-menu :default-active="activeTab" @select="handleMenu">
+        <el-menu-item index="dash"><el-icon><Odometer/></el-icon><span>仪表盘</span></el-menu-item>
+        <el-menu-item index="logs"><el-icon><Document/></el-icon><span>运行日志</span></el-menu-item>
+        <el-menu-item index="binds"><el-icon><User/></el-icon><span>用户绑定</span></el-menu-item>
+      </el-menu>
+    </div>
+    <div class="s-bottom">
+      <div class="user-panel">
+        <div class="u-info">
+          <div class="u-avatar">A</div>
+          <div>
+            <div class="u-name">Admin</div>
+            <div class="u-role">管理员</div>
+          </div>
         </div>
+        <button class="u-logout" @click="doLogout" title="退出登录">
+          <svg viewBox="0 0 14 14" fill="none"><path d="M9 10l3-3-3-3M12 7H5M5 3H3a1 1 0 00-1 1v6a1 1 0 001 1h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="ham" @click="mobileOpen=!mobileOpen" id="menu-btn" style="display:none">
+          <svg viewBox="0 0 17 17" fill="none"><line x1="2" y1="4.5" x2="15" y2="4.5" stroke-width="1.4" stroke-linecap="round"/><line x1="2" y1="8.5" x2="15" y2="8.5" stroke-width="1.4" stroke-linecap="round"/><line x1="2" y1="12.5" x2="15" y2="12.5" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+        <span class="breadcrumb">tqsync /</span>
+        <span class="page-title">{{ pageTitle }}</span>
+      </div>
+      <div class="tb-right">
+        <div class="uptime-badge">
+          <div class="up-dot"></div>
+          <span>{{ status.uptime || '—' }}</span>
+        </div>
+        <el-button class="restart-btn" size="small" plain @click="doRestart">↺ 重启</el-button>
+      </div>
     </div>
 
-    <script src="//unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="//unpkg.com/element-plus"></script>
-    <script src="//unpkg.com/@element-plus/icons-vue"></script>
-    <script src="//unpkg.com/axios/dist/axios.min.js"></script>
-    <script>
-        const { createApp, ref, onMounted, computed } = Vue;
-        const ElMessage = ElementPlus.ElMessage;
+    <div class="content">
 
-        createApp({
-            setup() {
-                const isLoggedIn = ref(false);
-                const apiKey = ref(localStorage.getItem('tqsync_api_key') || '');
-                const activeTab = ref('dash');
-                const mobileOpen = ref(false);
-                const status = ref({});
-                const startTimeRef = ref(0);
-                const logs = ref([]);
-                const bindings = ref([]);
+      <!-- DASHBOARD -->
+      <div v-if="activeTab==='dash'" class="page-in">
+        <div class="sec-hd">
+          <div class="sec-title">
+            <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="2" fill="currentColor"/><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width=".9"/></svg>
+            系统概览
+          </div>
+          <div class="sec-line"></div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card cg">
+            <div class="s-top">
+              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 5v2.8l1.8 1.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+              <span class="s-badge">在线</span>
+            </div>
+            <div class="s-lbl">运行时长</div>
+            <div class="s-val">{{ status.uptime || '—' }}</div>
+          </div>
+          <div class="stat-card cb">
+            <div class="s-top">
+              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><rect x="1.5" y="3" width="12" height="9" rx="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 7.5h6M4.5 5.5h3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+            </div>
+            <div class="s-lbl">CPU 负载</div>
+            <div class="s-val">{{ status.cpu_usage || '0%' }}</div>
+          </div>
+          <div class="stat-card co">
+            <div class="s-top">
+              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><ellipse cx="7.5" cy="7.5" rx="5.5" ry="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 4.5v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="7.5" cy="10" r=".8" fill="currentColor"/></svg></div>
+            </div>
+            <div class="s-lbl">内存占用</div>
+            <div class="s-val">{{ status.memory_usage || '—' }}</div>
+          </div>
+          <div class="stat-card cp">
+            <div class="s-top">
+              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5h2.5l2-4 2 8 2-4h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            </div>
+            <div class="s-lbl">已同步消息</div>
+            <div class="s-val">{{ status.sync_count || 0 }}</div>
+          </div>
+        </div>
 
-                const api = axios.create({ baseURL: window.location.origin });
+        <div class="spark-card">
+          <div class="spark-hd">
+            <div>
+              <div class="spark-lbl">消息同步活动</div>
+              <div class="spark-num">{{ status.sync_count || 0 }}</div>
+            </div>
+            <div class="spark-meta">过去 24 小时</div>
+          </div>
+          <div class="bars">
+            <div class="bar" v-for="(h,i) in sparkBars" :key="i"
+              :class="{peak:h===maxBar}"
+              :style="{height:h+'%'}"></div>
+          </div>
+        </div>
 
-                const checkScreen = () => {
-                    const btn = document.getElementById('menu-btn');
-                    if (btn) btn.style.display = window.innerWidth <= 768 ? 'block' : 'none';
-                };
-                window.addEventListener('resize', checkScreen);
+        <div class="info-grid">
+          <div class="info-card">
+            <div class="ic-hd">
+              <svg viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M3.5 6h5M3.5 4h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+              <span class="ic-title">基础信息</span>
+            </div>
+            <div class="ic-row"><span class="ic-key">版本</span><span class="ic-val">{{ status.version||'—' }}</span></div>
+            <div class="ic-row"><span class="ic-key">绑定用户数</span><span class="ic-val">{{ status.bound_users??'—' }}</span></div>
+            <div class="ic-row"><span class="ic-key">QQ 群 ID</span><span class="ic-val">{{ status.qq_group_id||'—' }}</span></div>
+            <div class="ic-row"><span class="ic-key">Telegram 群</span><span class="ic-val">{{ status.tg_group_id||'—' }}</span></div>
+          </div>
+          <div class="info-card">
+            <div class="ic-hd">
+              <svg viewBox="0 0 12 12" fill="none"><ellipse cx="6" cy="8" rx="4.5" ry="2.8" stroke="currentColor" stroke-width="1.1"/><ellipse cx="6" cy="5.5" rx="4.5" ry="2.8" stroke="currentColor" stroke-width="1.1"/></svg>
+              <span class="ic-title">存储监控</span>
+            </div>
+            <div class="ic-row"><span class="ic-key">数据库大小</span><span class="ic-val">{{ status.db_size||'—' }}</span></div>
+            <div class="ic-row"><span class="ic-key">磁盘使用率</span><span class="ic-val">{{ status.disk_usage||'—' }}</span></div>
+          </div>
+        </div>
+      </div>
 
-                const fetchStatus = async () => {
-                    try {
-                        api.defaults.headers['X-API-Key'] = apiKey.value;
-                        const res = await api.get('/admin/status');
-                        status.value = { ...status.value, ...res.data };
-                        if (startTimeRef.value === 0 && res.data.uptime_seconds) {
-                            startTimeRef.value = Date.now() / 1000 - res.data.uptime_seconds;
-                        }
-                        isLoggedIn.value = true;
-                    } catch (e) {
-                        if (e.response?.status === 403) {
-                            isLoggedIn.value = false;
-                            ElMessage.error("API Key 无效");
-                        }
-                    }
-                };
+      <!-- LOGS -->
+      <div v-if="activeTab==='logs'" class="page-in">
+        <div class="log-wrap">
+          <div class="log-tb">
+            <div class="traffic"><div class="td r"></div><div class="td y"></div><div class="td g"></div></div>
+            <input class="log-filter" v-model="logFilter" placeholder="过滤日志…" spellcheck="false"/>
+            <span class="l-cnt">{{ filteredLogs.length }} 条</span>
+          </div>
+          <div class="log-body" ref="logBodyRef">
+            <div v-for="(l,i) in filteredLogs" :key="i" class="log-line" :class="getLogCls(l)">
+              <span class="log-i">{{ i+1 }}</span>
+              <span class="log-t">{{ l }}</span>
+            </div>
+            <div class="log-empty" v-if="filteredLogs.length===0">
+              {{ logFilter ? '没有匹配的日志' : '暂无日志数据' }}
+            </div>
+          </div>
+        </div>
+      </div>
 
-                const updateUptimeDisplay = () => {
-                    if (startTimeRef.value > 0) {
-                        const now = Date.now() / 1000;
-                        const diff = Math.floor(now - startTimeRef.value);
-                        const h = Math.floor(diff / 3600);
-                        const m = Math.floor((diff % 3600) / 60);
-                        const s = diff % 60;
-                        status.value.uptime = `${h}h ${m}m ${s}s`;
-                    }
-                };
+      <!-- BINDINGS -->
+      <div v-if="activeTab==='binds'" class="page-in tbl-wrap">
+        <div class="sec-hd">
+          <div class="sec-title">
+            <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="3.5" r="2.2" stroke="currentColor" stroke-width=".9"/><path d="M1 10c0-2.2 2-3.8 4.5-3.8S10 7.8 10 10" stroke="currentColor" stroke-width=".9" stroke-linecap="round"/></svg>
+            绑定列表
+          </div>
+          <div class="sec-line"></div>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:12px;white-space:nowrap">{{ bindings.length }} 条记录</span>
+        </div>
+        <el-table :data="bindings" style="width:100%">
+          <el-table-column prop="tg_user_id" label="Telegram ID"></el-table-column>
+          <el-table-column prop="qq_user_id" label="QQ 号码"></el-table-column>
+          <el-table-column label="操作" width="80" align="center">
+            <template #default="scope">
+              <el-popconfirm title="确认解除此绑定？" @confirm="unbind(scope.row.tg_user_id)">
+                <template #reference>
+                  <el-button size="small" type="danger" icon="Delete" circle></el-button>
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="tbl-empty" v-if="bindings.length===0">
+          <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><circle cx="8.5" cy="5.5" r="3" stroke="currentColor" stroke-width="1.1"/><path d="M2 15.5c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></div>
+          暂无绑定用户
+        </div>
+      </div>
 
-                const fetchLogs = async () => {
-                    if (activeTab.value !== 'logs') return;
-                    try {
-                        const res = await api.get('/admin/logs?lines=100');
-                        logs.value = res.data.logs;
-                    } catch (e) {}
-                };
+    </div>
+  </div>
+</div>
+</div>
 
-                const fetchBindings = async () => {
-                    try {
-                        const res = await api.get('/admin/bindings');
-                        bindings.value = res.data;
-                    } catch (e) {}
-                };
+<script src="//unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="//unpkg.com/element-plus"></script>
+<script src="//unpkg.com/@element-plus/icons-vue"></script>
+<script src="//unpkg.com/axios/dist/axios.min.js"></script>
+<script>
+const { createApp, ref, computed, onMounted, nextTick } = Vue;
+const ElMessage = ElementPlus.ElMessage;
 
-                const handleMenu = (idx) => {
-                    activeTab.value = idx;
-                    mobileOpen.value = false;
-                    if (idx === 'logs') fetchLogs();
-                    if (idx === 'binds') fetchBindings();
-                };
+createApp({
+  setup() {
+    const isLoggedIn   = ref(false);
+    const loggingIn    = ref(false);
+    const loginLoading = ref(false);
+    const loginErr     = ref('');
+    const inputKey     = ref(localStorage.getItem('tqsync_api_key') || '');
+    const showPw       = ref(false);
 
-                const doRestart = async () => {
-                    try {
-                        await api.post('/admin/restart');
-                        ElMessage.success("重启指令已发送");
-                    } catch (e) { ElMessage.error("重启失败"); }
-                };
+    const activeTab    = ref('dash');
+    const mobileOpen   = ref(false);
+    const status       = ref({});
+    const startRef     = ref(0);
+    const logs         = ref([]);
+    const logFilter    = ref('');
+    const bindings     = ref([]);
+    const logBodyRef   = ref(null);
 
-                const unbind = async (id) => {
-                    try {
-                        await api.delete(`/admin/bindings/${id}`);
-                        ElMessage.success("已解除绑定");
-                        fetchBindings();
-                    } catch (e) { ElMessage.error("操作失败"); }
-                };
+    const sparkBars = ref(Array.from({length:24}, () => Math.floor(Math.random()*70+10)));
+    const maxBar    = computed(() => Math.max(...sparkBars.value));
 
-                const getLogStyle = (line) => {
-                    if (/error|ERROR|失败/i.test(line)) return { color: '#FF7B72' };
-                    if (/warn|WARN|warning/i.test(line)) return { color: '#FFA657' };
-                    if (/success|SUCCESS|成功|INFO/i.test(line)) return { color: '#6EE7B7' };
-                    if (/^\[.*?\]/.test(line)) return { color: '#79C0FF' };
-                    return {};
-                };
+    const api = axios.create({ baseURL: window.location.origin });
 
-                const pageTitle = computed(() => ({
-                    dash: '系统仪表盘', logs: '实时日志', binds: '用户管理'
-                })[activeTab.value]);
+    const checkScreen = () => {
+      const btn = document.getElementById('menu-btn');
+      if (btn) btn.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+    };
+    window.addEventListener('resize', checkScreen);
 
-                onMounted(() => {
-                    checkScreen();
-                    if (apiKey.value) fetchStatus();
-                    setInterval(() => {
-                        if (isLoggedIn.value) {
-                            fetchStatus();
-                            if (activeTab.value === 'logs') fetchLogs();
-                        }
-                    }, 5000);
-                    setInterval(updateUptimeDisplay, 1000);
-                });
+    const doLogin = async () => {
+      if (!inputKey.value.trim()) { loginErr.value = 'Token 不能为空'; return; }
+      loginLoading.value = true; loginErr.value = '';
+      try {
+        api.defaults.headers['X-API-Key'] = inputKey.value;
+        const res = await api.get('/admin/status');
+        status.value = res.data;
+        localStorage.setItem('tqsync_api_key', inputKey.value);
+        loggingIn.value = true;
+        setTimeout(() => { isLoggedIn.value = true; loggingIn.value = false; }, 420);
+      } catch(e) {
+        loginErr.value = e.response?.status === 403
+          ? 'Token 无效，请检查后重试'
+          : '连接失败，请稍后再试';
+      } finally { loginLoading.value = false; }
+    };
 
-                return {
-                    isLoggedIn, apiKey, activeTab, mobileOpen,
-                    status, logs, bindings, pageTitle,
-                    fetchStatus, handleMenu, doRestart, unbind, getLogStyle
-                };
-            }
-        }).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');
-    </script>
+    const doLogout = () => {
+      localStorage.removeItem('tqsync_api_key');
+      isLoggedIn.value = false;
+      inputKey.value = ''; status.value = {};
+    };
+
+    const fetchStatus = async () => {
+      try {
+        const res = await api.get('/admin/status');
+        status.value = { ...status.value, ...res.data };
+        if (startRef.value === 0 && res.data.uptime_seconds)
+          startRef.value = Date.now()/1000 - res.data.uptime_seconds;
+      } catch(e) { if (e.response?.status === 403) isLoggedIn.value = false; }
+    };
+
+    const updateUptime = () => {
+      if (startRef.value > 0) {
+        const d = Math.floor(Date.now()/1000 - startRef.value);
+        const h = Math.floor(d/3600), m = Math.floor((d%3600)/60), s = d%60;
+        status.value.uptime = `${h}h ${m}m ${s}s`;
+      }
+    };
+
+    const fetchLogs = async () => {
+      if (activeTab.value !== 'logs') return;
+      try {
+        const res = await api.get('/admin/logs?lines=100');
+        logs.value = res.data.logs;
+        nextTick(() => { if (logBodyRef.value) logBodyRef.value.scrollTop = logBodyRef.value.scrollHeight; });
+      } catch(e) {}
+    };
+
+    const fetchBindings = async () => {
+      try { const res = await api.get('/admin/bindings'); bindings.value = res.data; } catch(e) {}
+    };
+
+    const handleMenu = (idx) => {
+      activeTab.value = idx; mobileOpen.value = false;
+      if (idx === 'logs') fetchLogs();
+      if (idx === 'binds') fetchBindings();
+    };
+
+    const doRestart = async () => {
+      try { await api.post('/admin/restart'); ElMessage.success('重启指令已发送'); }
+      catch(e) { ElMessage.error('重启失败'); }
+    };
+
+    const unbind = async (id) => {
+      try { await api.delete(`/admin/bindings/${id}`); ElMessage.success('已解除绑定'); fetchBindings(); }
+      catch(e) { ElMessage.error('操作失败'); }
+    };
+
+    const filteredLogs = computed(() => {
+      if (!logFilter.value) return logs.value;
+      const q = logFilter.value.toLowerCase();
+      return logs.value.filter(l => l.toLowerCase().includes(q));
+    });
+
+    const getLogCls = (l) => {
+      if (/error|ERROR|失败/i.test(l)) return 'll-err';
+      if (/warn|WARN/i.test(l))        return 'll-warn';
+      if (/success|SUCCESS|成功/i.test(l)) return 'll-ok';
+      if (/\bINFO\b|\[info\]/i.test(l)) return 'll-info';
+      return '';
+    };
+
+    const pageTitle = computed(() => ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理'})[activeTab.value]);
+
+    onMounted(() => {
+      checkScreen();
+      if (inputKey.value) {
+        api.defaults.headers['X-API-Key'] = inputKey.value;
+        fetchStatus().then(() => { if (status.value.version) isLoggedIn.value = true; }).catch(() => {});
+      }
+      setInterval(() => {
+        if (isLoggedIn.value) { fetchStatus(); if (activeTab.value === 'logs') fetchLogs(); }
+      }, 5000);
+      setInterval(updateUptime, 1000);
+      setInterval(() => {
+        sparkBars.value = [...sparkBars.value.slice(1), Math.floor(Math.random()*75+8)];
+      }, 2800);
+    });
+
+    return {
+      isLoggedIn, loggingIn, loginLoading, loginErr, inputKey, showPw,
+      activeTab, mobileOpen, status, logs, logFilter, filteredLogs,
+      bindings, logBodyRef, sparkBars, maxBar, pageTitle,
+      doLogin, doLogout, handleMenu, doRestart, unbind, getLogCls
+    };
+  }
+}).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');
+</script>
 </body>
 </html>
