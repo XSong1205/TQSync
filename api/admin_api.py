@@ -118,26 +118,47 @@ async def get_logs(lines: int = 50):
     log_file = os.path.join(os.getcwd(), 'logs', 'tqsync.log')
     try:
         if not os.path.exists(log_file):
-            return {"logs": ["Log file not found."]}
+            return {"logs": ["日志文件未找到，请检查系统是否正常运行。"]}
         
         with open(log_file, 'r', encoding='utf-8') as f:
             all_lines = f.readlines()
             last_n_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
             
-        # 如果是 JSON 格式，尝试提取 message 字段以便前端显示更清晰
         clean_logs = []
         for line in last_n_lines:
+            line = line.strip()
+            if not line: continue
             try:
                 import json
                 log_obj = json.loads(line)
-                clean_logs.append(f"{log_obj.get('time', '')} [{log_obj.get('level', '')}] {log_obj.get('message', '')}")
-            except:
-                clean_logs.append(line.strip())
+                
+                # Loguru serialize=True 输出的 JSON 包含 'text' 字段（格式化后的日志文本）
+                # 优先使用 text 字段，因为它保留了终端显示的完整格式
+                log_text = log_obj.get('text', '').strip()
+                if log_text:
+                    clean_logs.append(log_text)
+                    continue
+                
+                # 兼容旧版或无 text 字段的 JSON 结构
+                record = log_obj.get('record', log_obj)
+                time_str = record.get('time', '')
+                if isinstance(time_str, dict): time_str = time_str.get('timestamp', '')
+                
+                level_val = record.get('level', '')
+                if isinstance(level_val, dict): level_val = level_val.get('name', '')
+                
+                message = record.get('message', '')
+                if message:
+                    clean_logs.append(f"{time_str} [{level_val}] {message}")
+                else:
+                    clean_logs.append(line) # 降级回原始行
+            except Exception:
+                clean_logs.append(line)
                 
         return {"logs": clean_logs}
     except Exception as e:
         logger.error(f"Failed to read logs: {e}")
-        return {"logs": [f"Error reading logs: {str(e)}"]}
+        return {"logs": [f"读取日志出错: {str(e)}"]}
 
 @app.put("/admin/config/{config_key}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 def update_config(config_key: str, update: ConfigUpdate):
