@@ -342,7 +342,8 @@ class SyncEngine:
 
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
         safe_display_name = escape_md_v2(display_name)
-        markdown_parts = [f"📋 \*\*合并转发消息\*\* \(来自 {safe_display_name}\):\n"]
+        # 使用原始字符串 r"" 避免 SyntaxWarning
+        markdown_parts = [r"📋 \*\*合并转发消息\*\* \(来自 " + safe_display_name + r"):\n"]
         
         try:
             # 尝试解析 content，它可能是 JSON 字符串或 Base64 编码的 JSON
@@ -379,10 +380,10 @@ class SyncEngine:
                 safe_nickname = escape_md_v2(nickname)
                 safe_text = escape_md_v2(text_content)
                 
-                # 格式化单条消息
-                formatted_msg = f"{index + 1}\. \*\*{safe_nickname}\*\*: {safe_text}"
+                # 格式化单条消息：使用原始字符串处理 MarkdownV2 转义
+                formatted_msg = f"{index + 1}\\. \\*\\*{safe_nickname}\\*\\*: {safe_text}"
                 if has_image:
-                    formatted_msg += " \[图片\]"
+                    formatted_msg += r" \[图片\]"
                 
                 markdown_parts.append(formatted_msg)
 
