@@ -326,8 +326,23 @@ class SyncEngine:
         解析并转发 QQ 合并转发消息到 Telegram (单层支持)
         :param content_data: OneBot forward 消息段中的 data 内容
         """
+        # MarkdownV2 转义函数：Telegram 对特殊字符有严格要求
+        def escape_md_v2(text):
+            if not text:
+                return ""
+            # Telegram MarkdownV2 需要转义的字符: _ * [ ] ( ) ~ ` > # + - = | { } . !
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+            result = ""
+            for char in str(text):
+                if char in escape_chars:
+                    result += "\\" + char
+                else:
+                    result += char
+            return result
+
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
-        markdown_parts = [f"📋 **合并转发消息** (来自 {display_name}):\n"]
+        safe_display_name = escape_md_v2(display_name)
+        markdown_parts = [f"📋 \*\*合并转发消息\*\* \(来自 {safe_display_name}\):\n"]
         
         try:
             # 尝试解析 content，它可能是 JSON 字符串或 Base64 编码的 JSON
@@ -361,30 +376,11 @@ class SyncEngine:
                     elif p_type == 'image':
                         has_image = True
                 
-                # 格式化单条消息
-                formatted_msg = f"{index + 1}. **{nickname}**: {text_content}"
-                if has_image:
-                    formatted_msg += " [图片]"
-                
-                # MarkdownV2 转义：Telegram 对特殊字符有严格要求
-                def escape_md_v2(text):
-                    if not text:
-                        return ""
-                    # Telegram MarkdownV2 需要转义的字符: _ * [ ] ( ) ~ ` > # + - = | { } . !
-                    escape_chars = r'_*[]()~`>#+-=|{}.!'
-                    result = ""
-                    for char in text:
-                        if char in escape_chars:
-                            result += "\\" + char
-                        else:
-                            result += char
-                    return result
-
                 safe_nickname = escape_md_v2(nickname)
                 safe_text = escape_md_v2(text_content)
                 
                 # 格式化单条消息
-                formatted_msg = f"{index + 1}\. **{safe_nickname}**: {safe_text}"
+                formatted_msg = f"{index + 1}\. \*\*{safe_nickname}\*\*: {safe_text}"
                 if has_image:
                     formatted_msg += " \[图片\]"
                 
