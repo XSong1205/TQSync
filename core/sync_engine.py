@@ -2,6 +2,7 @@ from telegram import Bot
 import os
 import uuid
 import aiohttp
+import asyncio
 import subprocess
 from datetime import datetime
 from utils.version_utils import get_full_version_string
@@ -19,7 +20,44 @@ class SyncEngine:
         self.bot = bot
         self.tg_group_id = config_loader.get('telegram.group_id')
         self.qq_group_id = config_loader.get('qq.group_id')
+        
+        # 异步同步队列：限制并发数为 3，防止大文件耗尽资源
+        self.sync_queue = asyncio.Queue(maxsize=50)
+        self.max_concurrent_syncs = 3
+        self._worker_tasks = []
+        
+        # 启动后台工作者
+        for i in range(self.max_concurrent_syncs):
+            task = asyncio.create_task(self._sync_worker(i))
+            self._worker_tasks.append(task)
+            
         SyncEngine._instance = self
+
+    async def _sync_worker(self, worker_id: int):
+        """后台同步工作者：从队列中获取任务并执行"""
+        logger.info(f"同步工作者 #{worker_id} 已启动")
+        while True:
+            try:
+                task_func, args, kwargs = await self.sync_queue.get()
+                logger.debug(f"工作者 #{worker_id} 开始处理任务: {task_func.__name__}")
+                try:
+                    await task_func(*args, **kwargs)
+                except Exception as e:
+                    logger.error(f"工作者 #{worker_id} 执行任务失败: {e}", exc_info=True)
+                finally:
+                    self.sync_queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"工作者 #{worker_id} 异常退出: {e}")
+
+    def enqueue_sync_task(self, task_func, *args, **kwargs):
+        """将同步任务加入队列"""
+        try:
+            self.sync_queue.put_nowait((task_func, args, kwargs))
+            logger.debug(f"任务已加入同步队列: {task_func.__name__}, 当前队列大小: {self.sync_queue.qsize()}")
+        except asyncio.QueueFull:
+            logger.warning("同步队列已满，丢弃新任务")
 
     @classmethod
     def get_instance(cls):

@@ -158,29 +158,14 @@ async def handle_qq_webhook(request):
                                  {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
-                try:
-                    await engine.forward_image_to_tg(qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id)
-                except Exception as e:
-                    logger.error(f"同步图片至 Telegram 失败: {e}")
-                    error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
-                                 {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
-                    await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
+                logger.info(f"检测到来自 {nickname} 的图片，已加入异步同步队列")
+                engine.enqueue_sync_task(engine.forward_image_to_tg, qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id)
             elif video_url:
-                try:
-                    await engine.forward_video_to_tg(qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id)
-                except Exception as e:
-                    logger.error(f"同步视频至 Telegram 失败: {e}")
-                    error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
-                                 {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
-                    await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
+                logger.info(f"检测到来自 {nickname} 的视频，已加入异步同步队列")
+                engine.enqueue_sync_task(engine.forward_video_to_tg, qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id)
             elif file_url:
-                try:
-                    await engine.forward_file_to_tg(qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
-                except Exception as e:
-                    logger.error(f"同步文件至 Telegram 失败: {e}")
-                    error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
-                                 {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
-                    await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
+                logger.info(f"检测到来自 {nickname} 的文件 ({file_name})，已加入异步同步队列")
+                engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
             elif combined_text:
                 try:
                     result = await engine.forward_to_tg(qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id)

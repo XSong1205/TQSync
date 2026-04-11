@@ -71,53 +71,23 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.photo:
         file_id = msg.photo[-1].file_id
         caption = msg.caption or ""
-        try:
-            result = await engine.forward_image_to_qq(user.id, user.username or str(user.id), file_id, caption)
-            if result and result.get('data', {}).get('message_id'):
-                qq_msg_id = result['data']['message_id']
-                await db.save_message_mapping(
-                    tg_message_id=update.message.message_id,
-                    qq_message_id=qq_msg_id,
-                    sender_tg_id=user.id
-                )
-                # 如果是回复消息，需要更新被回复消息的映射（如果需要更复杂的引用链）
-        except Exception as e:
-            logger.error(f"同步图片至 QQ 失败: {e}")
-            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
+        logger.info(f"检测到来自 {user.username} 的图片，已加入异步同步队列")
+        engine.enqueue_sync_task(engine.forward_image_to_qq, user.id, user.username or str(user.id), file_id, caption)
         return
 
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
-        logger.info(f"检测到来自 {user.username} 的视频，正在转发至 QQ...")
-        try:
-            result = await engine.forward_video_to_qq(user.id, user.username or str(user.id), file_id)
-            if result and result.get('data', {}).get('message_id'):
-                await db.save_message_mapping(
-                    tg_message_id=update.message.message_id,
-                    qq_message_id=result['data']['message_id'],
-                    sender_tg_id=user.id
-                )
-        except Exception as e:
-            logger.error(f"同步视频至 QQ 失败: {e}")
-            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
+        logger.info(f"检测到来自 {user.username} 的视频，已加入异步同步队列")
+        engine.enqueue_sync_task(engine.forward_video_to_qq, user.id, user.username or str(user.id), file_id)
         return
 
     # 处理通用文件 (包括 GIF/Animation)
     if msg.document:
         file_id = msg.document.file_id
         filename = msg.document.file_name or f"file_{uuid.uuid4().hex[:8]}.dat"
-        try:
-            result = await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
-            if result and result.get('data', {}).get('message_id'):
-                await db.save_message_mapping(
-                    tg_message_id=update.message.message_id,
-                    qq_message_id=result['data']['message_id'],
-                    sender_tg_id=user.id
-                )
-        except Exception as e:
-            logger.error(f"同步文件至 QQ 失败: {e}")
-            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
+        logger.info(f"检测到来自 {user.username} 的文件 ({filename})，已加入异步同步队列")
+        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
         return
 
     # 处理文本消息
