@@ -12,8 +12,8 @@ def get_version():
         n = int(count_result.stdout.strip())
         
         # 映射为语义化版本: 0.{N // 10}.{N % 10}
-        major = 0
-        minor = n // 10
+        major = n // 100
+        minor = (n % 100) // 10
         patch = n % 10
         return f"{major}.{minor}.{patch}"
     except Exception:

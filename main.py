@@ -68,6 +68,7 @@ async def handle_qq_webhook(request):
             image_url = None
             video_url = None
             file_url = None
+            voice_url = None
             file_name = "unknown_file"
             at_tg_ids = []
             is_forward = False
