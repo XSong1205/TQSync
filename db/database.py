@@ -79,14 +79,26 @@ class Database:
             await db.commit()
 
     async def get_binding_by_tg(self, tg_user_id: int):
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute('SELECT * FROM bindings WHERE tg_user_id = ?', (tg_user_id,)) as cursor:
-                return await cursor.fetchone()
+        for attempt in range(3):
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute('SELECT * FROM bindings WHERE tg_user_id = ?', (tg_user_id,)) as cursor:
+                        return await cursor.fetchone()
+            except Exception as e:
+                logger.warning(f"DB get_binding_by_tg failed (attempt {attempt+1}): {e}")
+                if attempt < 2: await asyncio.sleep(0.5)
+        return None
 
     async def get_binding_by_qq(self, qq_user_id: int):
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute('SELECT * FROM bindings WHERE qq_user_id = ?', (qq_user_id,)) as cursor:
-                return await cursor.fetchone()
+        for attempt in range(3):
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute('SELECT * FROM bindings WHERE qq_user_id = ?', (qq_user_id,)) as cursor:
+                        return await cursor.fetchone()
+            except Exception as e:
+                logger.warning(f"DB get_binding_by_qq failed (attempt {attempt+1}): {e}")
+                if attempt < 2: await asyncio.sleep(0.5)
+        return None
 
     async def add_binding(self, tg_user_id: int, qq_user_id: int, tg_username: str = None, qq_nickname: str = None):
         async with aiosqlite.connect(self.db_path) as db:

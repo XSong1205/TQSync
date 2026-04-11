@@ -135,7 +135,12 @@ async def handle_qq_webhook(request):
                 display_name = await engine.get_display_name(qq_user_id=qq_id, fallback_name=nickname)
                 html_text = f"[QQ] <b>{display_name}</b>: "
                 for tid in at_tg_ids:
-                    html_text += f"<a href='tg://user?id={tid}'>@User</a> "
+                    try:
+                        user = await engine.bot.get_chat(tid)
+                        html_text += f"{user.mention_html()} "
+                    except Exception as e:
+                        logger.warning(f"获取 TG 用户 {tid} 信息失败: {e}")
+                        html_text += f"<a href='tg://user?id={tid}'>@User</a> "
                 html_text += combined_text
                 try:
                     result = await engine.bot.send_message(chat_id=engine.tg_group_id, text=html_text, parse_mode='HTML', reply_to_message_id=reply_to_tg_id)

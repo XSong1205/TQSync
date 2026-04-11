@@ -85,7 +85,7 @@ class SyncEngine:
             # 回退到绑定的昵称或用户名
             return binding[3] or binding[2] or fallback_name
         
-        return f"{fallback_name} [Unbound]"
+        return f"{fallback_name} [未绑定]"
 
     async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = ""):
         """将 Telegram 图片转发到 QQ (本地文件中转方案，支持 Caption 图文混排)"""
