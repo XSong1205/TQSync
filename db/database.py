@@ -1,7 +1,10 @@
 import aiosqlite
 import os
 import uuid
+import asyncio
 from config.config_loader import config_loader
+
+logger = __import__('logging').getLogger(__name__)
 
 class Database:
     def __init__(self):
@@ -42,12 +45,18 @@ class Database:
 
     async def save_message_mapping(self, tg_message_id: int, qq_message_id: int, sender_tg_id: int = None, sender_qq_id: int = None):
         """保存双端消息 ID 映射关系"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute('''
-                INSERT INTO message_mapping (tg_message_id, qq_message_id, sender_tg_id, sender_qq_id)
-                VALUES (?, ?, ?, ?)
-            ''', (tg_message_id, qq_message_id, sender_tg_id, sender_qq_id))
-            await db.commit()
+        for attempt in range(3):
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    await db.execute('''
+                        INSERT INTO message_mapping (tg_message_id, qq_message_id, sender_tg_id, sender_qq_id)
+                        VALUES (?, ?, ?, ?)
+                    ''', (tg_message_id, qq_message_id, sender_tg_id, sender_qq_id))
+                    await db.commit()
+                return
+            except Exception as e:
+                logger.warning(f"DB save mapping failed (attempt {attempt+1}): {e}")
+                if attempt < 2: await asyncio.sleep(0.5)
 
     async def get_qq_msg_id_by_tg(self, tg_message_id: int):
         """根据 TG 消息 ID 查找 QQ 消息 ID"""

@@ -185,15 +185,16 @@ async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text(response)
 
 async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from main import start_time
+    from main import GLOBAL_START_TIME
     # 增加合理性检查，防止显示异常时长
-    if start_time < 1704067200: 
+    if GLOBAL_START_TIME < 1704067200: 
         response = "系统时间记录异常，请尝试重启机器人。"
     else:
-        response = await handle_status_command(start_time)
+        response = await handle_status_command(GLOBAL_START_TIME)
     await update.message.reply_text(response)
 
 async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    import asyncio
     from main import graceful_restart
     from config.config_loader import config_loader
     

@@ -35,20 +35,27 @@ class SyncEngine:
         os.makedirs(temp_dir, exist_ok=True)
         
         file_path = os.path.join(temp_dir, filename)
-        logger.info(f"正在下载文件至本地中转: {file_path}")
+        logger.info(f"正在下载文件至本地中转: {file_url[:50]}...")
         
         # 全局禁用 SSL 验证以适配国内代理环境
         connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(file_url) as resp:
-                if resp.status != 200:
-                    raise Exception(f"Download failed with status {resp.status}")
-                with open(file_path, 'wb') as f:
-                    while True:
-                        chunk = await resp.content.read(8192)
-                        if not chunk:
-                            break
-                        f.write(chunk)
+        timeout = aiohttp.ClientTimeout(total=60, connect=15)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            try:
+                async with session.get(file_url) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"Download failed with status {resp.status}")
+                    with open(file_path, 'wb') as f:
+                        while True:
+                            chunk = await resp.content.read(8192)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+            except asyncio.TimeoutError:
+                raise Exception("Download timed out")
+            except Exception as e:
+                if os.path.exists(file_path): os.remove(file_path)
+                raise e
         return os.path.abspath(file_path)
 
     def _cleanup_temp(self, file_path: str):
