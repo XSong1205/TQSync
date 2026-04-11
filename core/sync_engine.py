@@ -6,6 +6,7 @@ import base64
 import re
 import io
 import aiofiles
+import ffmpeg
 import aiohttp
 import asyncio
 import subprocess
@@ -231,10 +232,31 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
+    async def convert_webm_to_gif(self, input_path: str, output_path: str):
+        """使用 FFmpeg 将 WebM 贴纸转换为 GIF"""
+        logger.info(f"正在转换贴纸格式: {input_path} -> {output_path}")
+        try:
+            # 异步运行 FFmpeg 进程
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: (
+                ffmpeg
+                .input(input_path)
+                .filter('scale', 320, -1, flags='lanczos')
+                .filter('fps', fps=15, round='up')
+                .output(output_path, **{'loop': 0})
+                .overwrite_output()
+                .run(quiet=True)
+            ))
+            logger.info("贴纸格式转换成功")
+        except Exception as e:
+            logger.error(f"FFmpeg 转换失败: {e}")
+            raise
+
     async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False):
         """将 Telegram 贴纸转发到 QQ (支持静态和动态)"""
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
+        gif_path = None
         
         try:
             file = await self.bot.get_file(file_id)
@@ -251,11 +273,17 @@ class SyncEngine:
                 {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
             ]
             
-            # 根据类型选择消息段：动态贴纸作为视频/图片发送，静态作为图片发送
+            final_send_path = temp_path
+            
+            # 根据类型选择消息段：动态贴纸转换为 GIF 后作为图片发送
             if is_animated or ext == '.webm':
-                message_array.append({"type": "video", "data": {"file": temp_path}})
+                gif_filename = f"sticker_{uuid.uuid4().hex}.gif"
+                gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
+                await self.convert_webm_to_gif(temp_path, gif_path)
+                final_send_path = gif_path
+                message_array.append({"type": "image", "data": {"file": final_send_path}})
             else:
-                message_array.append({"type": "image", "data": {"file": temp_path}})
+                message_array.append({"type": "image", "data": {"file": final_send_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             logger.info(f"贴纸已成功发送至 QQ。结果: {result}")
@@ -267,6 +295,8 @@ class SyncEngine:
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
+            if gif_path:
+                self._cleanup_temp(gif_path)
 
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None):
         """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
