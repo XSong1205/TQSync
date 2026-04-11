@@ -248,8 +248,11 @@ class SyncEngine:
                 .run(quiet=True)
             ))
             logger.info("贴纸格式转换成功")
-        except Exception as e:
-            logger.error(f"FFmpeg 转换失败: {e}")
+        except ffmpeg.Error as e:
+            logger.error(f"FFmpeg 转换失败 (stderr: {e.stderr.decode() if e.stderr else 'N/A'})")
+            raise
+        except FileNotFoundError:
+            logger.error("未找到 FFmpeg 可执行文件。请确保已安装 FFmpeg 并将其添加到系统环境变量 PATH 中。")
             raise
 
     async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False):
@@ -265,7 +268,13 @@ class SyncEngine:
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
             # 动态贴纸通常是 .webm，静态是 .png 或 .webp
+            # 注意：.tgs 是 Lottie 格式，FFmpeg 无法直接处理
             ext = os.path.splitext(file_url)[1] or ('.webm' if is_animated else '.png')
+            
+            if ext == '.tgs':
+                logger.warning(f"跳过 Lottie 贴纸 (.tgs) 同步，当前不支持该格式转换: {file_url}")
+                return None
+
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
