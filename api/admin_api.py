@@ -83,19 +83,33 @@ async def get_status():
     mem_info = process.memory_info()
     cpu_percent = process.cpu_percent(interval=0.1)
     
+    # 磁盘使用情况
+    disk_usage = psutil.disk_usage('/')
+    
     # 数据库文件大小
     db_size = 0
     if os.path.exists('data/tqsync.db'):
         db_size = os.path.getsize('data/tqsync.db')
     
+    # 获取同步消息总数
+    try:
+        async with db._Database__get_connection() as conn:
+            cursor = await conn.execute('SELECT COUNT(*) FROM message_mapping')
+            sync_count = (await cursor.fetchone())[0]
+    except:
+        sync_count = 0
+    
     return {
         "version": get_full_version_string(),
+        "uptime_seconds": uptime_seconds,
         "uptime": f"{hours}h {minutes}m {seconds}s",
         "bound_users": len(bindings),
+        "sync_count": sync_count,
         "qq_group_id": config_loader.get('qq.group_id'),
         "tg_group_id": config_loader.get('telegram.group_id'),
         "cpu_usage": f"{cpu_percent:.1f}%",
         "memory_usage": f"{mem_info.rss / 1024 / 1024:.1f} MB",
+        "disk_usage": f"{disk_usage.percent:.1f}%",
         "db_size": f"{db_size / 1024:.1f} KB"
     }
 
