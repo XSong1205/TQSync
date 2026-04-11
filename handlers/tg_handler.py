@@ -101,10 +101,10 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
         return
 
-    # 处理通用文件
+    # 处理通用文件 (包括 GIF/Animation)
     if msg.document:
         file_id = msg.document.file_id
-        filename = msg.document.file_name or "unknown_file"
+        filename = msg.document.file_name or f"file_{uuid.uuid4().hex[:8]}.dat"
         try:
             result = await engine.forward_file_to_qq(user.id, user.username or str(user.id), file_id, filename)
             if result and result.get('data', {}).get('message_id'):

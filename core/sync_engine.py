@@ -34,8 +34,10 @@ class SyncEngine:
         temp_dir = os.path.join(os.getcwd(), 'temp')
         os.makedirs(temp_dir, exist_ok=True)
         
-        file_path = os.path.join(temp_dir, filename)
-        logger.info(f"正在下载文件至本地中转: {file_url[:50]}...")
+        # 确保文件名唯一，防止冲突
+        unique_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
+        file_path = os.path.join(temp_dir, unique_filename)
+        logger.info(f"正在下载文件至本地中转: {file_url[:50]}... (保存为: {filename})")
         
         # 全局禁用 SSL 验证以适配国内代理环境
         connector = aiohttp.TCPConnector(ssl=False)
@@ -207,7 +209,15 @@ class SyncEngine:
 
     async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file", reply_to_message_id: int = None):
         """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
-        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, reply_to_message_id=reply_to_message_id)
+        binding = await db.get_binding_by_qq(qq_user_id)
+        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        
+        # 确保文件名有扩展名
+        if not os.path.splitext(file_name)[1]:
+            ext = os.path.splitext(file_url.split('?')[0])[1] or '.dat'
+            file_name += ext
+
+        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, caption=prefix, reply_to_message_id=reply_to_message_id)
 
     async def _send_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, send_func, file_key: str, **kwargs):
         """通用文件转发到 Telegram 方法，支持本地路径中转"""
@@ -227,34 +237,41 @@ class SyncEngine:
                 temp_path = file_url
 
             # 准备发送参数
-            send_kwargs = {"chat_id": self.tg_group_id, file_key: temp_path}
-            
-            # 合并 caption
-            if "caption" in kwargs:
-                send_kwargs["caption"] = kwargs.pop("caption")
-            else:
-                send_kwargs["caption"] = prefix
+            send_kwargs = {"chat_id": self.tg_group_id}
             
             # 处理回复 ID
             if "reply_to_message_id" in kwargs:
                 send_kwargs["reply_to_message_id"] = kwargs.pop("reply_to_message_id")
-                
-            send_kwargs.update(kwargs)
+            
+            # 处理 Caption
+            if "caption" in kwargs:
+                send_kwargs["caption"] = kwargs.pop("caption")
+            elif file_key == "document":
+                send_kwargs["caption"] = prefix
 
             # 关键修复：即使是 http URL，如果 Telegram 无法访问（如内网或需代理），也应下载到本地再上传
             # 我们统一采用“下载到本地 -> 上传给 TG”的策略以确保稳定性
+            temp_path = file_url
             if not os.path.exists(temp_path) or temp_path.startswith("http"):
                 # 如果是 URL，先下载到临时文件
                 if temp_path.startswith("http"):
-                    ext = os.path.splitext(temp_path.split('?')[0])[1] or '.tmp'
-                    temp_filename = f"forward_{uuid.uuid4().hex}{ext}"
+                    ext = os.path.splitext(temp_path.split('?')[0])[1]
+                    original_filename = kwargs.get('filename', 'unknown_file')
+                    if not ext and original_filename != 'unknown_file':
+                        ext = os.path.splitext(original_filename)[1]
+                    ext = ext or '.tmp'
+                    temp_filename = f"forward_{uuid.uuid4().hex[:8]}{ext}"
                     downloaded_path = await self._download_to_temp(temp_path, temp_filename)
                     temp_path = downloaded_path
 
             # 以二进制流形式发送给 Telegram
             if os.path.exists(temp_path):
                 with open(temp_path, 'rb') as f:
-                    send_kwargs[file_key] = f
+                    # 对于文档类型，需要传递 filename 参数以便 TG 显示正确的文件名
+                    if file_key == "document":
+                        send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), f)
+                    else:
+                        send_kwargs[file_key] = f
                     await send_func(**send_kwargs)
             else:
                 raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
