@@ -19,16 +19,15 @@ os.makedirs(log_dir, exist_ok=True)
 
 # 文件输出（JSON，适合机器人服务端）
 def json_formatter(record):
-    # 提取 record 中的日志数据
-    log = record["record"]
+    # 在 Loguru 的 formatter 中，record 本身就是包含所有日志信息的字典
     # 构造 JSON 字典
     payload = {
-        "time": log["time"].strftime("%Y-%m-%d %H:%M:%S"),
-        "level": log["level"].name,
-        "message": log["message"],
-        "module": log["module"],
-        "line": log["line"],
-        "extra": log["extra"],
+        "time": record["time"].strftime("%Y-%m-%d %H:%M:%S"),
+        "level": record["level"].name,
+        "message": record["message"],
+        "module": record["module"],
+        "line": record["line"],
+        "extra": record["extra"],
     }
     return json.dumps(payload, ensure_ascii=False) + "\n"
 
