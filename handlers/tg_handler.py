@@ -93,51 +93,9 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 处理文本消息
     text = update.message.text
     if text:
-        try:
-            display_name = await engine.get_display_name(tg_user_id=user.id, fallback_name=user.username or str(user.id))
-            
-            # 解析 @ (Mention) 实体
-            message_array = []
-            last_offset = 0
-            entities = update.message.entities or []
-            
-            for entity in entities:
-                if entity.type == 'text_mention':
-                    # 提取 mention 之前的文本
-                    if entity.offset > last_offset:
-                        message_array.append({"type": "text", "data": {"text": text[last_offset:entity.offset]}})
-                    
-                    # 处理 @ 逻辑
-                    target_tg_id = entity.user.id
-                    binding = await db.get_binding_by_tg(target_tg_id)
-                    if binding:
-                        message_array.append({"type": "at", "data": {"qq": str(binding[1])}})
-                    else:
-                        message_array.append({"type": "text", "data": {"text": text[entity.offset:entity.offset+entity.length]}})
-                    
-                    last_offset = entity.offset + entity.length
-
-            # 添加剩余文本
-            if last_offset < len(text):
-                message_array.append({"type": "text", "data": {"text": text[last_offset:]}})
-            
-            if not message_array:
-                message_array.append({"type": "text", "data": {"text": text}})
-
-            # 构造最终消息数组：回复段 + 前缀 + 内容
-            final_message = reply_segment + [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}] + message_array
-            
-            result = await onebot_client.send_group_msg(engine.qq_group_id, final_message)
-            # 存储映射关系
-            if result and result.get('data', {}).get('message_id'):
-                await db.save_message_mapping(
-                    tg_message_id=update.message.message_id,
-                    qq_message_id=result['data']['message_id'],
-                    sender_tg_id=user.id
-                )
-        except Exception as e:
-            logger.error(f"同步文本至 QQ 失败: {e}")
-            await update.message.reply_text(f"❌ 同步到 QQ 失败: {str(e)[:50]}")
+        logger.info(f"检测到来自 {user.username} 的文本消息，已加入异步同步队列")
+        engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text)
+        return
 
 async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:

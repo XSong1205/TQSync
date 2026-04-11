@@ -167,19 +167,8 @@ async def handle_qq_webhook(request):
                 logger.info(f"检测到来自 {nickname} 的文件 ({file_name})，已加入异步同步队列")
                 engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
             elif combined_text:
-                try:
-                    result = await engine.forward_to_tg(qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id)
-                    if result:
-                        await db.save_message_mapping(
-                            tg_message_id=result.message_id,
-                            qq_message_id=data.get('message_id'),
-                            sender_qq_id=qq_id
-                        )
-                except Exception as e:
-                    logger.error(f"同步文本至 Telegram 失败: {e}")
-                    error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
-                                 {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
-                    await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
+                logger.info(f"检测到来自 {nickname} 的文本消息，已加入异步同步队列")
+                engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id)
         
         return web.Response(text="ok")
     except Exception as e:
