@@ -90,6 +90,14 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
         return
 
+    # 处理贴纸消息 (Sticker)
+    if msg.sticker:
+        file_id = msg.sticker.file_id
+        is_animated = msg.sticker.is_animated or msg.sticker.is_video
+        logger.info(f"检测到来自 {user.username} 的贴纸 (动态: {is_animated})，已加入异步同步队列")
+        engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated)
+        return
+
     # 处理文本消息
     text = update.message.text
     if text:

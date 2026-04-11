@@ -4,6 +4,8 @@ import uuid
 import json
 import base64
 import re
+import io
+import aiofiles
 import aiohttp
 import asyncio
 import subprocess
@@ -86,12 +88,12 @@ class SyncEngine:
                 async with session.get(file_url) as resp:
                     if resp.status != 200:
                         raise Exception(f"Download failed with status {resp.status}")
-                    with open(file_path, 'wb') as f:
+                    async with aiofiles.open(file_path, 'wb') as f:
                         while True:
                             chunk = await resp.content.read(8192)
                             if not chunk:
                                 break
-                            f.write(chunk)
+                            await f.write(chunk)
             except asyncio.TimeoutError:
                 raise Exception("Download timed out")
             except Exception as e:
@@ -229,6 +231,43 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
+    async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False):
+        """将 Telegram 贴纸转发到 QQ (支持静态和动态)"""
+        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
+        temp_path = None
+        
+        try:
+            file = await self.bot.get_file(file_id)
+            file_url = file.file_path
+            if not file_url.startswith("http"):
+                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
+            
+            # 动态贴纸通常是 .webm，静态是 .png 或 .webp
+            ext = os.path.splitext(file_url)[1] or ('.webm' if is_animated else '.png')
+            temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
+            temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            message_array = [
+                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
+            ]
+            
+            # 根据类型选择消息段：动态贴纸作为视频/图片发送，静态作为图片发送
+            if is_animated or ext == '.webm':
+                message_array.append({"type": "video", "data": {"file": temp_path}})
+            else:
+                message_array.append({"type": "image", "data": {"file": temp_path}})
+            
+            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            logger.info(f"贴纸已成功发送至 QQ。结果: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"转发贴纸至 QQ 失败: {e}", exc_info=True)
+            return None
+        finally:
+            if temp_path:
+                self._cleanup_temp(temp_path)
+
     async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None):
         """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
@@ -302,12 +341,13 @@ class SyncEngine:
 
             # 以二进制流形式发送给 Telegram
             if os.path.exists(temp_path):
-                with open(temp_path, 'rb') as f:
+                async with aiofiles.open(temp_path, 'rb') as f:
+                    file_content = await f.read()
                     # 对于文档类型，需要传递 filename 参数以便 TG 显示正确的文件名
                     if file_key == "document":
-                        send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), f)
+                        send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), io.BytesIO(file_content))
                     else:
-                        send_kwargs[file_key] = f
+                        send_kwargs[file_key] = io.BytesIO(file_content)
                     await send_func(**send_kwargs)
             else:
                 raise FileNotFoundError(f"File not found for forwarding: {temp_path}")

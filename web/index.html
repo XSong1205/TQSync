@@ -138,6 +138,7 @@
                 const activeTab = ref('dash');
                 const mobileOpen = ref(false);
                 const status = ref({});
+                const startTimeRef = ref(0);
                 const logs = ref([]);
                 const bindings = ref([]);
                 
@@ -154,13 +155,27 @@
                     try {
                         api.defaults.headers['X-API-Key'] = apiKey.value;
                         const res = await api.get('/admin/status');
-                        status.value = res.data;
+                        status.value = { ...status.value, ...res.data };
+                        if (startTimeRef.value === 0 && res.data.uptime_seconds) {
+                            startTimeRef.value = Date.now() / 1000 - res.data.uptime_seconds;
+                        }
                         isLoggedIn.value = true;
                     } catch (e) { 
                         if (e.response?.status === 403) {
                             isLoggedIn.value = false;
                             ElMessage.error("API Key 无效");
                         }
+                    }
+                };
+
+                const updateUptimeDisplay = () => {
+                    if (startTimeRef.value > 0) {
+                        const now = Date.now() / 1000;
+                        const diff = Math.floor(now - startTimeRef.value);
+                        const h = Math.floor(diff / 3600);
+                        const m = Math.floor((diff % 3600) / 60);
+                        const s = diff % 60;
+                        status.value.uptime = `${h}h ${m}m ${s}s`;
                     }
                 };
 
@@ -215,6 +230,8 @@
                             if (activeTab.value === 'logs') fetchLogs();
                         }
                     }, 5000);
+                    // Local uptime ticker every 1 second
+                    setInterval(updateUptimeDisplay, 1000);
                 });
 
                 return { isLoggedIn, apiKey, activeTab, mobileOpen, status, logs, bindings, pageTitle, fetchStatus, handleMenu, doRestart, unbind };
