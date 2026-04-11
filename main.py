@@ -241,21 +241,16 @@ async def graceful_restart():
     logger.info("正在触发优雅重启...")
     restart_event.set()
     
-    # 1. 取消所有后台异步任务
-    for task in background_tasks:
-        if not task.done():
-            task.cancel()
-    
-    # 2. 等待一小段时间让资源释放（如数据库连接）
+    # 1. 等待一小段时间让资源释放（如数据库连接、API 响应）
     await asyncio.sleep(0.5)
     
-    # 3. 显式关闭数据库连接
+    # 2. 显式关闭数据库连接
     try:
         await db.close()
     except:
         pass
         
-    # 4. 使用 execv 替换当前进程
+    # 3. 使用 execv 替换当前进程
     logger.info("正在重新启动进程...")
     os.execv(sys.executable, ['python'] + sys.argv)
 
