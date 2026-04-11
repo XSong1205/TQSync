@@ -41,7 +41,7 @@ async def handle_qq_webhook(request):
                         logger.info(f"Synced recall from QQ (msg_id: {qq_msg_id}) to TG (msg_id: {tg_msg_id})")
                     except Exception as e:
                         logger.error(f"Failed to delete message in TG: {e}")
-            return web.Response(text="ok")
+            return web.json_response({})
 
         # 仅处理群消息
         if data.get('message_type') == 'group':
@@ -49,7 +49,7 @@ async def handle_qq_webhook(request):
             target_group_id = config_loader.get('qq.group_id')
             if data.get('group_id') != target_group_id:
                 logger.debug(f"忽略非目标群组消息: {data.get('group_id')}")
-                return web.Response(text="ok")
+                return web.json_response({})
             
             sender = data.get('sender', {})
             qq_id = data['user_id']
@@ -105,17 +105,17 @@ async def handle_qq_webhook(request):
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
                         await onebot_client.send_group_msg(engine.qq_group_id, "⛔ 权限不足：仅管理员可执行重启操作")
-                        return web.Response(text="ok")
+                        return web.json_response({})
                     
                     await onebot_client.send_group_msg(engine.qq_group_id, "🔄 正在执行优雅重启，服务将在数秒后恢复...")
                     asyncio.create_task(graceful_restart())
-                    return web.Response(text="ok")
+                    return web.json_response({})
                 else:
                     response = "Unknown command. Use /help for more info."
                 
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
-                return web.Response(text="ok")
+                return web.json_response({})
 
             # 解析回复逻辑 (QQ -> TG)
             reply_to_tg_id = None
