@@ -1,6 +1,9 @@
 from telegram import Bot
 import os
 import uuid
+import json
+import base64
+import re
 import aiohttp
 import asyncio
 import subprocess
@@ -317,6 +320,68 @@ class SyncEngine:
         message = f"[TG] {display_name}: {text}"
         result = await onebot_client.send_group_msg(self.qq_group_id, message)
         return result
+
+    async def forward_merged_to_tg(self, qq_user_id: int, qq_nickname: str, content_data):
+        """
+        解析并转发 QQ 合并转发消息到 Telegram (单层支持)
+        :param content_data: OneBot forward 消息段中的 data 内容
+        """
+        display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
+        markdown_parts = [f"📋 **合并转发消息** (来自 {display_name}):\n"]
+        
+        try:
+            # 尝试解析 content，它可能是 JSON 字符串或 Base64 编码的 JSON
+            raw_content = content_data.get('content', '')
+            if not raw_content:
+                logger.warning("合并转发消息内容为空")
+                return
+
+            # 简单的解码逻辑：如果是 Base64 则解码，否则直接尝试解析
+            try:
+                decoded_str = base64.b64decode(raw_content).decode('utf-8')
+                msg_list = json.loads(decoded_str)
+            except:
+                msg_list = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+
+            if not isinstance(msg_list, list):
+                msg_list = [msg_list]
+
+            for index, msg_node in enumerate(msg_list):
+                sender = msg_node.get('sender', {})
+                nickname = sender.get('nickname', '未知用户')
+                message_array = msg_node.get('message', [])
+                
+                # 提取文本和图片
+                text_content = ""
+                has_image = False
+                for part in message_array:
+                    p_type = part.get('type')
+                    if p_type == 'text':
+                        text_content += part.get('data', {}).get('text', '')
+                    elif p_type == 'image':
+                        has_image = True
+                
+                # 格式化单条消息
+                formatted_msg = f"{index + 1}. **{nickname}**: {text_content}"
+                if has_image:
+                    formatted_msg += " [图片]"
+                
+                # MarkdownV2 转义
+                formatted_msg = re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', formatted_msg)
+                markdown_parts.append(formatted_msg)
+
+            final_md = "\n".join(markdown_parts)
+            result = await self.bot.send_message(
+                chat_id=self.tg_group_id, 
+                text=final_md, 
+                parse_mode='MarkdownV2'
+            )
+            logger.info(f"已同步合并转发消息至 TG，共 {len(msg_list)} 条子消息")
+            return result
+
+        except Exception as e:
+            logger.error(f"解析或发送合并转发消息失败: {e}")
+            return None
 
     async def forward_to_tg(self, qq_user_id: int, qq_nickname: str, text: str, reply_to_message_id: int = None):
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)

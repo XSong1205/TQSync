@@ -67,6 +67,8 @@ async def handle_qq_webhook(request):
             file_url = None
             file_name = "unknown_file"
             at_tg_ids = []
+            is_forward = False
+            forward_content = None
             
             for msg_part in message_array:
                 msg_type = msg_part.get('type')
@@ -85,8 +87,17 @@ async def handle_qq_webhook(request):
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     file_name = msg_part['data'].get('name', 'unknown_file')
+                elif msg_type == 'forward':
+                    is_forward = True
+                    forward_content = msg_part.get('data', {})
             
             combined_text = "".join(text_parts).strip()
+            
+            # 优先处理合并转发消息
+            if is_forward and forward_content:
+                logger.info(f"检测到来自 {nickname} 的合并转发消息，已加入异步同步队列")
+                engine.enqueue_sync_task(engine.forward_merged_to_tg, qq_id, nickname, forward_content)
+                return web.json_response({})
             
             # 指令识别与路由
             if combined_text.startswith('/'):
