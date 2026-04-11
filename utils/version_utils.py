@@ -1,23 +1,14 @@
-import subprocess
 import os
+import subprocess
 
 def get_version():
-    """通过 Git 提交次数动态计算版本号"""
+    """从 VERSION 文件中读取版本号"""
     try:
-        # 获取总提交次数
-        count_result = subprocess.run(
-            ['git', 'rev-list', '--count', 'HEAD'],
-            capture_output=True, text=True, check=True
-        )
-        n = int(count_result.stdout.strip())
-        
-        # 映射为语义化版本: 0.{N // 10}.{N % 10}
-        major = n // 100
-        minor = (n % 100) // 10
-        patch = n % 10
-        return f"{major}.{minor}.{patch}"
+        version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VERSION')
+        with open(version_file, 'r', encoding='utf-8') as f:
+            return f.read().strip()
     except Exception:
-        return "0.0.0"
+        return "1.0.0"
 
 def get_git_commit_hash(short=True):
     """获取 Git Commit Hash"""
