@@ -366,8 +366,28 @@ class SyncEngine:
                 if has_image:
                     formatted_msg += " [图片]"
                 
-                # MarkdownV2 转义
-                formatted_msg = re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', formatted_msg)
+                # MarkdownV2 转义：Telegram 对特殊字符有严格要求
+                def escape_md_v2(text):
+                    if not text:
+                        return ""
+                    # Telegram MarkdownV2 需要转义的字符: _ * [ ] ( ) ~ ` > # + - = | { } . !
+                    escape_chars = r'_*[]()~`>#+-=|{}.!'
+                    result = ""
+                    for char in text:
+                        if char in escape_chars:
+                            result += "\\" + char
+                        else:
+                            result += char
+                    return result
+
+                safe_nickname = escape_md_v2(nickname)
+                safe_text = escape_md_v2(text_content)
+                
+                # 格式化单条消息
+                formatted_msg = f"{index + 1}\. **{safe_nickname}**: {safe_text}"
+                if has_image:
+                    formatted_msg += " \[图片\]"
+                
                 markdown_parts.append(formatted_msg)
 
             final_md = "\n".join(markdown_parts)
