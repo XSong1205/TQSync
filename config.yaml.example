@@ -21,3 +21,7 @@ server:
 
 database:
   path: "db/tqsync.db"
+
+# 调试配置（可选）
+debug:
+  sticker_conversion_chat_id: null  # TGS 贴纸转换调试日志发送到的聊天 ID (Telegram Chat ID)，测试完成后请设为 null 或删除此行

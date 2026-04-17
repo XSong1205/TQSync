@@ -236,10 +236,27 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
-        """使用 lottie 库将 TGS 贴纸转换为 GIF（修复版）"""
+    async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512, debug_chat_id: int = None):
+        """使用 lottie 库将 TGS 贴纸转换为 GIF（修复版）
+        
+        Args:
+            tgs_path: TGS 文件路径
+            gif_path: 输出 GIF 路径
+            fps: 帧率
+            width: 宽度
+            height: 高度
+            debug_chat_id: 调试聊天 ID，如果提供则发送实时日志
+        """
         logger.info(f"正在转换 Lottie 贴纸: {tgs_path} -> {gif_path}")
         loop = asyncio.get_event_loop()
+        
+        # 辅助函数：发送调试消息
+        async def send_debug_msg(msg: str):
+            if debug_chat_id and self.bot:
+                try:
+                    await self.bot.send_message(chat_id=debug_chat_id, text=f"🔧 [TGS转换] {msg}")
+                except Exception as e:
+                    logger.debug(f"发送调试消息失败: {e}")
         
         def _render():
             import gzip
@@ -249,16 +266,23 @@ class SyncEngine:
             
             try:
                 # 1. 解压 TGS 文件并加载 Lottie JSON
+                logger.debug("步骤 1/4: 解压 TGS 文件")
                 with gzip.open(tgs_path, "rb") as f:
                     json_data = f.read().decode("utf-8")
+                logger.debug(f"TGS 文件大小: {len(json_data)} bytes")
                 
                 # 2. 从 JSON 字符串加载动画（使用 from_json 而非 from_dict）
+                logger.debug("步骤 2/4: 解析 Lottie JSON")
                 animation = Animation.from_json(json_data)
+                logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
                 
                 # 3. 渲染帧
+                logger.debug(f"步骤 3/4: 渲染帧 (fps={fps}, size={width}x{height})")
                 frames = render_frames(animation, width=width, height=height, fps=fps)
+                logger.debug(f"成功渲染 {len(frames)} 帧")
                 
                 # 4. 转成 Pillow Image 并保存为 GIF
+                logger.debug("步骤 4/4: 保存为 GIF")
                 pil_frames = [Image.fromarray(frame) for frame in frames]
                 if pil_frames:
                     pil_frames[0].save(
@@ -409,8 +433,11 @@ class SyncEngine:
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
                 
                 try:
+                    # 获取调试聊天 ID（如果配置了的话）
+                    debug_chat_id = self.config.get('debug', {}).get('sticker_conversion_chat_id')
+                    
                     if ext == '.tgs':
-                        await self.tgs_to_gif(temp_path, gif_path)
+                        await self.tgs_to_gif(temp_path, gif_path, debug_chat_id=debug_chat_id)
                     else:
                         await self.convert_webm_to_gif(temp_path, gif_path)
                     final_send_path = gif_path
