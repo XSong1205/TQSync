@@ -4,7 +4,6 @@ TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegra
 
 <img width="488" height="93" alt="PixPin_2026-04-11_10-05-02" src="https://github.com/user-attachments/assets/007c113b-13bb-4424-894a-77b0bcc64350" />
 这个不是我的TQSync😭撞名了，正在想新名字
-
 > [!TIP]
 > Next 分支功能已经足够强大，且兼容性、速度大幅提升，新用户建议使用 Next 版。目前重构版仍处于早期阶段，如有 Bug 敬请谅解！
 
@@ -22,6 +21,25 @@ TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegra
 - **QQ**: `aiohttp` (对接 Napcat OneBot v11 HTTP)
 - **Web Framework**: `FastAPI` + `Uvicorn` + `Vue`
 - **Database**: `SQLite`
+
+## 可选依赖
+
+### FFmpeg (推荐安装)
+FFmpeg 用于以下功能：
+- 动态贴纸转换 (TGS/WEBM -> GIF)
+- 语音消息转码 (OGG -> AMR)
+
+**如果不安装 FFmpeg**：
+- 动态贴纸将无法同步到 QQ
+- 语音消息将无法同步到 QQ
+- 其他功能不受影响
+
+**安装方法**：
+- Windows: `winget install Gyan.FFmpeg` 或从 https://ffmpeg.org 下载
+- Linux: `sudo apt install ffmpeg` (Debian/Ubuntu) 或 `sudo yum install ffmpeg` (CentOS)
+- macOS: `brew install ffmpeg`
+
+安装后请确保 `ffmpeg` 命令可在终端中执行。
 
 ## 安装
 

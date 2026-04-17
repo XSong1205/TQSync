@@ -362,8 +362,24 @@ class SyncEngine:
             logger.error(f"FFmpeg 转换失败 (stderr: {e.stderr.decode() if e.stderr else 'N/A'})")
             raise
         except FileNotFoundError:
-            logger.error("未找到 FFmpeg 可执行文件。请确保已安装 FFmpeg 并将其添加到系统环境变量 PATH 中。")
-            raise
+            error_msg = "FFmpeg 未安装，无法转换动态贴纸"
+            logger.error(error_msg + "。请安装 FFmpeg 并添加到系统 PATH")
+            
+            # 尝试向 Telegram 发送提示
+            try:
+                if hasattr(self, 'bot') and self.bot:
+                    await self.bot.send_message(
+                        chat_id=self.tg_group_id,
+                        text="⚠️ 动态贴纸转换失败：系统未安装 FFmpeg\n\n"
+                             "如需启用动态贴纸同步，请安装 FFmpeg：\n"
+                             "- Windows: winget install Gyan.FFmpeg\n"
+                             "- Linux: sudo apt install ffmpeg\n"
+                             "- macOS: brew install ffmpeg"
+                    )
+            except Exception as e:
+                logger.debug(f"发送 TG 提示失败: {e}")
+            
+            raise Exception(error_msg)
 
     async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
         """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
@@ -402,6 +418,25 @@ class SyncEngine:
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             logger.info(f"语音已转发至 QQ 群 {self.qq_group_id}")
             return result
+        except FileNotFoundError:
+            error_msg = "FFmpeg 未安装，无法转换语音消息"
+            logger.error(error_msg + "。请安装 FFmpeg 并添加到系统 PATH")
+            
+            # 尝试向 Telegram 发送提示
+            try:
+                if hasattr(self, 'bot') and self.bot:
+                    await self.bot.send_message(
+                        chat_id=self.tg_group_id,
+                        text="⚠️ 语音消息转换失败：系统未安装 FFmpeg\n\n"
+                             "如需启用语音同步，请安装 FFmpeg：\n"
+                             "- Windows: winget install Gyan.FFmpeg\n"
+                             "- Linux: sudo apt install ffmpeg\n"
+                             "- macOS: brew install ffmpeg"
+                    )
+            except Exception as e:
+                logger.debug(f"发送 TG 提示失败: {e}")
+            
+            return None
         except Exception as e:
             logger.error(f"转发语音至 QQ 失败: {e}")
             return None
@@ -450,8 +485,16 @@ class SyncEngine:
                     final_send_path = gif_path
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
-                    # 转换失败时尝试发送原始文件（如果 QQ 支持）或发送提示文本
-                    message_array.append({"type": "text", "data": {"text": "(贴纸转换失败，请查看日志)"}})
+                    
+                    # 判断是否为 FFmpeg 未安装
+                    is_ffmpeg_missing = "FFmpeg" in str(e) or isinstance(e, FileNotFoundError)
+                    
+                    if is_ffmpeg_missing:
+                        error_text = "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
+                    else:
+                        error_text = "贴纸转换失败，请查看日志"
+                    
+                    message_array.append({"type": "text", "data": {"text": f"({error_text})"}})
                     result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
                     return result
                 
