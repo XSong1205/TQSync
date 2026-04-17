@@ -318,6 +318,28 @@ async def graceful_restart(platform: str = 'qq'):
                 user32.EnumWindows(callback, 0)
             except Exception as e:
                 logger.debug(f"切换窗口焦点失败（非致命）: {e}")
+        
+        # Linux 下尝试将焦点切换到新进程终端
+        elif sys.platform.startswith('linux'):
+            await asyncio.sleep(0.3)
+            try:
+                # 方法1: 尝试使用 xdotool (X11)
+                import shutil
+                if shutil.which('xdotool'):
+                    # 查找包含 python 的窗口并激活
+                    os.system(f'xdotool search --pid {process.pid} windowactivate --sync 2>/dev/null || true')
+                    logger.debug(f"已尝试使用 xdotool 激活 PID {process.pid} 的窗口")
+                
+                # 方法2: 尝试使用 wmctrl (备用方案)
+                elif shutil.which('wmctrl'):
+                    os.system(f'wmctrl -p -l | grep {process.pid} | head -n1 | cut -d" " -f1 | xargs wmctrl -i -a 2>/dev/null || true')
+                    logger.debug(f"已尝试使用 wmctrl 激活 PID {process.pid} 的窗口")
+                
+                else:
+                    logger.debug("未检测到 xdotool 或 wmctrl，跳过窗口焦点切换")
+                    logger.debug("提示: 安装 xdotool (sudo apt install xdotool) 可启用自动焦点切换")
+            except Exception as e:
+                logger.debug(f"Linux 窗口焦点切换失败（非致命）: {e}")
     except Exception as e:
         logger.error(f"启动新进程失败: {e}")
         return
