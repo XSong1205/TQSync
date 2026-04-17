@@ -343,6 +343,66 @@ class SyncEngine:
         await loop.run_in_executor(None, _render)
         logger.info("Lottie 贴纸转换成功")
 
+    async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
+        """使用 lottie 库将 TGS 贴纸转换为 GIF
+        
+        Args:
+            tgs_path: TGS 文件路径
+            gif_path: 输出 GIF 路径
+            fps: 帧率
+            width: 宽度
+            height: 高度
+        """
+        logger.info(f"正在转换 Lottie 贴纸: {tgs_path} -> {gif_path}")
+        loop = asyncio.get_event_loop()
+        
+        def _render():
+            import gzip
+            from lottie.parsers.tgs import parse_tgs
+            from lottie.exporters.cairo import render_frames
+            from PIL import Image
+            
+            try:
+                # 1. 解压 TGS 文件并加载 Lottie JSON
+                logger.debug("步骤 1/4: 解压 TGS 文件")
+                with open(tgs_path, "rb") as f:
+                    tgs_data = f.read()
+                logger.debug(f"TGS 文件大小: {len(tgs_data)} bytes")
+                
+                # 2. 从 TGS 文件加载动画
+                logger.debug("步骤 2/4: 解析 Lottie JSON")
+                animation = parse_tgs(tgs_data)
+                logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
+                
+                # 3. 渲染帧
+                logger.debug(f"步骤 3/4: 渲染帧 (fps={fps}, size={width}x{height})")
+                frames = render_frames(animation, width=width, height=height, fps=fps)
+                logger.debug(f"成功渲染 {len(frames)} 帧")
+                
+                # 4. 转成 Pillow Image 并保存为 GIF
+                logger.debug("步骤 4/4: 保存为 GIF")
+                pil_frames = [Image.fromarray(frame) for frame in frames]
+                if pil_frames:
+                    pil_frames[0].save(
+                        gif_path,
+                        save_all=True,
+                        append_images=pil_frames[1:],
+                        duration=int(1000 / fps),
+                        loop=0,
+                        transparency=0,
+                        disposal=2
+                    )
+                    logger.info(f"成功渲染 {len(pil_frames)} 帧")
+                else:
+                    raise Exception("未渲染出任何帧")
+                    
+            except Exception as e:
+                logger.error(f"Lottie 渲染失败: {e}", exc_info=True)
+                raise
+
+        await loop.run_in_executor(None, _render)
+        logger.info("Lottie 贴纸转换成功")
+
     async def convert_webm_to_gif(self, input_path: str, output_path: str):
         """使用 FFmpeg 将 WebM 贴纸转换为 GIF"""
         logger.info(f"正在转换贴纸格式: {input_path} -> {output_path}")
@@ -485,6 +545,7 @@ class SyncEngine:
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
             # 验证下载的文件（仅对动态贴纸）
+            is_tgs_format = False
             if is_animated and os.path.exists(temp_path):
                 file_size = os.path.getsize(temp_path)
                 logger.debug(f"下载的贴纸文件大小: {file_size} bytes")
@@ -495,13 +556,11 @@ class SyncEngine:
                         header = f.read(4)
                         if header == b'\x1a\x45\xdf\xa3':
                             logger.debug("文件头验证通过：确认为 WebM 格式")
+                        elif header[:2] == b'\x1f\x8b':  # gzip 魔数
+                            logger.info("检测到 TGS 格式（gzip 压缩的 Lottie JSON），将使用 lottie 库渲染")
+                            is_tgs_format = True
                         else:
                             logger.warning(f"文件头不匹配 WebM 格式 (header: {header.hex()})，但将继续尝试转换")
-                            # 如果是 TGS 格式（gzip），需要特殊处理
-                            if header[:2] == b'\x1f\x8b':  # gzip 魔数
-                                logger.error("检测到 TGS 格式（gzip 压缩的 JSON），FFmpeg 无法直接处理")
-                                logger.error("这不应该发生，因为 Telegram Bot API 应该已经将 TGS 转换为 WebM")
-                                raise Exception("收到 TGS 格式文件，期望 WebM 格式。请检查 Telegram Bot API 配置")
                 except Exception as e:
                     logger.warning(f"文件头检查失败: {e}")
             
@@ -517,11 +576,16 @@ class SyncEngine:
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
                 
                 try:
-                    # 获取调试聊天 ID（如果配置了的话）
-                    debug_chat_id = config_loader.get('debug.sticker_conversion_chat_id')
+                    # 根据文件格式选择转换方法
+                    if is_tgs_format:
+                        # TGS 格式：使用 lottie 库渲染
+                        logger.info("使用 Lottie 渲染引擎转换 TGS 贴纸")
+                        await self.tgs_to_gif(temp_path, gif_path, fps=30, width=512, height=512)
+                    else:
+                        # WebM 格式：使用 FFmpeg 转换
+                        logger.info("使用 FFmpeg 转换 WebM 贴纸")
+                        await self.convert_webm_to_gif(temp_path, gif_path)
                     
-                    # TGS 和 WEBM 都使用 FFmpeg 转换为 GIF
-                    await self.convert_webm_to_gif(temp_path, gif_path)
                     final_send_path = gif_path
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
