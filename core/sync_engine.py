@@ -349,17 +349,18 @@ class SyncEngine:
         try:
             # 获取 FFmpeg 路径
             ffmpeg_path = ffmpeg_manager.get_executable_path() or 'ffmpeg'
+            logger.debug(f"使用 FFmpeg 路径: {ffmpeg_path}")
             
             # 异步运行 FFmpeg 进程
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: (
                 ffmpeg
-                .input(input_path, cmd=ffmpeg_path)
+                .input(input_path)
                 .filter('scale', 320, -1, flags='lanczos')
                 .filter('fps', fps=15, round='up')
                 .output(output_path, **{'loop': 0})
                 .overwrite_output()
-                .run(quiet=True)
+                .run(cmd=ffmpeg_path, quiet=True)
             ))
             logger.info("贴纸格式转换成功")
         except ffmpeg.Error as e:
@@ -407,12 +408,13 @@ class SyncEngine:
             amr_path = os.path.join(os.getcwd(), 'temp', amr_filename)
             
             ffmpeg_path = ffmpeg_manager.get_executable_path() or 'ffmpeg'
+            logger.debug(f"使用 FFmpeg 路径: {ffmpeg_path}")
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: (
-                ffmpeg.input(temp_path, cmd=ffmpeg_path)
+                ffmpeg.input(temp_path)
                 .output(amr_path, acodec='libopencore_amrnb', ar=8000, ab=12.2)
                 .overwrite_output()
-                .run(quiet=True)
+                .run(cmd=ffmpeg_path, quiet=True)
             ))
             
             message_array = [
@@ -535,12 +537,13 @@ class SyncEngine:
             ogg_path = os.path.join(os.getcwd(), 'temp', ogg_filename)
             
             ffmpeg_path = ffmpeg_manager.get_executable_path() or 'ffmpeg'
+            logger.debug(f"使用 FFmpeg 路径: {ffmpeg_path}")
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: (
-                ffmpeg.input(temp_path, cmd=ffmpeg_path)
+                ffmpeg.input(temp_path)
                 .output(ogg_path, acodec='libopus', ar=48000, ab='64k')
                 .overwrite_output()
-                .run(quiet=True)
+                .run(cmd=ffmpeg_path, quiet=True)
             ))
             
             caption = f"[QQ] {display_name} 发送了一条语音"
