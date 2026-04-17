@@ -237,21 +237,28 @@ class SyncEngine:
                 self._cleanup_temp(temp_path)
 
     async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
-        """使用 lottie + Pillow 将 TGS 贴纸转换为 GIF"""
+        """使用 lottie 库将 TGS 贴纸转换为 GIF（修复版）"""
         logger.info(f"正在转换 Lottie 贴纸: {tgs_path} -> {gif_path}")
         loop = asyncio.get_event_loop()
         
         def _render():
+            import gzip
+            from lottie import Animation
+            from lottie.exporters import render_frames
+            from PIL import Image
+            
             try:
-                # 1. 解压并加载 Lottie JSON
+                # 1. 解压 TGS 文件并加载 Lottie JSON
                 with gzip.open(tgs_path, "rb") as f:
-                    data = json.loads(f.read().decode("utf-8"))
-                animation = objects.Animation.from_dict(data)
+                    json_data = f.read().decode("utf-8")
                 
-                # 2. 渲染帧
-                frames = exporters.render_frames(animation, width=width, height=height, fps=fps)
+                # 2. 从 JSON 字符串加载动画（使用 from_json 而非 from_dict）
+                animation = Animation.from_json(json_data)
                 
-                # 3. 转成 Pillow Image 并保存
+                # 3. 渲染帧
+                frames = render_frames(animation, width=width, height=height, fps=fps)
+                
+                # 4. 转成 Pillow Image 并保存为 GIF
                 pil_frames = [Image.fromarray(frame) for frame in frames]
                 if pil_frames:
                     pil_frames[0].save(
@@ -263,8 +270,40 @@ class SyncEngine:
                         transparency=0,
                         disposal=2
                     )
+                    logger.info(f"成功渲染 {len(pil_frames)} 帧")
+                else:
+                    raise Exception("未渲染出任何帧")
+                    
+            except AttributeError as e:
+                logger.error(f"Lottie API 错误: {e}")
+                logger.warning("尝试使用备用方案：直接解压 JSON 并使用 from_dict")
+                
+                # 备用方案：尝试旧的 API
+                import json as json_module
+                with gzip.open(tgs_path, "rb") as f:
+                    data = json_module.loads(f.read().decode("utf-8"))
+                
+                # 尝试不同的导入路径
+                try:
+                    from lottie.objects import Animation as AnimObj
+                    animation = AnimObj.from_dict(data)
+                except:
+                    from lottie import Animation as AnimObj
+                    animation = AnimObj.from_dict(data)
+                
+                frames = render_frames(animation, width=width, height=height, fps=fps)
+                pil_frames = [Image.fromarray(frame) for frame in frames]
+                if pil_frames:
+                    pil_frames[0].save(
+                        gif_path,
+                        save_all=True,
+                        append_images=pil_frames[1:],
+                        duration=int(1000 / fps),
+                        loop=0
+                    )
+                    
             except Exception as e:
-                logger.error(f"Lottie 渲染失败: {e}")
+                logger.error(f"Lottie 渲染失败: {e}", exc_info=True)
                 raise
 
         await loop.run_in_executor(None, _render)
