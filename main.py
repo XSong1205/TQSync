@@ -243,7 +243,6 @@ REBOOT_INFO_FILE = "logs/.reboot_info"
 async def graceful_restart(platform: str = 'qq'):
     """优雅重启：启动新进程后退出当前进程，实现无缝重启"""
     logger.info("正在触发优雅重启...")
-    restart_event.set()
     
     reboot_info = {
         "start_time": time.time() * 1000,
@@ -254,12 +253,21 @@ async def graceful_restart(platform: str = 'qq'):
     with open(REBOOT_INFO_FILE, 'w', encoding='utf-8') as f:
         json.dump(reboot_info, f)
     
-    await asyncio.sleep(0.3)
+    # 等待一小段时间确保文件写入完成
+    await asyncio.sleep(0.5)
+    
+    # 尝试取消所有后台任务，让它们有机会清理
+    for task in background_tasks:
+        if not task.done():
+            task.cancel()
+    
+    # 给任务一点时间取消
+    await asyncio.sleep(0.5)
     
     try:
         await db.close()
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"数据库关闭（预期内）: {e}")
         
     logger.info("正在启动新进程...")
     
@@ -273,15 +281,22 @@ async def graceful_restart(platform: str = 'qq'):
             wShowWindow=subprocess.SW_HIDE
         )
     
-    subprocess.Popen(
-        [sys.executable] + sys.argv,
-        env=env,
-        startupinfo=startup_info,
-        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
-    )
+    try:
+        subprocess.Popen(
+            [sys.executable] + sys.argv,
+            env=env,
+            startupinfo=startup_info,
+            creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
+        )
+        logger.info("新进程已启动，当前进程即将退出...")
+    except Exception as e:
+        logger.error(f"启动新进程失败: {e}")
+        return
     
-    logger.info("新进程已启动，当前进程即将退出...")
-    await asyncio.sleep(1.5)
+    # 给一点时间让日志输出完成
+    await asyncio.sleep(1.0)
+    
+    # 使用 os._exit 强制退出，避免 asyncio 的清理逻辑产生额外日志
     os._exit(0)
 
 async def main():
@@ -361,6 +376,7 @@ async def main():
     
     engine = SyncEngine.get_instance()
     
+    # 处理重启通知
     if os.path.exists(REBOOT_INFO_FILE):
         try:
             with open(REBOOT_INFO_FILE, 'r', encoding='utf-8') as f:
@@ -387,11 +403,17 @@ async def main():
     try:
         await restart_event.wait()
     except asyncio.CancelledError:
-        pass
+        # 这是预期的取消操作（重启过程中），静默忽略
+        logger.debug("主循环被取消（预期内的重启行为）")
+    except Exception as e:
+        logger.error(f"主循环异常: {e}")
     finally:
         logger.info("TQSync 正在关闭...")
         # 确保数据库连接关闭
-        await db.close()
+        try:
+            await db.close()
+        except Exception as e:
+            logger.debug(f"数据库关闭（最终清理）: {e}")
 
 if __name__ == '__main__':
     try:
