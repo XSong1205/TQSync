@@ -278,6 +278,11 @@ async def graceful_restart(platform: str = 'qq'):
     creation_flags = 0
     
     if sys.platform == 'win32':
+        # Windows API 常量定义
+        SW_SHOWNORMAL = 1  # 显示窗口并激活（等同于 win32con.SW_SHOWNORMAL）
+        STARTF_USESHOWWINDOW = 1  # subprocess.STARTF_USESHOWWINDOW
+        CREATE_NEW_CONSOLE = 0x00000010  # subprocess.CREATE_NEW_CONSOLE
+        
         # 检测是否在 Tabby/Windows Terminal 等现代终端中
         # 这些终端通常通过 WT_SESSION 或 TERM_PROGRAM 环境变量标识
         is_modern_terminal = any(key in os.environ for key in ['WT_SESSION', 'TERM_PROGRAM'])
@@ -286,18 +291,18 @@ async def graceful_restart(platform: str = 'qq'):
             # 现代终端：不创建新控制台，让新进程继承当前会话
             logger.debug("检测到现代终端环境，新进程将继承当前终端会话")
             startup_info = subprocess.STARTUPINFO(
-                dwFlags=subprocess.STARTF_USESHOWWINDOW,
-                wShowWindow=subprocess.SW_SHOWNORMAL
+                dwFlags=STARTF_USESHOWWINDOW,
+                wShowWindow=SW_SHOWNORMAL
             )
             # 不使用 CREATE_NEW_CONSOLE，保持在同一终端窗口
             creation_flags = 0
         else:
             # 传统控制台：创建新窗口并激活
             startup_info = subprocess.STARTUPINFO(
-                dwFlags=subprocess.STARTF_USESHOWWINDOW,
-                wShowWindow=subprocess.SW_SHOWNORMAL
+                dwFlags=STARTF_USESHOWWINDOW,
+                wShowWindow=SW_SHOWNORMAL
             )
-            creation_flags = subprocess.CREATE_NEW_CONSOLE
+            creation_flags = CREATE_NEW_CONSOLE
     
     try:
         process = subprocess.Popen(
