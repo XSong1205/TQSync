@@ -357,45 +357,76 @@ class SyncEngine:
         loop = asyncio.get_event_loop()
         
         def _render():
-            import gzip
-            from lottie.parsers.tgs import parse_tgs
-            from lottie.exporters.cairo import render_frames
-            from PIL import Image
-            
             try:
-                # 1. 解压 TGS 文件并加载 Lottie JSON
-                logger.debug("步骤 1/4: 解压 TGS 文件")
-                with open(tgs_path, "rb") as f:
-                    tgs_data = f.read()
-                logger.debug(f"TGS 文件大小: {len(tgs_data)} bytes")
+                # 尝试导入 lottie 渲染模块
+                from lottie.parsers.tgs import parse_tgs
                 
-                # 2. 从 TGS 文件加载动画
-                logger.debug("步骤 2/4: 解析 Lottie JSON")
-                animation = parse_tgs(tgs_data)
+                # 检查是否有 cairo 支持
+                try:
+                    from lottie.exporters.cairo import has_cairo
+                    if not has_cairo():
+                        raise ImportError("cairo 未安装")
+                except:
+                    raise ImportError(
+                        "lottie 库缺少渲染依赖。请执行: pip install 'lottie[cairo]' pycairo\n"
+                        "或者在 Windows 上安装 GTK+ 以获取 cairo 支持"
+                    )
+                
+                from lottie.exporters.cairo import export_svg
+                from PIL import Image
+                import io
+                import cairosvg
+                
+                # 1. 解析 TGS
+                logger.debug("步骤 1/4: 解析 TGS 文件")
+                with open(tgs_path, "rb") as f:
+                    animation = parse_tgs(f.read())
+                
                 logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
                 
-                # 3. 渲染帧
-                logger.debug(f"步骤 3/4: 渲染帧 (fps={fps}, size={width}x{height})")
-                frames = render_frames(animation, width=width, height=height, fps=fps)
+                # 2. 渲染每一帧为 SVG，然后转换为 PNG
+                logger.debug(f"步骤 2/4: 渲染帧 (fps={fps}, size={width}x{height})")
+                frames = []
+                total_frames = int(animation.duration * fps)
+                
+                for i in range(total_frames):
+                    # 设置当前帧
+                    animation.seek(i / fps)
+                    
+                    # 导出为 SVG
+                    svg_buffer = io.BytesIO()
+                    export_svg(animation, svg_buffer, width=width, height=height)
+                    svg_data = svg_buffer.getvalue()
+                    
+                    # SVG 转 PNG
+                    png_data = cairosvg.svg2png(bytestring=svg_data, output_width=width, output_height=height)
+                    frame_image = Image.open(io.BytesIO(png_data))
+                    frames.append(frame_image)
+                    
+                    if (i + 1) % 10 == 0:
+                        logger.debug(f"已渲染 {i + 1}/{total_frames} 帧")
+                
                 logger.debug(f"成功渲染 {len(frames)} 帧")
                 
-                # 4. 转成 Pillow Image 并保存为 GIF
-                logger.debug("步骤 4/4: 保存为 GIF")
-                pil_frames = [Image.fromarray(frame) for frame in frames]
-                if pil_frames:
-                    pil_frames[0].save(
+                # 3. 保存为 GIF
+                logger.debug("步骤 3/4: 保存为 GIF")
+                if frames:
+                    frames[0].save(
                         gif_path,
                         save_all=True,
-                        append_images=pil_frames[1:],
+                        append_images=frames[1:],
                         duration=int(1000 / fps),
                         loop=0,
                         transparency=0,
                         disposal=2
                     )
-                    logger.info(f"成功渲染 {len(pil_frames)} 帧")
+                    logger.info(f"成功渲染 {len(frames)} 帧")
                 else:
                     raise Exception("未渲染出任何帧")
                     
+            except ImportError as e:
+                logger.error(f"Lottie 渲染依赖缺失: {e}")
+                raise
             except Exception as e:
                 logger.error(f"Lottie 渲染失败: {e}", exc_info=True)
                 raise
