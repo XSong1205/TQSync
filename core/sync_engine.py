@@ -252,11 +252,24 @@ class SyncEngine:
         
         # 辅助函数：发送调试消息
         async def send_debug_msg(msg: str):
+            # 发送到 Telegram
             if debug_chat_id and self.bot:
                 try:
                     await self.bot.send_message(chat_id=debug_chat_id, text=f"🔧 [TGS转换] {msg}")
                 except Exception as e:
-                    logger.debug(f"发送调试消息失败: {e}")
+                    logger.debug(f"发送 TG 调试消息失败: {e}")
+            
+            # 发送到 QQ 群组
+            qq_group_id = config_loader.get('qq.group_id')
+            if qq_group_id:
+                try:
+                    from handlers.qq_handler import onebot_client
+                    await onebot_client.send_group_msg(
+                        qq_group_id, 
+                        f"[TGS转换] {msg}"
+                    )
+                except Exception as e:
+                    logger.debug(f"发送 QQ 调试消息失败: {e}")
         
         def _render():
             import gzip
@@ -434,7 +447,7 @@ class SyncEngine:
                 
                 try:
                     # 获取调试聊天 ID（如果配置了的话）
-                    debug_chat_id = self.config.get('debug', {}).get('sticker_conversion_chat_id')
+                    debug_chat_id = config_loader.get('debug.sticker_conversion_chat_id')
                     
                     if ext == '.tgs':
                         await self.tgs_to_gif(temp_path, gif_path, debug_chat_id=debug_chat_id)
