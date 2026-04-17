@@ -424,7 +424,7 @@ class SyncEngine:
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
             # 动态贴纸通常是 .webm，静态是 .png 或 .webp
-            # 注意：.tgs 是 Lottie 格式，现在支持转换
+            # 注意：.tgs 是 Lottie 格式，Telegram 会自动转换为 webm
             ext = os.path.splitext(file_url)[1] or ('.webm' if is_animated else '.png')
 
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
@@ -445,10 +445,8 @@ class SyncEngine:
                     # 获取调试聊天 ID（如果配置了的话）
                     debug_chat_id = config_loader.get('debug.sticker_conversion_chat_id')
                     
-                    if ext == '.tgs':
-                        await self.tgs_to_gif(temp_path, gif_path, debug_chat_id=debug_chat_id)
-                    else:
-                        await self.convert_webm_to_gif(temp_path, gif_path)
+                    # TGS 和 WEBM 都使用 FFmpeg 转换为 GIF
+                    await self.convert_webm_to_gif(temp_path, gif_path)
                     final_send_path = gif_path
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
