@@ -278,12 +278,26 @@ async def graceful_restart(platform: str = 'qq'):
     creation_flags = 0
     
     if sys.platform == 'win32':
-        startup_info = subprocess.STARTUPINFO(
-            dwFlags=subprocess.STARTF_USESHOWWINDOW,
-            wShowWindow=subprocess.SW_SHOWNORMAL  # 显示窗口并激活
-        )
-        # CREATE_NEW_CONSOLE 创建新控制台窗口
-        creation_flags = subprocess.CREATE_NEW_CONSOLE
+        # 检测是否在 Tabby/Windows Terminal 等现代终端中
+        # 这些终端通常通过 WT_SESSION 或 TERM_PROGRAM 环境变量标识
+        is_modern_terminal = any(key in os.environ for key in ['WT_SESSION', 'TERM_PROGRAM'])
+        
+        if is_modern_terminal:
+            # 现代终端：不创建新控制台，让新进程继承当前会话
+            logger.debug("检测到现代终端环境，新进程将继承当前终端会话")
+            startup_info = subprocess.STARTUPINFO(
+                dwFlags=subprocess.STARTF_USESHOWWINDOW,
+                wShowWindow=subprocess.SW_SHOWNORMAL
+            )
+            # 不使用 CREATE_NEW_CONSOLE，保持在同一终端窗口
+            creation_flags = 0
+        else:
+            # 传统控制台：创建新窗口并激活
+            startup_info = subprocess.STARTUPINFO(
+                dwFlags=subprocess.STARTF_USESHOWWINDOW,
+                wShowWindow=subprocess.SW_SHOWNORMAL
+            )
+            creation_flags = subprocess.CREATE_NEW_CONSOLE
     
     try:
         process = subprocess.Popen(
@@ -296,28 +310,35 @@ async def graceful_restart(platform: str = 'qq'):
         
         # Windows 下尝试将焦点切换到新进程窗口
         if sys.platform == 'win32':
-            await asyncio.sleep(0.5)  # 等待窗口创建
-            try:
-                import ctypes
-                # 尝试获取新进程的窗口句柄并激活
-                user32 = ctypes.windll.user32
-                # 枚举窗口找到我们的进程
-                def enum_windows_callback(hwnd, lParam):
-                    if user32.IsWindowVisible(hwnd):
-                        pid = ctypes.c_ulong()
-                        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-                        if pid.value == process.pid:
-                            # 找到窗口，激活它
-                            user32.SetForegroundWindow(hwnd)
-                            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-                            return False
-                    return True
-                
-                WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-                callback = WNDENUMPROC(enum_windows_callback)
-                user32.EnumWindows(callback, 0)
-            except Exception as e:
-                logger.debug(f"切换窗口焦点失败（非致命）: {e}")
+            # 检测是否在 Tabby/Windows Terminal 等现代终端中
+            is_modern_terminal = any(key in os.environ for key in ['WT_SESSION', 'TERM_PROGRAM'])
+            
+            if not is_modern_terminal:
+                # 传统控制台：尝试激活新窗口
+                await asyncio.sleep(0.5)  # 等待窗口创建
+                try:
+                    import ctypes
+                    # 尝试获取新进程的窗口句柄并激活
+                    user32 = ctypes.windll.user32
+                    # 枚举窗口找到我们的进程
+                    def enum_windows_callback(hwnd, lParam):
+                        if user32.IsWindowVisible(hwnd):
+                            pid = ctypes.c_ulong()
+                            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                            if pid.value == process.pid:
+                                # 找到窗口，激活它
+                                user32.SetForegroundWindow(hwnd)
+                                user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                                return False
+                        return True
+                    
+                    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+                    callback = WNDENUMPROC(enum_windows_callback)
+                    user32.EnumWindows(callback, 0)
+                except Exception as e:
+                    logger.debug(f"切换窗口焦点失败（非致命）: {e}")
+            else:
+                logger.debug("现代终端环境，跳过窗口激活操作")
         
         # Linux 下尝试将焦点切换到新进程终端
         elif sys.platform.startswith('linux'):
