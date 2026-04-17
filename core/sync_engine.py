@@ -273,20 +273,20 @@ class SyncEngine:
         
         def _render():
             import gzip
-            from lottie import Animation
+            from lottie.parsers.tgs import parse_tgs
             from lottie.exporters import render_frames
             from PIL import Image
             
             try:
                 # 1. 解压 TGS 文件并加载 Lottie JSON
                 logger.debug("步骤 1/4: 解压 TGS 文件")
-                with gzip.open(tgs_path, "rb") as f:
-                    json_data = f.read().decode("utf-8")
-                logger.debug(f"TGS 文件大小: {len(json_data)} bytes")
+                with open(tgs_path, "rb") as f:
+                    tgs_data = f.read()
+                logger.debug(f"TGS 文件大小: {len(tgs_data)} bytes")
                 
-                # 2. 从 JSON 字符串加载动画（使用 from_json 而非 from_dict）
+                # 2. 从 TGS 文件加载动画
                 logger.debug("步骤 2/4: 解析 Lottie JSON")
-                animation = Animation.from_json(json_data)
+                animation = parse_tgs(tgs_data)
                 logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
                 
                 # 3. 渲染帧
@@ -313,20 +313,16 @@ class SyncEngine:
                     
             except AttributeError as e:
                 logger.error(f"Lottie API 错误: {e}")
-                logger.warning("尝试使用备用方案：直接解压 JSON 并使用 from_dict")
+                logger.warning("尝试使用备用方案：直接解压 JSON 并使用 parse_tgs_json")
                 
-                # 备用方案：尝试旧的 API
+                # 备用方案：使用 parse_tgs_json
                 import json as json_module
                 with gzip.open(tgs_path, "rb") as f:
-                    data = json_module.loads(f.read().decode("utf-8"))
+                    json_data = f.read().decode("utf-8")
+                    data = json_module.loads(json_data)
                 
-                # 尝试不同的导入路径
-                try:
-                    from lottie.objects import Animation as AnimObj
-                    animation = AnimObj.from_dict(data)
-                except:
-                    from lottie import Animation as AnimObj
-                    animation = AnimObj.from_dict(data)
+                from lottie.parsers.tgs import parse_tgs_json
+                animation = parse_tgs_json(data)
                 
                 frames = render_frames(animation, width=width, height=height, fps=fps)
                 pil_frames = [Image.fromarray(frame) for frame in frames]
