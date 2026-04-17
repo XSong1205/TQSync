@@ -122,7 +122,7 @@ async def handle_qq_webhook(request):
                 response = ""
                 
                 if cmd == '/bind':
-                    response = await handle_bind_command(qq_id, args)
+                    response = await handle_bind_command(qq_id, 'qq')
                 elif cmd == '/setprefix':
                     response = await handle_setprefix_command(qq_id, 'qq', args)
                 elif cmd == '/help':
@@ -456,6 +456,20 @@ async def main():
     # 启动临时文件清理任务
     cleanup_task = asyncio.create_task(cleanup_temp_files())
     background_tasks.append(cleanup_task)
+    
+    # 启动验证码清理任务（每小时清理一次）
+    async def cleanup_verification_codes():
+        """每小时清理一次过期验证码"""
+        while True:
+            try:
+                await db.cleanup_expired_codes()
+                logger.debug("已清理过期验证码")
+            except Exception as e:
+                logger.error(f"验证码清理失败: {e}")
+            await asyncio.sleep(3600)
+    
+    cleanup_codes_task = asyncio.create_task(cleanup_verification_codes())
+    background_tasks.append(cleanup_codes_task)
     
     logger.info("TQSync is running...")
     

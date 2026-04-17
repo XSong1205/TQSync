@@ -45,5 +45,23 @@ class OneBotClient:
                     logger.error(f"OneBot API Error: {result}")
                 return result
 
+    async def send_private_msg(self, user_id: int, message):
+        """
+        发送私聊消息。支持字符串（CQ码）或列表（消息段数组）。
+        """
+        url = f"{self.base_url}/send_private_msg"
+        payload = {
+            "user_id": user_id,
+            "message": message,
+            "auto_escape": False
+        }
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.post(url, json=payload, headers=self.headers) as resp:
+                result = await resp.json()
+                if result.get('retcode') != 0:
+                    logger.error(f"OneBot Private Msg API Error: {result}")
+                return result
+
 # 全局实例
 onebot_client = OneBotClient()

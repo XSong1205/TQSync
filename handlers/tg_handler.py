@@ -150,16 +150,62 @@ async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(response)
 
 async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 TG 端的 /bind <验证码> 指令"""
     if not context.args:
-        await update.message.reply_text("Usage: /bind <qq_number>")
+        await update.message.reply_text(
+            "请使用验证码完成绑定：\n"
+            "1. 在 QQ 群中发送 /bind 获取验证码\n"
+            "2. 在 Telegram 中使用 /bind <验证码>"
+        )
         return
     
-    qq_number = int(context.args[0])
+    verification_code = context.args[0]
     tg_user = update.effective_user
     
-    # 简单绑定逻辑：直接建立映射
-    await db.add_binding(tg_user.id, qq_number, tg_user.username)
-    await update.message.reply_text(f"Successfully bound to QQ: {qq_number}")
+    # 调用验证逻辑
+    result = await db.verify_and_consume_code(verification_code)
+    
+    if not result['valid']:
+        await update.message.reply_text(f"❌ 绑定失败: {result['reason']}")
+        return
+    
+    qq_user_id = result['qq_user_id']
+    
+    # 检查是否已被其他 TG 用户绑定
+    existing_binding = await db.get_binding_by_qq(qq_user_id)
+    if existing_binding and existing_binding[0] != tg_user.id:
+        await update.message.reply_text("❌ 该 QQ 号已被其他 Telegram 用户绑定")
+        return
+    
+    # 建立绑定关系
+    await db.add_binding(tg_user.id, qq_user_id, tg_user.username)
+    
+    # 通知 TG 用户
+    await update.message.reply_text(
+        f"✅ 绑定成功！\n"
+        f"QQ: {qq_user_id}\n"
+        f"Telegram: @{tg_user.username or tg_user.id}\n"
+        f"现在您的消息将双向同步。"
+    )
+    
+    # 通知 QQ 用户（通过私聊或群消息@）
+    try:
+        from handlers.qq_handler import onebot_client
+        from core.sync_engine import SyncEngine
+        engine = SyncEngine.get_instance()
+        
+        notify_msg = f"✅ 您的 QQ 已成功绑定到 Telegram (@{tg_user.username or tg_user.id})"
+        await onebot_client.send_private_msg(qq_user_id, notify_msg)
+    except Exception as e:
+        logger.warning(f"无法发送 QQ 绑定成功通知: {e}")
+        # 降级：在群内@用户
+        try:
+            await onebot_client.send_group_msg(engine.qq_group_id, [
+                {"type": "at", "data": {"qq": str(qq_user_id)}},
+                {"type": "text", "data": {"text": f" 您的 QQ 已成功绑定到 Telegram"}}
+            ])
+        except:
+            pass
 
 def get_tg_handlers():
     return [
