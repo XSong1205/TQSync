@@ -275,20 +275,49 @@ async def graceful_restart(platform: str = 'qq'):
     env['TQSYNC_RESTARTED'] = '1'
     
     startup_info = None
+    creation_flags = 0
+    
     if sys.platform == 'win32':
         startup_info = subprocess.STARTUPINFO(
             dwFlags=subprocess.STARTF_USESHOWWINDOW,
-            wShowWindow=subprocess.SW_HIDE
+            wShowWindow=subprocess.SW_SHOWNORMAL  # 显示窗口并激活
         )
+        # CREATE_NEW_CONSOLE 创建新控制台窗口
+        creation_flags = subprocess.CREATE_NEW_CONSOLE
     
     try:
-        subprocess.Popen(
+        process = subprocess.Popen(
             [sys.executable] + sys.argv,
             env=env,
             startupinfo=startup_info,
-            creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
+            creationflags=creation_flags
         )
-        logger.info("新进程已启动，当前进程即将退出...")
+        logger.info(f"新进程已启动 (PID: {process.pid})，当前进程即将退出...")
+        
+        # Windows 下尝试将焦点切换到新进程窗口
+        if sys.platform == 'win32':
+            await asyncio.sleep(0.5)  # 等待窗口创建
+            try:
+                import ctypes
+                # 尝试获取新进程的窗口句柄并激活
+                user32 = ctypes.windll.user32
+                # 枚举窗口找到我们的进程
+                def enum_windows_callback(hwnd, lParam):
+                    if user32.IsWindowVisible(hwnd):
+                        pid = ctypes.c_ulong()
+                        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        if pid.value == process.pid:
+                            # 找到窗口，激活它
+                            user32.SetForegroundWindow(hwnd)
+                            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                            return False
+                    return True
+                
+                WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+                callback = WNDENUMPROC(enum_windows_callback)
+                user32.EnumWindows(callback, 0)
+            except Exception as e:
+                logger.debug(f"切换窗口焦点失败（非致命）: {e}")
     except Exception as e:
         logger.error(f"启动新进程失败: {e}")
         return
