@@ -20,6 +20,7 @@ from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
 from db.database import db
 from utils.logger import logger
+from utils.ffmpeg_manager import ffmpeg_manager
 
 class SyncEngine:
     _instance = None
@@ -346,11 +347,14 @@ class SyncEngine:
         """使用 FFmpeg 将 WebM 贴纸转换为 GIF"""
         logger.info(f"正在转换贴纸格式: {input_path} -> {output_path}")
         try:
+            # 获取 FFmpeg 路径
+            ffmpeg_path = ffmpeg_manager.get_executable_path() or 'ffmpeg'
+            
             # 异步运行 FFmpeg 进程
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: (
                 ffmpeg
-                .input(input_path)
+                .input(input_path, cmd=ffmpeg_path)
                 .filter('scale', 320, -1, flags='lanczos')
                 .filter('fps', fps=15, round='up')
                 .output(output_path, **{'loop': 0})
@@ -402,9 +406,10 @@ class SyncEngine:
             amr_filename = f"voice_{uuid.uuid4().hex}.amr"
             amr_path = os.path.join(os.getcwd(), 'temp', amr_filename)
             
+            ffmpeg_path = ffmpeg_manager.get_executable_path() or 'ffmpeg'
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: (
-                ffmpeg.input(temp_path)
+                ffmpeg.input(temp_path, cmd=ffmpeg_path)
                 .output(amr_path, acodec='libopencore_amrnb', ar=8000, ab=12.2)
                 .overwrite_output()
                 .run(quiet=True)
@@ -529,9 +534,10 @@ class SyncEngine:
             ogg_filename = f"voice_{uuid.uuid4().hex}.ogg"
             ogg_path = os.path.join(os.getcwd(), 'temp', ogg_filename)
             
+            ffmpeg_path = ffmpeg_manager.get_executable_path() or 'ffmpeg'
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, lambda: (
-                ffmpeg.input(temp_path)
+                ffmpeg.input(temp_path, cmd=ffmpeg_path)
                 .output(ogg_path, acodec='libopus', ar=48000, ab='64k')
                 .overwrite_output()
                 .run(quiet=True)

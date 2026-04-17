@@ -63,5 +63,14 @@ class OneBotClient:
                     logger.error(f"OneBot Private Msg API Error: {result}")
                 return result
 
+    async def delete_msg(self, message_id: int):
+        """撤回消息"""
+        url = f"{self.base_url}/delete_msg"
+        payload = {"message_id": message_id}
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.post(url, json=payload, headers=self.headers) as resp:
+                return await resp.json()
+
 # 全局实例
 onebot_client = OneBotClient()

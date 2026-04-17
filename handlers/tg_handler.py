@@ -6,6 +6,7 @@ from db.database import db
 from handlers.qq_handler import onebot_client
 from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command
 import time
+import uuid
 from utils.logger import logger
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -207,6 +208,36 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         except:
             pass
 
+async def handle_confirm_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /confirm 指令，触发 FFmpeg 自动下载"""
+    from utils.ffmpeg_manager import ffmpeg_manager
+    
+    status = await db.get_setting('ffmpeg_auto_download_confirmed')
+    if status == 'confirmed':
+        await update.message.reply_text("⚠️ 您已经确认过自动下载，无需重复操作。")
+        return
+
+    msg = await update.message.reply_text("📥 正在开始下载并安装 FFmpeg，请稍候...")
+    
+    async def progress(percent):
+        try:
+            await msg.edit_text(f"📥 正在下载 FFmpeg... {percent}%")
+        except:
+            pass
+
+    success = await ffmpeg_manager.download_and_install(progress_callback=progress)
+    
+    if success:
+        await db.set_setting('ffmpeg_auto_download_confirmed', 'confirmed')
+        await msg.edit_text("✅ FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
+    else:
+        await msg.edit_text("❌ FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
+
+async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /cancel 指令，取消 FFmpeg 自动下载提示"""
+    await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
+    await update.message.reply_text("已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。")
+
 def get_tg_handlers():
     return [
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
@@ -215,5 +246,7 @@ def get_tg_handlers():
         CommandHandler('setprefix', handle_setprefix_command),
         CommandHandler('help', handle_help_command),
         CommandHandler('status', handle_status_command_tg),
-        CommandHandler('reboot', handle_reboot_command_tg)
+        CommandHandler('reboot', handle_reboot_command_tg),
+        CommandHandler('confirm', handle_confirm_ffmpeg),
+        CommandHandler('cancel', handle_cancel_ffmpeg)
     ]

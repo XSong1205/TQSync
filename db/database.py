@@ -52,6 +52,15 @@ class Database:
                 )
             ''')
             
+            # FFmpeg 自动下载确认状态表
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             await db.commit()
 
     async def save_message_mapping(self, tg_message_id: int, qq_message_id: int, sender_tg_id: int = None, sender_qq_id: int = None):
@@ -253,5 +262,20 @@ class Database:
     async def close(self):
         """关闭数据库连接池（虽然 aiosqlite 是短连接，但预留接口以备未来扩展）"""
         pass
+
+    # --- FFmpeg Auto-Download Settings ---
+    async def get_setting(self, key: str, default: str = None) -> str:
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT value FROM system_settings WHERE key = ?', (key,)) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else default
+
+    async def set_setting(self, key: str, value: str):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute('''
+                INSERT OR REPLACE INTO system_settings (key, value)
+                VALUES (?, ?)
+            ''', (key, value))
+            await db.commit()
 
 db = Database()

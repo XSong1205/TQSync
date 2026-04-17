@@ -14,6 +14,8 @@ HELP_TEXT = (
     "/setprefix <nickname> - 设置您在双端显示的统一昵称\n"
     "/status - 查看机器人运行状态\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
+    "/confirm - 确认自动下载 FFmpeg\n"
+    "/cancel - 取消自动下载提示\n"
     "/help - 显示此帮助信息\n\n"
     "绑定流程：\n"
     "1. 在 QQ 群发送 /bind 获取6位验证码\n"

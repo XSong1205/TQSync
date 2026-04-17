@@ -29,17 +29,16 @@ FFmpeg 用于以下功能：
 - 动态贴纸转换 (TGS/WEBM -> GIF)
 - 语音消息转码 (OGG -> AMR)
 
-**如果不安装 FFmpeg**：
-- 动态贴纸将无法同步到 QQ
-- 语音消息将无法同步到 QQ
-- 其他功能不受影响
+**自动下载（推荐）：**
+启动机器人时，如果检测到未安装 FFmpeg，机器人会在 QQ 和 Telegram 群内发送提示。您只需在任意一端回复 `/confirm`，机器人将自动下载并配置适合当前系统的 FFmpeg。
 
-**安装方法**：
-- Windows: `winget install Gyan.FFmpeg` 或从 https://ffmpeg.org 下载
-- Linux: `sudo apt install ffmpeg` (Debian/Ubuntu) 或 `sudo yum install ffmpeg` (CentOS)
-- macOS: `brew install ffmpeg`
+**手动安装方法：**
+如果您希望手动安装或自动下载失败，请参考以下命令：
+- **Windows**: `winget install Gyan.FFmpeg`
+- **Linux**: `sudo apt install ffmpeg`
+- **macOS**: `brew install ffmpeg`
 
-安装后请确保 `ffmpeg` 命令可在终端中执行。
+安装完成后，请重启 TQSync 以生效。
 
 ## 安装
 

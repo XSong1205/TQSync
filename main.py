@@ -138,6 +138,25 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, "正在重启，请稍候...")
                     asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
+                elif cmd == '/confirm':
+                    from utils.ffmpeg_manager import ffmpeg_manager
+                    status = await db.get_setting('ffmpeg_auto_download_confirmed')
+                    if status == 'confirmed':
+                        await onebot_client.send_group_msg(engine.qq_group_id, "⚠️ 您已经确认过自动下载，无需重复操作。")
+                        return web.json_response({})
+                    
+                    await onebot_client.send_group_msg(engine.qq_group_id, "📥 正在开始下载并安装 FFmpeg，请稍候...（由于下载较大，请耐心等待）")
+                    success = await ffmpeg_manager.download_and_install()
+                    if success:
+                        await db.set_setting('ffmpeg_auto_download_confirmed', 'confirmed')
+                        await onebot_client.send_group_msg(engine.qq_group_id, "✅ FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
+                    else:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "❌ FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
+                    return web.json_response({})
+                elif cmd == '/cancel':
+                    await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
+                    await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。")
+                    return web.json_response({})
                 else:
                     response = "未知命令。使用 /help 获取更多帮助。"
                 
@@ -413,6 +432,40 @@ async def main():
     
     # 初始化同步引擎 (单例模式)
     global_sync_engine = SyncEngine(application.bot)
+    
+    # FFmpeg 自动下载检测与交互
+    from utils.ffmpeg_manager import ffmpeg_manager
+    ffmpeg_local_path = ffmpeg_manager.get_executable_path()
+    ffmpeg_status = await db.get_setting('ffmpeg_auto_download_confirmed')
+    
+    logger.info(f"FFmpeg 检测结果: 本地路径={ffmpeg_local_path}, 数据库状态={ffmpeg_status}")
+    
+    if not ffmpeg_local_path and ffmpeg_status != 'cancelled':
+        logger.info("未检测到 FFmpeg，正在发送自动下载提示...")
+        prompt_msg = (
+            "⚠️ 检测到系统未安装 FFmpeg\n"
+            "FFmpeg 用于动态贴纸和语音消息的转换。\n\n"
+            "您可以选择：\n"
+            "1. 回复 /confirm 让机器人自动下载并安装 FFmpeg\n"
+            "2. 回复 /cancel 取消提示（需手动安装）\n"
+            "3. 手动安装后重启机器人"
+        )
+        try:
+            await application.bot.send_message(chat_id=global_sync_engine.tg_group_id, text=prompt_msg)
+            logger.info("FFmpeg 提示已发送到 Telegram")
+        except Exception as e:
+            logger.error(f"发送 FFmpeg 提示到 TG 失败: {e}")
+        
+        try:
+            qq_gid = config_loader.get('qq.group_id')
+            await onebot_client.send_group_msg(qq_gid, prompt_msg)
+            logger.info("FFmpeg 提示已发送到 QQ")
+        except Exception as e:
+            logger.error(f"发送 FFmpeg 提示到 QQ 失败: {e}")
+    elif ffmpeg_local_path:
+        logger.info(f"FFmpeg 已存在: {ffmpeg_local_path}")
+    elif ffmpeg_status == 'cancelled':
+        logger.info("用户已取消 FFmpeg 自动下载提示")
     
     # 注册 TG 处理器
     for handler in get_tg_handlers():
