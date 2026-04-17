@@ -143,7 +143,7 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
         return
         
     await update.message.reply_text("🔄 正在执行优雅重启，服务将在数秒后恢复...")
-    asyncio.create_task(graceful_restart())
+    asyncio.create_task(graceful_restart('tg'))
 
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = await handle_help_command_logic()

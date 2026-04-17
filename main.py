@@ -2,6 +2,8 @@ import asyncio
 import os
 import sys
 import time
+import subprocess
+import json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
@@ -69,6 +71,7 @@ async def handle_qq_webhook(request):
             video_url = None
             file_url = None
             voice_url = None
+            reply_to_tg_id = None
             file_name = "unknown_file"
             at_tg_ids = []
             is_forward = False
@@ -133,7 +136,7 @@ async def handle_qq_webhook(request):
                         return web.json_response({})
                     
                     await onebot_client.send_group_msg(engine.qq_group_id, "正在重启，请稍候...")
-                    asyncio.create_task(graceful_restart())
+                    asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
                 else:
                     response = "未知命令。使用 /help 获取更多帮助。"
@@ -143,7 +146,6 @@ async def handle_qq_webhook(request):
                 return web.json_response({})
 
             # 解析回复逻辑 (QQ -> TG)
-            reply_to_tg_id = None
             for msg_part in message_array:
                 if msg_part.get('type') == 'reply':
                     original_qq_id = int(msg_part['data'].get('id', 0))
@@ -236,23 +238,51 @@ start_time = time.time()
 restart_event = asyncio.Event()
 background_tasks = []
 
-async def graceful_restart():
-    """优雅重启：取消所有后台任务并重新加载进程"""
+REBOOT_INFO_FILE = "logs/.reboot_info"
+
+async def graceful_restart(platform: str = 'qq'):
+    """优雅重启：启动新进程后退出当前进程，实现无缝重启"""
     logger.info("正在触发优雅重启...")
     restart_event.set()
     
-    # 1. 等待一小段时间让资源释放（如数据库连接、API 响应）
-    await asyncio.sleep(0.5)
+    reboot_info = {
+        "start_time": time.time() * 1000,
+        "platform": platform
+    }
     
-    # 2. 显式关闭数据库连接
+    os.makedirs("logs", exist_ok=True)
+    with open(REBOOT_INFO_FILE, 'w', encoding='utf-8') as f:
+        json.dump(reboot_info, f)
+    
+    await asyncio.sleep(0.3)
+    
     try:
         await db.close()
     except:
         pass
         
-    # 3. 使用 execv 替换当前进程
-    logger.info("正在重新启动进程...")
-    os.execv(sys.executable, ['python'] + sys.argv)
+    logger.info("正在启动新进程...")
+    
+    env = os.environ.copy()
+    env['TQSYNC_RESTARTED'] = '1'
+    
+    startup_info = None
+    if sys.platform == 'win32':
+        startup_info = subprocess.STARTUPINFO(
+            dwFlags=subprocess.STARTF_USESHOWWINDOW,
+            wShowWindow=subprocess.SW_HIDE
+        )
+    
+    subprocess.Popen(
+        [sys.executable] + sys.argv,
+        env=env,
+        startupinfo=startup_info,
+        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
+    )
+    
+    logger.info("新进程已启动，当前进程即将退出...")
+    await asyncio.sleep(1.5)
+    os._exit(0)
 
 async def main():
     global start_time
@@ -329,8 +359,28 @@ async def main():
     
     logger.info("TQSync is running...")
     
-    # 发送启动成功通知
     engine = SyncEngine.get_instance()
+    
+    if os.path.exists(REBOOT_INFO_FILE):
+        try:
+            with open(REBOOT_INFO_FILE, 'r', encoding='utf-8') as f:
+                reboot_info = json.load(f)
+            os.remove(REBOOT_INFO_FILE)
+            
+            elapsed_ms = int(time.time() * 1000 - reboot_info['start_time'])
+            platform = reboot_info.get('platform', 'qq')
+            
+            reboot_msg = f"✅ 重启完成\n⏱ 耗时: {elapsed_ms}ms"
+            
+            if platform == 'tg':
+                await engine.bot.send_message(engine.tg_group_id, reboot_msg)
+            else:
+                await onebot_client.send_group_msg(engine.qq_group_id, reboot_msg)
+                
+            logger.info(f"重启完成，耗时 {elapsed_ms}ms")
+        except Exception as e:
+            logger.error(f"处理重启信息失败: {e}")
+    
     await engine.send_startup_notification()
     
     # 等待重启信号或任务结束
