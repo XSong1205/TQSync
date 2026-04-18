@@ -510,7 +510,7 @@ class SyncEngine:
                 .filter('fps', fps=15, round='up')
                 .output(output_path, **{'loop': 0})
                 .overwrite_output()
-                .run(cmd=ffmpeg_path, quiet=True)
+                .run(cmd=ffmpeg_path, capture_stdout=True, capture_stderr=True)
             ))
             logger.info("贴纸格式转换成功")
         except ffmpeg.Error as e:
