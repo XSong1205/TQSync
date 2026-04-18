@@ -542,6 +542,74 @@ class SyncEngine:
             
             raise Exception(error_msg)
 
+    async def tgs_to_gif(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 30):
+        """使用 rlottie 库将 TGS 贴纸转换为 GIF
+        
+        Args:
+            tgs_path: TGS 文件路径
+            gif_path: 输出 GIF 路径
+            width: 宽度
+            height: 高度
+            fps: 帧率
+        """
+        logger.info(f"正在转换 TGS 贴纸 (rlottie): {tgs_path} -> {gif_path}")
+        loop = asyncio.get_event_loop()
+        
+        def _convert():
+            try:
+                from rlottie_python import LottieAnimation
+                from PIL import Image
+                
+                # 加载 TGS 动画
+                animation = LottieAnimation.from_file(tgs_path)
+                
+                # 获取动画信息
+                total_frames = animation.total_frame
+                duration = animation.duration
+                
+                logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s")
+                
+                if total_frames == 0:
+                    raise ValueError("TGS 动画没有帧")
+                
+                # 渲染每一帧
+                frames = []
+                for frame_num in range(total_frames):
+                    # 渲染帧为 RGBA buffer
+                    buffer = animation.render(frame_num, width, height)
+                    
+                    # 转换为 PIL Image
+                    image = Image.frombytes('RGBA', (width, height), buffer)
+                    frames.append(image)
+                    
+                    if (frame_num + 1) % 10 == 0:
+                        logger.debug(f"已渲染 {frame_num + 1}/{total_frames} 帧")
+                
+                logger.debug(f"成功渲染 {len(frames)} 帧")
+                
+                # 保存为 GIF
+                if frames:
+                    frames[0].save(
+                        gif_path,
+                        save_all=True,
+                        append_images=frames[1:],
+                        duration=int(duration * 1000 / total_frames),  # 每帧持续时间（毫秒）
+                        loop=0,
+                        transparency=0
+                    )
+                    logger.info(f"TGS 转换成功: {gif_path} ({len(frames)} 帧)")
+                else:
+                    raise ValueError("未渲染出任何帧")
+                    
+            except ImportError as e:
+                logger.error(f"rlottie 库导入失败: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"TGS 转换失败: {e}", exc_info=True)
+                raise
+        
+        await loop.run_in_executor(None, _convert)
+
     async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
         """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
         display_name = await self.get_display_name(tg_user_id, tg_username)
@@ -645,16 +713,26 @@ class SyncEngine:
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
                 
                 try:
-                    # 统一使用 FFmpeg 转换 WebM
-                    logger.info("使用 FFmpeg 转换贴纸为 GIF")
-                    await self.convert_webm_to_gif(temp_path, gif_path)
+                    # 根据文件格式选择转换方法
+                    if ext == '.tgs' or temp_path.endswith('.tgs'):
+                        # TGS 格式：使用 rlottie 库
+                        logger.info("使用 rlottie 库转换 TGS 贴纸")
+                        await self.tgs_to_gif(temp_path, gif_path, fps=30, width=512, height=512)
+                    else:
+                        # WebM 格式：使用 FFmpeg
+                        logger.info("使用 FFmpeg 转换 WebM 贴纸")
+                        await self.convert_webm_to_gif(temp_path, gif_path)
+                    
                     final_send_path = gif_path
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
                     
                     # 判断错误类型
+                    error_str = str(e).lower()
                     if "FFmpeg" in str(e) or isinstance(e, FileNotFoundError):
                         error_text = "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
+                    elif "rlottie" in error_str or "ImportError" in str(type(e).__name__):
+                        error_text = "⚠️ 贴纸转换失败：rlottie 库异常\n请执行: pip install rlottie-python"
                     else:
                         error_text = "贴纸转换失败，请查看日志"
                     
