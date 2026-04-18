@@ -7,11 +7,9 @@ import base64
 import re
 import io
 import gzip
-import json
 import time
 import aiofiles
 import ffmpeg
-from lottie import objects, exporters
 from PIL import Image
 import aiohttp
 import asyncio
@@ -495,132 +493,6 @@ class SyncEngine:
         await loop.run_in_executor(None, _render)
         logger.info("Lottie 贴纸转换成功")
 
-    async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
-        """使用 lottie 库将 TGS 贴纸转换为 GIF
-        
-        Args:
-            tgs_path: TGS 文件路径
-            gif_path: 输出 GIF 路径
-            fps: 帧率
-            width: 宽度
-            height: 高度
-        """
-        logger.info(f"正在转换 Lottie 贴纸: {tgs_path} -> {gif_path}")
-        loop = asyncio.get_event_loop()
-        
-        def _render():
-            try:
-                # 尝试导入 lottie 渲染模块
-                from lottie.parsers.tgs import parse_tgs
-                
-                # 检查是否有 cairo 支持
-                try:
-                    from lottie.exporters.cairo import has_cairo
-                    if not has_cairo():
-                        raise ImportError("cairo 未安装")
-                except:
-                    raise ImportError(
-                        "lottie 库缺少渲染依赖。请执行: pip install 'lottie[cairo]' pycairo\n"
-                        "或者在 Windows 上安装 GTK+ 以获取 cairo 支持"
-                    )
-                
-                from lottie.exporters.cairo import export_svg
-                from PIL import Image
-                import io
-                import cairosvg
-                
-                # 1. 解析 TGS
-                logger.debug("步骤 1/4: 解析 TGS 文件")
-                with open(tgs_path, "rb") as f:
-                    animation = parse_tgs(f.read())
-                
-                logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
-                
-                # 2. 渲染每一帧为 SVG，然后转换为 PNG
-                logger.debug(f"步骤 2/4: 渲染帧 (fps={fps}, size={width}x{height})")
-                frames = []
-                total_frames = int(animation.duration * fps)
-                
-                for i in range(total_frames):
-                    # 设置当前帧
-                    animation.seek(i / fps)
-                    
-                    # 导出为 SVG
-                    svg_buffer = io.BytesIO()
-                    export_svg(animation, svg_buffer, width=width, height=height)
-                    svg_data = svg_buffer.getvalue()
-                    
-                    # SVG 转 PNG
-                    png_data = cairosvg.svg2png(bytestring=svg_data, output_width=width, output_height=height)
-                    frame_image = Image.open(io.BytesIO(png_data))
-                    frames.append(frame_image)
-                    
-                    if (i + 1) % 10 == 0:
-                        logger.debug(f"已渲染 {i + 1}/{total_frames} 帧")
-                
-                logger.debug(f"成功渲染 {len(frames)} 帧")
-                
-                # 3. 保存为 GIF
-                logger.debug("步骤 3/4: 保存为 GIF")
-                if frames:
-                    frames[0].save(
-                        gif_path,
-                        save_all=True,
-                        append_images=frames[1:],
-                        duration=int(1000 / fps),
-                        loop=0,
-                        transparency=0,
-                        disposal=2
-                    )
-                    logger.info(f"成功渲染 {len(frames)} 帧")
-                else:
-                    raise Exception("未渲染出任何帧")
-                    
-            except ImportError as e:
-                error_msg = str(e)
-                logger.error(f"Lottie 渲染依赖缺失: {error_msg}")
-                raise
-            except Exception as e:
-                logger.error(f"Lottie 渲染失败: {e}", exc_info=True)
-                raise
-
-        try:
-            await loop.run_in_executor(None, _render)
-            logger.info("Lottie 贴纸转换成功")
-        except ImportError as e:
-            error_msg = str(e)
-            
-            # 检测是否为 Windows 系统缺少 GTK+
-            if sys.platform == 'win32' and ('cairo' in error_msg.lower() or 'pycairo' in error_msg.lower()):
-                gtk_help_text = (
-                    "⚠️ TGS 贴纸转换失败：Windows 系统缺少 GTK+ 运行时\n\n"
-                    "请安装 GTK+ 以支持动态贴纸渲染：\n"
-                    "1. 下载 GTK+ 安装包:\n"
-                    "   https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases\n"
-                    "2. 运行安装程序并完成安装\n"
-                    "3. 重启 TQSync 机器人\n\n"
-                    "或者考虑使用 Linux/WSL 部署以获得更好的兼容性"
-                )
-                
-                # 发送到 Telegram
-                try:
-                    if hasattr(self, 'bot') and self.bot:
-                        await self.bot.send_message(
-                            chat_id=self.tg_group_id,
-                            text=gtk_help_text
-                        )
-                except Exception as send_err:
-                    logger.debug(f"发送 TG 提示失败: {send_err}")
-                
-                # 发送到 QQ
-                try:
-                    qq_gid = config_loader.get('qq.group_id')
-                    await onebot_client.send_group_msg(qq_gid, gtk_help_text)
-                except Exception as send_err:
-                    logger.debug(f"发送 QQ 提示失败: {send_err}")
-            
-            raise
-
     async def convert_webm_to_gif(self, input_path: str, output_path: str):
         """使用 FFmpeg 将 WebM 贴纸转换为 GIF"""
         logger.info(f"正在转换贴纸格式: {input_path} -> {output_path}")
@@ -761,59 +633,28 @@ class SyncEngine:
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
-            # 验证下载的文件（仅对动态贴纸）
-            is_tgs_format = False
-            if is_animated and os.path.exists(temp_path):
-                file_size = os.path.getsize(temp_path)
-                logger.debug(f"下载的贴纸文件大小: {file_size} bytes")
-                
-                # 检查文件是否以 WebM 魔数开头 (1A 45 DF A3)
-                try:
-                    with open(temp_path, 'rb') as f:
-                        header = f.read(4)
-                        if header == b'\x1a\x45\xdf\xa3':
-                            logger.debug("文件头验证通过：确认为 WebM 格式")
-                        elif header[:2] == b'\x1f\x8b':  # gzip 魔数
-                            logger.info("检测到 TGS 格式（gzip 压缩的 Lottie JSON），将使用 lottie 库渲染")
-                            is_tgs_format = True
-                        else:
-                            logger.warning(f"文件头不匹配 WebM 格式 (header: {header.hex()})，但将继续尝试转换")
-                except Exception as e:
-                    logger.warning(f"文件头检查失败: {e}")
-            
             message_array = [
                 {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
             ]
             
             final_send_path = temp_path
             
-            # 根据类型选择消息段：动态贴纸转换为 GIF 后作为图片发送
+            # 动态贴纸转换为 GIF 后作为图片发送
             if is_animated or ext in ['.webm', '.tgs']:
                 gif_filename = f"sticker_{uuid.uuid4().hex}.gif"
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
                 
                 try:
-                    # 根据文件格式选择转换方法
-                    if is_tgs_format:
-                        # TGS 格式：使用 lottie 库渲染
-                        logger.info("使用 Lottie 渲染引擎转换 TGS 贴纸")
-                        await self.tgs_to_gif(temp_path, gif_path, fps=30, width=512, height=512)
-                    else:
-                        # WebM 格式：使用 FFmpeg 转换
-                        logger.info("使用 FFmpeg 转换 WebM 贴纸")
-                        await self.convert_webm_to_gif(temp_path, gif_path)
-                    
+                    # 统一使用 FFmpeg 转换 WebM
+                    logger.info("使用 FFmpeg 转换贴纸为 GIF")
+                    await self.convert_webm_to_gif(temp_path, gif_path)
                     final_send_path = gif_path
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
                     
-                    error_str = str(e).lower()
-                    
                     # 判断错误类型
                     if "FFmpeg" in str(e) or isinstance(e, FileNotFoundError):
                         error_text = "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
-                    elif sys.platform == 'win32' and ('cairo' in error_str or 'gtk' in error_str or 'pycairo' in error_str):
-                        error_text = "⚠️ TGS 贴纸转换失败：缺少 GTK+ 运行时\n请查看日志获取安装指引"
                     else:
                         error_text = "贴纸转换失败，请查看日志"
                     
