@@ -8,6 +8,7 @@ import re
 import io
 import gzip
 import json
+import time
 import aiofiles
 import ffmpeg
 from lottie import objects, exporters
@@ -77,36 +78,82 @@ class SyncEngine:
             raise RuntimeError("SyncEngine has not been initialized. Call SyncEngine(bot) first.")
         return cls._instance
 
-    async def _download_to_temp(self, file_url: str, filename: str) -> str:
-        """下载文件到 temp 目录并返回本地绝对路径"""
+    async def _download_to_temp(self, file_url: str, original_filename: str) -> str:
+        """下载文件到 temp 目录并返回本地绝对路径
+        
+        流程：
+        1. 使用 UUID 作为临时文件名下载
+        2. 下载完成后重命名为原始文件名
+        3. 返回最终文件路径
+        """
         temp_dir = os.path.join(os.getcwd(), 'temp')
         os.makedirs(temp_dir, exist_ok=True)
         
-        # 确保文件名唯一，防止冲突
-        unique_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
-        file_path = os.path.join(temp_dir, unique_filename)
-        logger.info(f"正在下载文件至本地中转: {file_url[:50]}... (保存为: {filename})")
+        # 生成纯 UUID 临时文件名（避免特殊字符和长度问题）
+        temp_filename = f"{uuid.uuid4().hex}.tmp"
+        temp_path = os.path.join(temp_dir, temp_filename)
+        
+        logger.info(f"开始下载文件: {original_filename} ({file_url[:60]}...)")
         
         # 全局禁用 SSL 验证以适配国内代理环境
         connector = aiohttp.TCPConnector(ssl=False)
-        timeout = aiohttp.ClientTimeout(total=60, connect=15)
+        timeout = aiohttp.ClientTimeout(total=300, connect=30)  # 增加超时时间到大文件支持
+        start_time = time.time()
+        
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             try:
                 async with session.get(file_url) as resp:
                     if resp.status != 200:
                         raise Exception(f"Download failed with status {resp.status}")
-                    async with aiofiles.open(file_path, 'wb') as f:
+                    
+                    # 获取文件大小
+                    total_size = int(resp.headers.get('content-length', 0))
+                    downloaded_size = 0
+                    last_log_time = time.time()
+                    
+                    async with aiofiles.open(temp_path, 'wb') as f:
                         while True:
-                            chunk = await resp.content.read(8192)
+                            chunk = await resp.content.read(65536)  # 增加块大小到 64KB 提升性能
                             if not chunk:
                                 break
                             await f.write(chunk)
+                            downloaded_size += len(chunk)
+                            
+                            # 每秒输出一次进度（针对大文件）
+                            current_time = time.time()
+                            if total_size > 0 and (current_time - last_log_time >= 1.0):
+                                elapsed = current_time - start_time
+                                progress = (downloaded_size / total_size) * 100
+                                speed = downloaded_size / elapsed if elapsed > 0 else 0
+                                logger.debug(f"下载进度: {progress:.1f}% ({self._format_size(downloaded_size)}/{self._format_size(total_size)}) | 速度: {self._format_size(speed)}/s")
+                                last_log_time = current_time
+                
+                # 下载完成，重命名为原始文件名
+                final_path = os.path.join(temp_dir, original_filename)
+                
+                # 如果目标文件已存在，添加序号避免冲突
+                if os.path.exists(final_path):
+                    name, ext = os.path.splitext(original_filename)
+                    counter = 1
+                    while os.path.exists(final_path):
+                        final_path = os.path.join(temp_dir, f"{name}_{counter}{ext}")
+                        counter += 1
+                
+                os.rename(temp_path, final_path)
+                file_size = os.path.getsize(final_path)
+                elapsed = time.time() - start_time
+                logger.info(f"文件下载完成: {os.path.basename(final_path)} ({self._format_size(file_size)}) | 耗时: {elapsed:.1f}s")
+                
+                return os.path.abspath(final_path)
+                
             except asyncio.TimeoutError:
-                raise Exception("Download timed out")
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise Exception(f"下载超时: {original_filename}")
             except Exception as e:
-                if os.path.exists(file_path): os.remove(file_path)
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
                 raise e
-        return os.path.abspath(file_path)
 
     def _cleanup_temp(self, file_path: str):
         """清理临时文件"""
@@ -116,6 +163,62 @@ class SyncEngine:
                 logger.info(f"已清理临时文件: {file_path}")
         except Exception as e:
             logger.warning(f"清理临时文件失败 {file_path}: {e}")
+
+    def _format_size(self, size_bytes: int) -> str:
+        """格式化文件大小"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} TB"
+
+    def _classify_error(self, error: Exception) -> str:
+        """分类错误类型"""
+        error_str = str(error).lower()
+        
+        if isinstance(error, asyncio.TimeoutError) or 'timeout' in error_str:
+            return 'timeout'
+        elif 'no space' in error_str or 'disk full' in error_str:
+            return 'disk_full'
+        elif 'permission' in error_str or 'access denied' in error_str:
+            return 'permission'
+        elif 'network' in error_str or 'connection' in error_str:
+            return 'network'
+        elif 'file too large' in error_str or 'size limit' in error_str:
+            return 'too_large'
+        else:
+            return 'unknown'
+
+    def _get_friendly_error_message(self, error_type: str, filename: str = "") -> str:
+        """根据错误类型生成友好的错误消息"""
+        messages = {
+            'timeout': f"⚠️ 文件同步失败：下载超时\n文件: {filename}\n建议：检查网络连接或稍后重试",
+            'disk_full': "⚠️ 文件同步失败：磁盘空间不足\n请清理 temp 目录或增加磁盘空间",
+            'permission': "⚠️ 文件同步失败：权限不足\n请检查 temp 目录的读写权限",
+            'network': f"⚠️ 文件同步失败：网络错误\n文件: {filename}\n建议：检查网络连接或代理设置",
+            'too_large': f"⚠️ 文件同步失败：文件过大\n文件: {filename}\n平台对文件大小有限制",
+            'unknown': f"⚠️ 文件同步失败\n文件: {filename}\n详情请查看日志"
+        }
+        return messages.get(error_type, messages['unknown'])
+
+    async def _send_error_notification(self, tg_user_id: int = None, qq_group_id: int = None, error_msg: str = ""):
+        """向双端发送错误通知"""
+        # 发送到 Telegram
+        if tg_user_id and hasattr(self, 'bot') and self.bot:
+            try:
+                await self.bot.send_message(
+                    chat_id=self.tg_group_id,
+                    text=error_msg
+                )
+            except Exception as e:
+                logger.debug(f"发送 TG 错误通知失败: {e}")
+        
+        # 发送到 QQ
+        if qq_group_id:
+            try:
+                await onebot_client.send_group_msg(qq_group_id, error_msg)
+            except Exception as e:
+                logger.debug(f"发送 QQ 错误通知失败: {e}")
 
     async def get_display_name(self, tg_user_id: int = None, qq_user_id: int = None, fallback_name: str = "Unknown"):
         """根据绑定关系获取统一显示名称，优先使用自定义前缀"""
