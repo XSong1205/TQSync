@@ -914,6 +914,7 @@ class SyncEngine:
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
         temp_path = None
+        original_filename = None
         
         try:
             # 判断是否为本地路径或内网地址
@@ -921,6 +922,7 @@ class SyncEngine:
                 local_path = file_url.replace("file://", "")
                 if os.path.exists(local_path):
                     temp_path = local_path
+                    original_filename = os.path.basename(local_path)
                 else:
                     raise FileNotFoundError(f"Local file not found: {local_path}")
             else:
@@ -950,8 +952,10 @@ class SyncEngine:
                     if not ext and original_filename != 'unknown_file':
                         ext = os.path.splitext(original_filename)[1]
                     ext = ext or '.tmp'
-                    temp_filename = f"forward_{uuid.uuid4().hex[:8]}{ext}"
-                    downloaded_path = await self._download_to_temp(temp_path, temp_filename)
+                    
+                    # 使用原始文件名下载
+                    download_filename = original_filename if original_filename != 'unknown_file' else f"file_{uuid.uuid4().hex[:8]}{ext}"
+                    downloaded_path = await self._download_to_temp(temp_path, download_filename)
                     temp_path = downloaded_path
 
             # 以二进制流形式发送给 Telegram
@@ -964,11 +968,34 @@ class SyncEngine:
                     else:
                         send_kwargs[file_key] = io.BytesIO(file_content)
                     await send_func(**send_kwargs)
+                    logger.info(f"文件已成功发送至 Telegram: {os.path.basename(temp_path)}")
             else:
                 raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
                 
+        except asyncio.TimeoutError:
+            error_msg = f"⚠️ 文件同步失败：上传至 Telegram 超时\n文件: {original_filename or os.path.basename(temp_path) if temp_path else '未知'}\n可能原因：文件过大或网络不稳定"
+            # 发送到 QQ
+            try:
+                qq_gid = config_loader.get('qq.group_id')
+                await onebot_client.send_group_msg(qq_gid, error_msg)
+            except Exception as send_err:
+                logger.debug(f"发送 QQ 错误通知失败: {send_err}")
+            return None
+                
         except Exception as e:
             logger.error(f"转发消息至 Telegram 失败: {e}", exc_info=True)
+            
+            # 判断错误类型并发送友好提示
+            error_type = self._classify_error(e)
+            error_msg = self._get_friendly_error_message(error_type, original_filename or os.path.basename(temp_path) if temp_path else "")
+            
+            # 发送到 QQ
+            try:
+                qq_gid = config_loader.get('qq.group_id')
+                await onebot_client.send_group_msg(qq_gid, error_msg)
+            except Exception as send_err:
+                logger.debug(f"发送 QQ 错误通知失败: {send_err}")
+            return None
 
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
