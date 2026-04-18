@@ -688,18 +688,26 @@ class SyncEngine:
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            # 关键修复：Telegram Bot API 返回的 URL 扩展名可能不准确
-            # 对于动态贴纸，无论原始格式是 .tgs 还是 .webm，Telegram 都会转换为 WebM 格式
-            # 所以我们根据 is_animated 标志来决定扩展名
-            if is_animated:
-                ext = '.webm'  # Telegram 已将 TGS 转换为 WebM
-            else:
-                ext = os.path.splitext(file_url)[1] or '.png'
-            
-            logger.debug(f"贴纸文件信息: is_animated={is_animated}, 原始URL扩展名={os.path.splitext(file_url)[1]}, 使用扩展名={ext}")
-
+            # 下载文件
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
             temp_path = await self._download_to_temp(file_url, temp_filename)
+            
+            # 检测实际文件格式（通过文件头）
+            actual_format = 'unknown'
+            if os.path.exists(temp_path):
+                try:
+                    with open(temp_path, 'rb') as f:
+                        header = f.read(4)
+                        if header[:2] == b'\x1f\x8b':  # gzip 魔数
+                            actual_format = 'tgs'
+                            logger.info("检测到 TGS 格式（gzip 压缩的 Lottie JSON）")
+                        elif header == b'\x1a\x45\xdf\xa3':  # WebM 魔数
+                            actual_format = 'webm'
+                            logger.info("检测到 WebM 格式")
+                        else:
+                            logger.warning(f"未知文件格式 (header: {header.hex()})")
+                except Exception as e:
+                    logger.warning(f"文件头检查失败: {e}")
             
             message_array = [
                 {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
@@ -708,19 +716,23 @@ class SyncEngine:
             final_send_path = temp_path
             
             # 动态贴纸转换为 GIF 后作为图片发送
-            if is_animated or ext in ['.webm', '.tgs']:
+            if is_animated or actual_format in ['tgs', 'webm']:
                 gif_filename = f"sticker_{uuid.uuid4().hex}.gif"
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
                 
                 try:
-                    # 根据文件格式选择转换方法
-                    if ext == '.tgs' or temp_path.endswith('.tgs'):
-                        # TGS 格式：使用 rlottie 库
-                        logger.info("使用 rlottie 库转换 TGS 贴纸")
+                    # 根据实际文件格式选择转换方法
+                    if actual_format == 'tgs':
+                        # TGS 格式：使用 rlottie 库直接渲染
+                        logger.info("使用 rlottie 库渲染 TGS 贴纸")
                         await self.tgs_to_gif(temp_path, gif_path, fps=30, width=512, height=512)
-                    else:
-                        # WebM 格式：使用 FFmpeg
+                    elif actual_format == 'webm':
+                        # WebM 格式：使用 FFmpeg 转换
                         logger.info("使用 FFmpeg 转换 WebM 贴纸")
+                        await self.convert_webm_to_gif(temp_path, gif_path)
+                    else:
+                        # 未知格式，尝试使用 FFmpeg
+                        logger.warning(f"未知格式 ({actual_format})，尝试使用 FFmpeg 转换")
                         await self.convert_webm_to_gif(temp_path, gif_path)
                     
                     final_send_path = gif_path
