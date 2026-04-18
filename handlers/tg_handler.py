@@ -66,20 +66,20 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         original_qq_id = await db.get_qq_msg_id_by_tg(original_tg_id)
         if original_qq_id:
             reply_segment.append({"type": "reply", "data": {"id": str(original_qq_id)}})
-            logger.info(f"检测到 TG 回复，映射到 QQ 消息 ID: {original_qq_id}")
+            logger.info(f"[TG] 映射回复消息至 {original_qq_id}")
 
     # 处理图片消息
     if msg.photo:
         file_id = msg.photo[-1].file_id
         caption = msg.caption or ""
-        logger.info(f"检测到来自 {user.username} 的图片，已加入异步同步队列")
+        logger.info(f"[TG] {user.username} 发送了一张图片")
         engine.enqueue_sync_task(engine.forward_image_to_qq, user.id, user.username or str(user.id), file_id, caption)
         return
 
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
-        logger.info(f"检测到来自 {user.username} 的视频，已加入异步同步队列")
+        logger.info(f"[TG] {user.username} 发送了一段视频")
         engine.enqueue_sync_task(engine.forward_video_to_qq, user.id, user.username or str(user.id), file_id)
         return
 
@@ -87,7 +87,7 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.document:
         file_id = msg.document.file_id
         filename = msg.document.file_name or f"file_{uuid.uuid4().hex[:8]}.dat"
-        logger.info(f"检测到来自 {user.username} 的文件 ({filename})，已加入异步同步队列")
+        logger.info(f"[TG] {user.username} 发送了一个文件 ({filename})")
         engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
         return
 
@@ -95,21 +95,21 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.sticker:
         file_id = msg.sticker.file_id
         is_animated = msg.sticker.is_animated or msg.sticker.is_video
-        logger.info(f"检测到来自 {user.username} 的贴纸 (动态: {is_animated})，已加入异步同步队列")
+        logger.info(f"[TG] {user.username} 发送了一个贴纸 (动态: {is_animated})")
         engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated)
         return
 
     # 处理语音消息 (Voice/Audio)
     if msg.voice or msg.audio:
         file_id = (msg.voice or msg.audio).file_id
-        logger.info(f"检测到来自 {user.username} 的语音消息，已加入异步同步队列")
+        logger.info(f"[TG] {user.username} 发送了一个语音消息")
         engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id)
         return
 
     # 处理文本消息
     text = update.message.text
     if text:
-        logger.info(f"检测到来自 {user.username} 的文本消息，已加入异步同步队列")
+        logger.info(f"[TG] {user.username} 发送了一条文本消息")
         engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text)
         return
 
@@ -126,7 +126,7 @@ async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT
     from main import GLOBAL_START_TIME
     # 增加合理性检查，防止显示异常时长
     if GLOBAL_START_TIME < 1704067200: 
-        response = "系统时间记录异常，请尝试重启机器人。"
+        response = "运行时间计算异常，请尝试重启机器人"
     else:
         response = await handle_status_command(GLOBAL_START_TIME)
     await update.message.reply_text(response)
@@ -140,10 +140,10 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     
     if admin_ids and user_id not in admin_ids:
-        await update.message.reply_text("⛔ 权限不足：仅管理员可执行重启操作")
+        await update.message.reply_text("您的权限不足以执行此操作")
         return
         
-    await update.message.reply_text("🔄 正在执行优雅重启，服务将在数秒后恢复...")
+    await update.message.reply_text("重启中，可能需要 5-10 秒，请稍候")
     asyncio.create_task(graceful_restart('tg'))
 
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -167,7 +167,7 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     result = await db.verify_and_consume_code(verification_code)
     
     if not result['valid']:
-        await update.message.reply_text(f"❌ 绑定失败: {result['reason']}")
+        await update.message.reply_text(f"绑定失败: {result['reason']}")
         return
     
     qq_user_id = result['qq_user_id']
@@ -175,7 +175,7 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 检查是否已被其他 TG 用户绑定
     existing_binding = await db.get_binding_by_qq(qq_user_id)
     if existing_binding and existing_binding[0] != tg_user.id:
-        await update.message.reply_text("❌ 该 QQ 号已被其他 Telegram 用户绑定")
+        await update.message.reply_text("该 QQ 号已被其他用户绑定，请勿尝试重复绑定")
         return
     
     # 建立绑定关系
@@ -186,7 +186,7 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"✅ 绑定成功！\n"
         f"QQ: {qq_user_id}\n"
         f"Telegram: @{tg_user.username or tg_user.id}\n"
-        f"现在您的消息将双向同步。"
+        f"现在您的消息将更好地双向同步。"
     )
     
     # 通知 QQ 用户（通过私聊或群消息@）
@@ -214,14 +214,14 @@ async def handle_confirm_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TY
     
     status = await db.get_setting('ffmpeg_auto_download_confirmed')
     if status == 'confirmed':
-        await update.message.reply_text("⚠️ 您已经确认过自动下载，无需重复操作。")
+        await update.message.reply_text("您已经确认过自动下载，无需重复操作。")
         return
 
-    msg = await update.message.reply_text("📥 正在开始下载并安装 FFmpeg，请稍候...")
+    msg = await update.message.reply_text("正在开始下载并安装 FFmpeg")
     
     async def progress(percent):
         try:
-            await msg.edit_text(f"📥 正在下载 FFmpeg... {percent}%")
+            await msg.edit_text(f"正在下载 FFmpeg... {percent}%")
         except:
             pass
 
@@ -229,9 +229,9 @@ async def handle_confirm_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TY
     
     if success:
         await db.set_setting('ffmpeg_auto_download_confirmed', 'confirmed')
-        await msg.edit_text("✅ FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
+        await msg.edit_text("FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
     else:
-        await msg.edit_text("❌ FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
+        await msg.edit_text("FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
 
 async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /cancel 指令，取消 FFmpeg 自动下载提示"""

@@ -48,17 +48,18 @@ async def handle_bind_command(user_id: int, platform: str, args: list = None):
                 f"【TQSync 绑定验证码】\n"
                 f"您的验证码是: {code}\n"
                 f"有效期: 5分钟\n"
-                f"请在 Telegram 中使用 /bind {code} 完成绑定")
+                f"请在 Telegram 中使用 /bind {code} 完成绑定"
+                f"请勿将验证码传递给他人")
             
             if result.get('retcode') == 0:
-                return f"✅ 验证码已通过私聊发送给您，请查收。\n⚠️ 如果未收到，请检查是否开启了临时会话权限。"
+                return f"验证码已通过私聊发送给您，请查收。\n如果未收到，请检查是否开启了临时会话权限。"
             else:
                 raise Exception(f"OneBot API 错误: {result}")
         
         except Exception as e:
             logger.warning(f"发送私聊验证码失败 (QQ: {qq_user_id}): {e}")
             # 降级方案：在群内发送验证码
-            return f"⚠️ 私聊发送失败（可能未开启临时会话权限）\n您的验证码是: {code}\n请在 Telegram 中使用 /bind {code} 完成绑定\n⏰ 有效期: 5分钟"
+            return f"私聊发送失败（可能未开启临时会话权限）\n您的验证码是: {code}\n请在 Telegram 中使用 /bind {code} 完成绑定\n有效期: 5分钟"
     
     elif platform == 'tg':
         # TG 端不再直接绑定，提示使用验证码方式
@@ -83,7 +84,7 @@ async def handle_setprefix_command(user_id: int, platform: str, args: list):
         if binding: uid = binding[4]
         
     if not uid:
-        return "You are not bound yet. Please use /bind first."
+        return "您尚未完成绑定，请使用 /bind 获取验证码。"
     
     await db.update_custom_prefix(uid, new_prefix)
     return f"Your unified display name has been updated to: {new_prefix}"
