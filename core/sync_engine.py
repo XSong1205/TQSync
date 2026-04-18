@@ -673,7 +673,6 @@ class SyncEngine:
     async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
         """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
         display_name = await self.get_display_name(tg_user_id, tg_username)
-        onebot_client = OneBotClient(self.config['napcat']['host'], self.config['napcat']['port'])
 
         try:
             file_url = await self.bot.get_file(file_id)
