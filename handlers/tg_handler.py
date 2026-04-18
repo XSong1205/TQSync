@@ -99,11 +99,19 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated)
         return
 
-    # 处理语音消息 (Voice/Audio)
-    if msg.voice or msg.audio:
-        file_id = (msg.voice or msg.audio).file_id
+    # 处理语音消息 (Voice) - 仅限 Telegram 的语音消息
+    if msg.voice:
+        file_id = msg.voice.file_id
         logger.info(f"[TG] {user.username} 发送了一个语音消息")
         engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id)
+        return
+    
+    # 处理音频文件 (Audio) - 如 .flac, .mp3, .wav 等，作为通用文件发送
+    if msg.audio:
+        file_id = msg.audio.file_id
+        filename = msg.audio.file_name or f"audio_{msg.audio.file_unique_id}.mp3"
+        logger.info(f"[TG] {user.username} 发送了一个音频文件: {filename}")
+        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
         return
 
     # 处理文本消息
