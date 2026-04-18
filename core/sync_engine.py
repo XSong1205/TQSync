@@ -1,5 +1,6 @@
 from telegram import Bot
 import os
+import sys
 import uuid
 import json
 import base64
@@ -425,14 +426,49 @@ class SyncEngine:
                     raise Exception("未渲染出任何帧")
                     
             except ImportError as e:
-                logger.error(f"Lottie 渲染依赖缺失: {e}")
+                error_msg = str(e)
+                logger.error(f"Lottie 渲染依赖缺失: {error_msg}")
                 raise
             except Exception as e:
                 logger.error(f"Lottie 渲染失败: {e}", exc_info=True)
                 raise
 
-        await loop.run_in_executor(None, _render)
-        logger.info("Lottie 贴纸转换成功")
+        try:
+            await loop.run_in_executor(None, _render)
+            logger.info("Lottie 贴纸转换成功")
+        except ImportError as e:
+            error_msg = str(e)
+            
+            # 检测是否为 Windows 系统缺少 GTK+
+            if sys.platform == 'win32' and ('cairo' in error_msg.lower() or 'pycairo' in error_msg.lower()):
+                gtk_help_text = (
+                    "⚠️ TGS 贴纸转换失败：Windows 系统缺少 GTK+ 运行时\n\n"
+                    "请安装 GTK+ 以支持动态贴纸渲染：\n"
+                    "1. 下载 GTK+ 安装包:\n"
+                    "   https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases\n"
+                    "2. 运行安装程序并完成安装\n"
+                    "3. 重启 TQSync 机器人\n\n"
+                    "或者考虑使用 Linux/WSL 部署以获得更好的兼容性"
+                )
+                
+                # 发送到 Telegram
+                try:
+                    if hasattr(self, 'bot') and self.bot:
+                        await self.bot.send_message(
+                            chat_id=self.tg_group_id,
+                            text=gtk_help_text
+                        )
+                except Exception as send_err:
+                    logger.debug(f"发送 TG 提示失败: {send_err}")
+                
+                # 发送到 QQ
+                try:
+                    qq_gid = config_loader.get('qq.group_id')
+                    await onebot_client.send_group_msg(qq_gid, gtk_help_text)
+                except Exception as send_err:
+                    logger.debug(f"发送 QQ 提示失败: {send_err}")
+            
+            raise
 
     async def convert_webm_to_gif(self, input_path: str, output_path: str):
         """使用 FFmpeg 将 WebM 贴纸转换为 GIF"""
@@ -621,11 +657,13 @@ class SyncEngine:
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
                     
-                    # 判断是否为 FFmpeg 未安装
-                    is_ffmpeg_missing = "FFmpeg" in str(e) or isinstance(e, FileNotFoundError)
+                    error_str = str(e).lower()
                     
-                    if is_ffmpeg_missing:
+                    # 判断错误类型
+                    if "FFmpeg" in str(e) or isinstance(e, FileNotFoundError):
                         error_text = "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
+                    elif sys.platform == 'win32' and ('cairo' in error_str or 'gtk' in error_str or 'pycairo' in error_str):
+                        error_text = "⚠️ TGS 贴纸转换失败：缺少 GTK+ 运行时\n请查看日志获取安装指引"
                     else:
                         error_text = "贴纸转换失败，请查看日志"
                     
