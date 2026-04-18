@@ -2,17 +2,13 @@
 
 TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegram 群组与 QQ 群之间的双向消息同步。
 
-<img width="488" height="93" alt="PixPin_2026-04-11_10-05-02" src="https://github.com/user-attachments/assets/007c113b-13bb-4424-894a-77b0bcc64350" />
-这个不是我的TQSync😭撞名了，正在想新名字
-> [!TIP]
-> Next 分支功能已经足够强大，且兼容性、速度大幅提升，新用户建议使用 Next 版。目前重构版仍处于早期阶段，如有 Bug 敬请谅解！
 
 ## 重构版功能特性
 
 - **管理 API**：提供 FastAPI 接口，支持动态修改配置、管理绑定关系及服务重启。
-- **模块化设计**：代码结构清晰，易于后续扩展多媒体（图片、文件等）同步功能。
+- **模块化设计**：每个功能都是模块化设计，后续可在WebUI中自由开关。
 - **绑定同步**：支持用户信息绑定，双向同步，配合同步撤回、同步回复
-- **WebUI**(目前可用，待完善)：可便捷地通过网页实现信息统计查看、重启、配置文件、绑定用户、屏蔽词添加(Todo)等
+- **WebUI**：可便捷地通过网页实现信息统计查看、重启、配置文件、绑定用户、屏蔽词添加(Todo)等
 
 ## 技术栈
 
@@ -31,11 +27,12 @@ FFmpeg 用于以下功能：
 
 **自动下载（推荐）：**
 启动机器人时，如果检测到未安装 FFmpeg，机器人会在 QQ 和 Telegram 群内发送提示。您只需在任意一端回复 `/confirm`，机器人将自动下载并配置适合当前系统的 FFmpeg。
+如您不想安装且不想再被提示，请输入 `/cancel`，然后程序将记录此选择，下次不再提示，此后您可手动安装。
 
 **手动安装方法：**
 如果您希望手动安装或自动下载失败，请参考以下命令：
 - **Windows**: `winget install Gyan.FFmpeg`
-- **Linux**: `sudo apt install ffmpeg`
+- **Linux**(Debian系): `sudo apt install ffmpeg`
 - **macOS**: `brew install ffmpeg`
 
 安装完成后，请重启 TQSync 以生效。
@@ -72,7 +69,7 @@ python -c "import cairo; print('GTK+ 安装成功')"
 python install.py
 ```
 
-### 手动安装(Windows&Linux)
+### 手动安装(Windows/Linux/macOS)
 
 #### 1. 安装依赖
 

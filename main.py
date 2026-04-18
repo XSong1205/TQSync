@@ -104,13 +104,13 @@ async def handle_qq_webhook(request):
             
             # 优先处理合并转发消息
             if is_forward and forward_content:
-                logger.info(f"检测到来自 {nickname} 的合并转发消息，已加入异步同步队列")
+                logger.info(f"[QQ] {nickname} 发送了一条合并转发消息")
                 engine.enqueue_sync_task(engine.forward_merged_to_tg, qq_id, nickname, forward_content)
                 return web.json_response({})
             
             # 处理语音消息 (Record)
             if voice_url:
-                logger.info(f"检测到来自 {nickname} 的语音消息，已加入异步同步队列")
+                logger.info(f"[QQ] {nickname} 发送了一条语音消息")
                 engine.enqueue_sync_task(engine.forward_voice_to_tg, qq_id, nickname, voice_url, reply_to_message_id=reply_to_tg_id)
                 return web.json_response({})
             
@@ -205,16 +205,16 @@ async def handle_qq_webhook(request):
                                  {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
-                logger.info(f"检测到来自 {nickname} 的图片，已加入异步同步队列")
+                logger.info(f"[QQ] {nickname} 发送了一张图片")
                 engine.enqueue_sync_task(engine.forward_image_to_tg, qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id)
             elif video_url:
-                logger.info(f"检测到来自 {nickname} 的视频，已加入异步同步队列")
+                logger.info(f"[QQ] {nickname} 发送了一个视频")
                 engine.enqueue_sync_task(engine.forward_video_to_tg, qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id)
             elif file_url:
-                logger.info(f"检测到来自 {nickname} 的文件 ({file_name})，已加入异步同步队列")
+                logger.info(f"[QQ] {nickname} 发送了一个文件 ({file_name}) ")
                 engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
             elif combined_text:
-                logger.info(f"检测到来自 {nickname} 的文本消息，已加入异步同步队列")
+                logger.info(f"[QQ] {nickname} 发送了一条文本消息")
                 engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id)
         
         return web.Response(text="ok")

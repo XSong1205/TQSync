@@ -79,7 +79,7 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
-        logger.info(f"[TG] {user.username} 发送了一段视频")
+        logger.info(f"[TG] {user.username} 发送了一个视频")
         engine.enqueue_sync_task(engine.forward_video_to_qq, user.id, user.username or str(user.id), file_id)
         return
 
@@ -110,7 +110,7 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.audio:
         file_id = msg.audio.file_id
         filename = msg.audio.file_name or f"audio_{msg.audio.file_unique_id}.mp3"
-        logger.info(f"[TG] {user.username} 发送了一个音频文件: {filename}")
+        logger.info(f"[TG] {user.username} 发送了一个文件: {filename}")
         engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
         return
 
