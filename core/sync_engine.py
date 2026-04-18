@@ -252,10 +252,10 @@ class SyncEngine:
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            # 2. 下载到本地 temp
+            # 2. 下载到本地 temp（使用原始文件名）
             ext = os.path.splitext(file_url)[1] or '.jpg'
-            temp_filename = f"img_{uuid.uuid4().hex}{ext}"
-            temp_path = await self._download_to_temp(file_url, temp_filename)
+            original_filename = f"image_{uuid.uuid4().hex[:8]}{ext}"
+            temp_path = await self._download_to_temp(file_url, original_filename)
             
             # 3. 构造消息段 (实现图文混排：文字在上，图片在下)
             message_array = [
@@ -269,12 +269,28 @@ class SyncEngine:
             message_array.append({"type": "image", "data": {"file": temp_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"图片已成功发送至 QQ。结果: {result}")
+            logger.info(f"图片已成功发送至 QQ: {original_filename}")
             return result
 
+        except asyncio.TimeoutError:
+            error_msg = f"⚠️ 图片同步失败：下载超时\n建议：检查网络连接或稍后重试"
+            await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
+            return None
+            
         except Exception as e:
             logger.error(f"转发图片至 QQ 失败: {e}", exc_info=True)
+            
+            # 判断错误类型并发送友好提示
+            error_type = self._classify_error(e)
+            error_msg = self._get_friendly_error_message(error_type, original_filename if 'original_filename' in locals() else "")
+            
+            await self._send_error_notification(
+                tg_user_id=tg_user_id, 
+                qq_group_id=self.qq_group_id, 
+                error_msg=error_msg
+            )
             return None
+            
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
@@ -283,6 +299,7 @@ class SyncEngine:
         """将 Telegram 视频转发到 QQ"""
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
+        original_filename = None
         
         try:
             file = await self.bot.get_file(file_id)
@@ -291,8 +308,8 @@ class SyncEngine:
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
             ext = os.path.splitext(file_url)[1] or '.mp4'
-            temp_filename = f"vid_{uuid.uuid4().hex}{ext}"
-            temp_path = await self._download_to_temp(file_url, temp_filename)
+            original_filename = f"video_{uuid.uuid4().hex[:8]}{ext}"
+            temp_path = await self._download_to_temp(file_url, original_filename)
             
             message_array = [
                 {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}},
@@ -300,12 +317,28 @@ class SyncEngine:
             ]
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"视频已成功发送至 QQ。结果: {result}")
+            logger.info(f"视频已成功发送至 QQ: {original_filename}")
             return result
 
+        except asyncio.TimeoutError:
+            error_msg = f"⚠️ 视频同步失败：下载超时\n文件: {original_filename}\n可能原因：文件过大或网络不稳定"
+            await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
+            return None
+            
         except Exception as e:
             logger.error(f"转发视频至 QQ 失败: {e}", exc_info=True)
+            
+            # 判断错误类型并发送友好提示
+            error_type = self._classify_error(e)
+            error_msg = self._get_friendly_error_message(error_type, original_filename or "")
+            
+            await self._send_error_notification(
+                tg_user_id=tg_user_id, 
+                qq_group_id=self.qq_group_id, 
+                error_msg=error_msg
+            )
             return None
+            
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
@@ -321,9 +354,8 @@ class SyncEngine:
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            ext = os.path.splitext(filename)[1]
-            temp_filename = f"file_{uuid.uuid4().hex}{ext}"
-            temp_path = await self._download_to_temp(file_url, temp_filename)
+            # 直接使用原始文件名
+            temp_path = await self._download_to_temp(file_url, filename)
             
             message_array = [
                 {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}},
@@ -331,12 +363,28 @@ class SyncEngine:
             ]
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            logger.info(f"文件已成功发送至 QQ。结果: {result}")
+            logger.info(f"文件已成功发送至 QQ: {filename}")
             return result
 
+        except asyncio.TimeoutError:
+            error_msg = f"⚠️ 文件同步失败：下载超时\n文件名: {filename}\n可能原因：文件过大或网络不稳定"
+            await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
+            return None
+            
         except Exception as e:
             logger.error(f"转发文件至 QQ 失败: {e}", exc_info=True)
+            
+            # 判断错误类型并发送友好提示
+            error_type = self._classify_error(e)
+            error_msg = self._get_friendly_error_message(error_type, filename)
+            
+            await self._send_error_notification(
+                tg_user_id=tg_user_id, 
+                qq_group_id=self.qq_group_id, 
+                error_msg=error_msg
+            )
             return None
+            
         finally:
             if temp_path:
                 self._cleanup_temp(temp_path)
