@@ -400,43 +400,16 @@ class SyncEngine:
         loop = asyncio.get_event_loop()
         
         def _render():
-            import gzip
-            import json as json_module
-            from lottie.parsers.tgs import parse_tgs_json
-            from PIL import Image
+            from lottie.parsers.tgs import parse_tgs
+            from lottie.exporters.gif import export_animation
             
-            logger.debug("步骤 1/3: 解压 TGS 文件")
-            with open(tgs_path, "rb") as f:
-                tgs_data = f.read()
-            
-            json_str = gzip.decompress(tgs_data).decode("utf-8")
-            json_data = json_module.loads(json_str)
-            
-            logger.debug("步骤 2/3: 解析 Lottie JSON")
-            animation = parse_tgs_json(json_data)
+            logger.debug("步骤 1/2: 解析 TGS 文件")
+            animation = parse_tgs(tgs_path)
             logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
             
-            n_frames = max(1, int(animation.duration * fps))
-            logger.debug(f"步骤 3/3: 渲染 {n_frames} 帧 (fps={fps}, size={width}x{height})")
-            
-            frames = []
-            for i in range(n_frames):
-                time_sec = i / fps
-                frame = animation.frame_at(time_sec)
-                img = frame.to_image(width=width, height=height)
-                frames.append(img.convert('RGBA'))
-            
-            if frames:
-                frames[0].save(
-                    gif_path,
-                    save_all=True,
-                    append_images=frames[1:],
-                    duration=int(1000 / fps),
-                    loop=0
-                )
-                logger.info(f"Lottie 贴纸转换成功 ({len(frames)} 帧)")
-            else:
-                raise Exception("未渲染出任何帧")
+            logger.debug(f"步骤 2/2: 导出为 GIF (fps={fps}, size={width}x{height})")
+            export_animation(gif_path, animation, fps=fps, width=width, height=height)
+            logger.info(f"Lottie 贴纸转换成功")
         
         await loop.run_in_executor(None, _render)
 
@@ -503,51 +476,26 @@ class SyncEngine:
         loop = asyncio.get_event_loop()
         
         def _convert():
-            try:
-                from rlottie_python import LottieAnimation
-                from PIL import Image
-                
-                animation = LottieAnimation.from_file(tgs_path)
-                
-                total_frames = animation.get_total_frames()
-                duration = animation.get_duration()
-                
-                logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s")
-                
-                if total_frames <= 0:
-                    raise ValueError("TGS 动画没有帧")
-                
-                frame_duration_ms = int((duration / total_frames) * 1000)
-                
-                frames = []
-                for frame_num in range(total_frames):
-                    buffer = animation.render(frame_num, width, height)
-                    image = Image.frombytes('RGBA', (width, height), buffer)
-                    frames.append(image)
-                    
-                    if (frame_num + 1) % 10 == 0:
-                        logger.debug(f"已渲染 {frame_num + 1}/{total_frames} 帧")
-                
-                logger.debug(f"成功渲染 {len(frames)} 帧")
-                
-                if frames:
-                    frames[0].save(
-                        gif_path,
-                        save_all=True,
-                        append_images=frames[1:],
-                        duration=frame_duration_ms,
-                        loop=0
-                    )
-                    logger.info(f"TGS 转换成功: {gif_path} ({len(frames)} 帧)")
-                else:
-                    raise ValueError("未渲染出任何帧")
-                    
-            except ImportError as e:
-                logger.error(f"rlottie 库导入失败: {e}")
-                raise
-            except Exception as e:
-                logger.error(f"TGS 转换失败: {e}", exc_info=True)
-                raise
+            from rlottie_python import LottieAnimation
+            
+            animation = LottieAnimation.from_file(tgs_path)
+            
+            total_frames = animation.lottie_animation_get_totalframe()
+            duration = animation.lottie_animation_get_duration()
+            
+            logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s")
+            
+            if total_frames <= 0:
+                raise ValueError("TGS 动画没有帧")
+            
+            animation.save_animation(
+                gif_path,
+                fps=fps,
+                width=width,
+                height=height,
+                loop=0
+            )
+            logger.info(f"TGS 转换成功: {gif_path}")
         
         await loop.run_in_executor(None, _convert)
 
