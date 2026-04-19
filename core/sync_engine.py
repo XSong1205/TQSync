@@ -8,6 +8,7 @@ import re
 import io
 import gzip
 import time
+import shutil
 import aiofiles
 import ffmpeg
 from PIL import Image
@@ -81,43 +82,40 @@ class SyncEngine:
         
         流程：
         1. 使用 UUID 作为临时文件名下载
-        2. 下载完成后重命名为原始文件名
+        2. 下载完成后移动到最终文件名
         3. 返回最终文件路径
         """
         temp_dir = os.path.join(os.getcwd(), 'temp')
         os.makedirs(temp_dir, exist_ok=True)
         
-        # 生成纯 UUID 临时文件名（避免特殊字符和长度问题）
         temp_filename = f"{uuid.uuid4().hex}.tmp"
         temp_path = os.path.join(temp_dir, temp_filename)
         
         logger.info(f"开始下载文件: {original_filename} ({file_url[:60]}...)")
         
-        # 全局禁用 SSL 验证以适配国内代理环境
         connector = aiohttp.TCPConnector(ssl=False)
-        timeout = aiohttp.ClientTimeout(total=300, connect=30)  # 增加超时时间到大文件支持
+        timeout = aiohttp.ClientTimeout(total=300, connect=30)
         start_time = time.time()
+        download_success = False
         
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            try:
+        try:
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                 async with session.get(file_url) as resp:
                     if resp.status != 200:
                         raise Exception(f"Download failed with status {resp.status}")
                     
-                    # 获取文件大小
                     total_size = int(resp.headers.get('content-length', 0))
                     downloaded_size = 0
                     last_log_time = time.time()
                     
                     async with aiofiles.open(temp_path, 'wb') as f:
                         while True:
-                            chunk = await resp.content.read(65536)  # 增加块大小到 64KB 提升性能
+                            chunk = await resp.content.read(65536)
                             if not chunk:
                                 break
                             await f.write(chunk)
                             downloaded_size += len(chunk)
                             
-                            # 每秒输出一次进度（针对大文件）
                             current_time = time.time()
                             if total_size > 0 and (current_time - last_log_time >= 1.0):
                                 elapsed = current_time - start_time
@@ -125,33 +123,34 @@ class SyncEngine:
                                 speed = downloaded_size / elapsed if elapsed > 0 else 0
                                 logger.debug(f"下载进度: {progress:.1f}% ({self._format_size(downloaded_size)}/{self._format_size(total_size)}) | 速度: {self._format_size(speed)}/s")
                                 last_log_time = current_time
-                
-                # 下载完成，重命名为原始文件名
-                final_path = os.path.join(temp_dir, original_filename)
-                
-                # 如果目标文件已存在，添加序号避免冲突
-                if os.path.exists(final_path):
-                    name, ext = os.path.splitext(original_filename)
-                    counter = 1
-                    while os.path.exists(final_path):
-                        final_path = os.path.join(temp_dir, f"{name}_{counter}{ext}")
-                        counter += 1
-                
-                os.rename(temp_path, final_path)
-                file_size = os.path.getsize(final_path)
-                elapsed = time.time() - start_time
-                logger.info(f"文件下载完成: {os.path.basename(final_path)} ({self._format_size(file_size)}) | 耗时: {elapsed:.1f}s")
-                
-                return os.path.abspath(final_path)
-                
-            except asyncio.TimeoutError:
-                if os.path.exists(temp_path):
+            
+            download_success = True
+            
+            final_path = os.path.join(temp_dir, original_filename)
+            if os.path.exists(final_path):
+                name, ext = os.path.splitext(original_filename)
+                counter = 1
+                while os.path.exists(final_path):
+                    final_path = os.path.join(temp_dir, f"{name}_{counter}{ext}")
+                    counter += 1
+            
+            shutil.move(temp_path, final_path)
+            file_size = os.path.getsize(final_path)
+            elapsed = time.time() - start_time
+            logger.info(f"文件下载完成: {os.path.basename(final_path)} ({self._format_size(file_size)}) | 耗时: {elapsed:.1f}s")
+            
+            return os.path.abspath(final_path)
+            
+        except asyncio.TimeoutError:
+            raise Exception(f"下载超时: {original_filename}")
+        except Exception as e:
+            raise e
+        finally:
+            if not download_success and os.path.exists(temp_path):
+                try:
                     os.remove(temp_path)
-                raise Exception(f"下载超时: {original_filename}")
-            except Exception as e:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                raise e
+                except Exception:
+                    pass
 
     def _cleanup_temp(self, file_path: str):
         """清理临时文件"""
