@@ -387,7 +387,7 @@ class SyncEngine:
                 self._cleanup_temp(temp_path)
 
     async def _tgs_to_gif_lottie(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
-        """使用 lottie 库将 TGS 贴纸转换为 GIF
+        """使用 lottie 库将 TGS 贴纸转换为 GIF（备用方案）
         
         Args:
             tgs_path: TGS 文件路径
@@ -396,19 +396,23 @@ class SyncEngine:
             width: 宽度
             height: 高度
         """
-        logger.info(f"正在转换 Lottie 贴纸: {tgs_path} -> {gif_path}")
+        logger.info(f"正在转换 Lottie 贴纸 (备用): {tgs_path} -> {gif_path}")
         loop = asyncio.get_event_loop()
         
         def _render():
-            from lottie.parsers.tgs import parse_tgs
-            from lottie.exporters.gif import export_animation
+            from rlottie_python import LottieAnimation
             
-            logger.debug("步骤 1/2: 解析 TGS 文件")
-            animation = parse_tgs(tgs_path)
-            logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
+            animation = LottieAnimation.from_tgs(tgs_path)
             
-            logger.debug(f"步骤 2/2: 导出为 GIF (fps={fps}, size={width}x{height})")
-            export_animation(gif_path, animation, fps=fps, width=width, height=height)
+            total_frames = animation.lottie_animation_get_totalframe()
+            duration = animation.lottie_animation_get_duration()
+            
+            logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s")
+            
+            if total_frames <= 0 or duration <= 0:
+                raise ValueError(f"TGS 动画数据无效 (帧数={total_frames}, 时长={duration})")
+            
+            animation.save_animation(gif_path, fps=fps, width=width, height=height, loop=0)
             logger.info(f"Lottie 贴纸转换成功")
         
         await loop.run_in_executor(None, _render)
@@ -476,17 +480,43 @@ class SyncEngine:
         loop = asyncio.get_event_loop()
         
         def _convert():
+            import gzip
+            import json
             from rlottie_python import LottieAnimation
             
-            animation = LottieAnimation.from_file(tgs_path)
+            with open(tgs_path, 'rb') as f:
+                raw_data = f.read()
+            
+            logger.debug(f"TGS 文件原始大小: {len(raw_data)} bytes")
+            logger.debug(f"TGS 文件头: {raw_data[:4].hex()}")
+            
+            is_gzip = raw_data[:2] == b'\x1f\x8b'
+            logger.debug(f"是否为 gzip 压缩: {is_gzip}")
+            
+            if is_gzip:
+                tgs_data = gzip.decompress(raw_data)
+                json_str = tgs_data.decode('utf-8')
+                logger.debug(f"TGS 解压后大小: {len(json_str)} bytes")
+                
+                try:
+                    json.loads(json_str)
+                    logger.debug("JSON 格式验证: 有效")
+                except:
+                    logger.warning("JSON 格式验证: 无效")
+                
+                animation = LottieAnimation.from_data(json_str)
+            else:
+                json_str = raw_data.decode('utf-8')
+                animation = LottieAnimation.from_file(tgs_path)
             
             total_frames = animation.lottie_animation_get_totalframe()
             duration = animation.lottie_animation_get_duration()
+            framerate = animation.lottie_animation_get_framerate()
             
-            logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s")
+            logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s, 帧率={framerate}")
             
-            if total_frames <= 0:
-                raise ValueError("TGS 动画没有帧")
+            if total_frames <= 0 or duration <= 0:
+                raise ValueError(f"TGS 动画数据无效 (帧数={total_frames}, 时长={duration})")
             
             animation.save_animation(
                 gif_path,
