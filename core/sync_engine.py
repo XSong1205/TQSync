@@ -387,8 +387,8 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def tgs_to_gif(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512, debug_chat_id: int = None):
-        """使用 lottie 库将 TGS 贴纸转换为 GIF（修复版）
+    async def _tgs_to_gif_lottie(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512, debug_chat_id: int = None):
+        """使用 lottie 库将 TGS 贴纸转换为 GIF
         
         Args:
             tgs_path: TGS 文件路径
@@ -542,7 +542,7 @@ class SyncEngine:
             
             raise Exception(error_msg)
 
-    async def tgs_to_gif(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 30):
+    async def _tgs_to_gif_rlottie(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 30):
         """使用 rlottie 库将 TGS 贴纸转换为 GIF
         
         Args:
@@ -610,6 +610,36 @@ class SyncEngine:
         
         await loop.run_in_executor(None, _convert)
 
+    async def convert_tgs_to_gif(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 30):
+        """将 TGS 贴纸转换为 GIF（自动选择最佳渲染方案）
+        
+        依次尝试 rlottie -> lottie 库渲染
+        
+        Args:
+            tgs_path: TGS 文件路径
+            gif_path: 输出 GIF 路径
+            width: 宽度
+            height: 高度
+            fps: 帧率
+        """
+        errors = []
+        
+        try:
+            await self._tgs_to_gif_rlottie(tgs_path, gif_path, width, height, fps)
+            return
+        except Exception as e:
+            errors.append(f"rlottie: {e}")
+            logger.warning(f"rlottie 渲染失败，尝试备用方案 lottie: {e}")
+        
+        try:
+            await self._tgs_to_gif_lottie(tgs_path, gif_path, fps, width, height)
+            return
+        except Exception as e:
+            errors.append(f"lottie: {e}")
+            logger.warning(f"lottie 渲染也失败了: {e}")
+        
+        raise Exception(f"TGS 转换失败，已尝试: {', '.join(errors)}")
+
     async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
         """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
         display_name = await self.get_display_name(tg_user_id, tg_username)
@@ -676,8 +706,53 @@ class SyncEngine:
             if 'amr_path' in locals() and amr_path:
                 self._cleanup_temp(amr_path)
 
+    def _detect_sticker_format(self, file_path: str) -> str:
+        """通过文件头检测贴纸格式
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            'tgs', 'webm' 或 'unknown'
+        """
+        if not os.path.exists(file_path):
+            return 'unknown'
+        
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(4)
+                if header[:2] == b'\x1f\x8b':
+                    logger.info("检测到 TGS 格式（gzip 压缩的 Lottie JSON）")
+                    return 'tgs'
+                elif header == b'\x1a\x45\xdf\xa3':
+                    logger.info("检测到 WebM 格式")
+                    return 'webm'
+                else:
+                    logger.warning(f"未知文件格式 (header: {header.hex()})")
+                    return 'unknown'
+        except Exception as e:
+            logger.warning(f"文件头检查失败: {e}")
+            return 'unknown'
+
+    def _get_sticker_error_text(self, error: Exception) -> str:
+        """根据错误类型返回用户友好的错误消息"""
+        error_str = str(error).lower()
+        if "FFmpeg" in str(error) or isinstance(error, FileNotFoundError):
+            return "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
+        elif "rlottie" in error_str or "lottie" in error_str or "ImportError" in str(type(error).__name__):
+            return "⚠️ 贴纸转换失败：Lottie 库异常\n请检查相关依赖"
+        else:
+            return "贴纸转换失败，请查看日志"
+
     async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False):
-        """将 Telegram 贴纸转发到 QQ (支持静态和动态)"""
+        """将 Telegram 贴纸转发到 QQ (支持静态和动态)
+        
+        Args:
+            tg_user_id: Telegram 用户 ID
+            tg_username: Telegram 用户名
+            file_id: 贴纸文件 ID
+            is_animated: 是否为动态贴纸
+        """
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
         gif_path = None
@@ -688,26 +763,11 @@ class SyncEngine:
             if not file_url.startswith("http"):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            # 下载文件
+            ext = os.path.splitext(file_url)[1] if '.' in file_url else ''
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
             temp_path = await self._download_to_temp(file_url, temp_filename)
             
-            # 检测实际文件格式（通过文件头）
-            actual_format = 'unknown'
-            if os.path.exists(temp_path):
-                try:
-                    with open(temp_path, 'rb') as f:
-                        header = f.read(4)
-                        if header[:2] == b'\x1f\x8b':  # gzip 魔数
-                            actual_format = 'tgs'
-                            logger.info("检测到 TGS 格式（gzip 压缩的 Lottie JSON）")
-                        elif header == b'\x1a\x45\xdf\xa3':  # WebM 魔数
-                            actual_format = 'webm'
-                            logger.info("检测到 WebM 格式")
-                        else:
-                            logger.warning(f"未知文件格式 (header: {header.hex()})")
-                except Exception as e:
-                    logger.warning(f"文件头检查失败: {e}")
+            actual_format = self._detect_sticker_format(temp_path)
             
             message_array = [
                 {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
@@ -715,39 +775,25 @@ class SyncEngine:
             
             final_send_path = temp_path
             
-            # 动态贴纸转换为 GIF 后作为图片发送
             if is_animated or actual_format in ['tgs', 'webm']:
                 gif_filename = f"sticker_{uuid.uuid4().hex}.gif"
                 gif_path = os.path.join(os.getcwd(), 'temp', gif_filename)
                 
                 try:
-                    # 根据实际文件格式选择转换方法
                     if actual_format == 'tgs':
-                        # TGS 格式：使用 rlottie 库直接渲染
-                        logger.info("使用 rlottie 库渲染 TGS 贴纸")
-                        await self.tgs_to_gif(temp_path, gif_path, fps=30, width=512, height=512)
+                        logger.info("检测到 TGS 格式，使用 Lottie/rlottie 渲染")
+                        await self.convert_tgs_to_gif(temp_path, gif_path, fps=30, width=512, height=512)
                     elif actual_format == 'webm':
-                        # WebM 格式：使用 FFmpeg 转换
-                        logger.info("使用 FFmpeg 转换 WebM 贴纸")
+                        logger.info("检测到 WebM 格式，使用 FFmpeg 转换")
                         await self.convert_webm_to_gif(temp_path, gif_path)
                     else:
-                        # 未知格式，尝试使用 FFmpeg
                         logger.warning(f"未知格式 ({actual_format})，尝试使用 FFmpeg 转换")
                         await self.convert_webm_to_gif(temp_path, gif_path)
                     
                     final_send_path = gif_path
                 except Exception as e:
                     logger.error(f"贴纸转换失败: {e}")
-                    
-                    # 判断错误类型
-                    error_str = str(e).lower()
-                    if "FFmpeg" in str(e) or isinstance(e, FileNotFoundError):
-                        error_text = "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
-                    elif "rlottie" in error_str or "ImportError" in str(type(e).__name__):
-                        error_text = "⚠️ 贴纸转换失败：rlottie 库异常\n请执行: pip install rlottie-python"
-                    else:
-                        error_text = "贴纸转换失败，请查看日志"
-                    
+                    error_text = self._get_sticker_error_text(e)
                     message_array.append({"type": "text", "data": {"text": f"({error_text})"}})
                     result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
                     return result
@@ -956,7 +1002,7 @@ class SyncEngine:
         safe_display_name = escape_md_v2(display_name)
         # 移除加粗格式以避免 MarkdownV2 转义冲突（如 **{safe}** 中 safe 含 * 时会导致解析失败）
         # 确保括号被正确转义
-        markdown_parts = [f"📋 合并转发消息 \(来自 {safe_display_name}\):\n"]
+        markdown_parts = [f"📋 合并转发消息 \\(来自 {safe_display_name}\\):\n"]
         
         try:
             # 尝试解析 content，它可能是 JSON 字符串或 Base64 编码的 JSON
