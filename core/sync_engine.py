@@ -423,67 +423,58 @@ class SyncEngine:
         
         def _render():
             import gzip
-            from lottie.parsers.tgs import parse_tgs
-            from lottie.exporters import render_frames
+            import json as json_module
+            from lottie.parsers.tgs import parse_tgs, parse_tgs_json
             from PIL import Image
             
             try:
-                # 1. 解压 TGS 文件并加载 Lottie JSON
-                logger.debug("步骤 1/4: 解压 TGS 文件")
+                logger.debug("步骤 1/4: 解压并解析 TGS 文件")
                 with open(tgs_path, "rb") as f:
                     tgs_data = f.read()
                 logger.debug(f"TGS 文件大小: {len(tgs_data)} bytes")
                 
-                # 2. 从 TGS 文件加载动画
-                logger.debug("步骤 2/4: 解析 Lottie JSON")
+                logger.debug("步骤 2/4: 加载 Lottie 动画")
                 animation = parse_tgs(tgs_data)
                 logger.debug(f"动画信息: 时长={animation.duration}s, 帧率={animation.frame_rate}")
                 
-                # 3. 渲染帧
-                logger.debug(f"步骤 3/4: 渲染帧 (fps={fps}, size={width}x{height})")
-                frames = render_frames(animation, width=width, height=height, fps=fps)
-                logger.debug(f"成功渲染 {len(frames)} 帧")
-                
-                # 4. 转成 Pillow Image 并保存为 GIF
-                logger.debug("步骤 4/4: 保存为 GIF")
-                pil_frames = [Image.fromarray(frame) for frame in frames]
-                if pil_frames:
-                    pil_frames[0].save(
-                        gif_path,
-                        save_all=True,
-                        append_images=pil_frames[1:],
-                        duration=int(1000 / fps),
-                        loop=0,
-                        transparency=0,
-                        disposal=2
-                    )
-                    logger.info(f"成功渲染 {len(pil_frames)} 帧")
-                else:
-                    raise Exception("未渲染出任何帧")
-                    
-            except AttributeError as e:
-                logger.error(f"Lottie API 错误: {e}")
-                logger.warning("尝试使用备用方案：直接解压 JSON 并使用 parse_tgs_json")
-                
-                # 备用方案：使用 parse_tgs_json
-                import json as json_module
+            except Exception as e:
+                logger.warning(f"parse_tgs 失败，尝试直接解压 JSON: {e}")
                 with gzip.open(tgs_path, "rb") as f:
                     json_data = f.read().decode("utf-8")
                     data = json_module.loads(json_data)
-                
-                from lottie.parsers.tgs import parse_tgs_json
                 animation = parse_tgs_json(data)
+            
+            try:
+                from lottie.exporters.gif import export_animation
                 
-                frames = render_frames(animation, width=width, height=height, fps=fps)
-                pil_frames = [Image.fromarray(frame) for frame in frames]
-                if pil_frames:
-                    pil_frames[0].save(
+                logger.debug(f"步骤 3/4: 渲染帧 (fps={fps}, size={width}x{height})")
+                export_animation(gif_path, animation, fps=fps, width=width, height=height)
+                logger.info(f"Lottie 贴纸转换成功")
+                
+            except ImportError:
+                logger.warning("lottie.exporters.gif 不可用，尝试手动渲染")
+                
+                n_frames = int(animation.duration * fps)
+                if n_frames == 0:
+                    n_frames = 1
+                
+                logger.debug(f"步骤 3/4: 手动渲染 {n_frames} 帧")
+                frames = []
+                for i in range(n_frames):
+                    frame = animation.frame_at(i / fps)
+                    img = frame.to_image(width=width, height=height)
+                    frames.append(img)
+                
+                logger.debug("步骤 4/4: 保存为 GIF")
+                if frames:
+                    frames[0].save(
                         gif_path,
                         save_all=True,
-                        append_images=pil_frames[1:],
+                        append_images=frames[1:],
                         duration=int(1000 / fps),
                         loop=0
                     )
+                    logger.info(f"成功渲染 {len(frames)} 帧")
                     
             except Exception as e:
                 logger.error(f"Lottie 渲染失败: {e}", exc_info=True)
@@ -563,8 +554,8 @@ class SyncEngine:
                 animation = LottieAnimation.from_file(tgs_path)
                 
                 # 获取动画信息
-                total_frames = animation.total_frame
-                duration = animation.duration
+                total_frames = animation.total_frames()
+                duration = animation.duration()
                 
                 logger.debug(f"TGS 动画信息: 总帧数={total_frames}, 时长={duration}s")
                 

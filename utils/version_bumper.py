@@ -38,9 +38,9 @@ def bump_version(part='patch'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Bump project version')
-    parser.add_argument('--bump-major', action='store_true', help='Bump major version')
-    parser.add_argument('--bump-minor', action='store_true', help='Bump minor version')
-    parser.add_argument('--bump-patch', action='store_true', help='Bump patch version')
+    parser.add_argument('-a', action='store_true', dest='bump_major', help='Bump major version')
+    parser.add_argument('-b', action='store_true', dest='bump_minor', help='Bump minor version')
+    parser.add_argument('-c', action='store_true', dest='bump_patch', help='Bump patch version')
     
     args = parser.parse_args()
     
