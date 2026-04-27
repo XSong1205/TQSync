@@ -386,7 +386,7 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def _tgs_to_gif_lottie(self, tgs_path: str, gif_path: str, fps: int = 60, width: int = 512, height: int = 512):
+    async def _tgs_to_gif_lottie(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
         """使用 lottie 库将 TGS 贴纸转换为 GIF（备用方案）
         
         Args:
@@ -466,7 +466,7 @@ class SyncEngine:
             
             raise Exception(error_msg)
 
-    async def _tgs_to_gif_rlottie(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 60):
+    async def _tgs_to_gif_rlottie(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 30):
         """使用 rlottie 库将 TGS 贴纸转换为 GIF
         
         Args:
@@ -529,7 +529,7 @@ class SyncEngine:
         
         await loop.run_in_executor(None, _convert)
 
-    async def convert_tgs_to_gif(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 60):
+    async def convert_tgs_to_gif(self, tgs_path: str, gif_path: str, width: int = 512, height: int = 512, fps: int = 30):
         """将 TGS 贴纸转换为 GIF（自动选择最佳渲染方案）
         
         依次尝试 rlottie -> lottie 库渲染
@@ -701,7 +701,7 @@ class SyncEngine:
                 try:
                     if actual_format == 'tgs':
                         logger.info("检测到 TGS 格式，使用 Lottie/rlottie 渲染")
-                        await self.convert_tgs_to_gif(temp_path, gif_path, fps=60, width=512, height=512)
+                        await self.convert_tgs_to_gif(temp_path, gif_path, width=512, height=512)
                     elif actual_format == 'webm':
                         logger.info("检测到 WebM 格式，使用 FFmpeg 转换")
                         await self.convert_webm_to_gif(temp_path, gif_path)
