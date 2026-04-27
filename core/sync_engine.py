@@ -792,6 +792,42 @@ class SyncEngine:
         full_caption = f"{prefix}\n{caption}" if caption else prefix
         await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption, reply_to_message_id=reply_to_message_id)
 
+    async def forward_mface_to_tg(self, qq_user_id: int, qq_nickname: str, mface_url: str, reply_to_message_id: int = None):
+        """将 QQ 动画表情 (mface) 转发到 Telegram"""
+        binding = await db.get_binding_by_qq(qq_user_id)
+        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
+        temp_path = None
+        try:
+            download_name = f"mface_{uuid.uuid4().hex[:8]}"
+            temp_path = await self._download_to_temp(mface_url, download_name)
+            ext = self._detect_extension_from_content(temp_path) or '.gif'
+            async with aiofiles.open(temp_path, 'rb') as f:
+                file_content = await f.read()
+            display_name = f"{download_name}{ext}"
+            send_kwargs = dict(chat_id=self.tg_group_id, caption=prefix)
+            if reply_to_message_id:
+                send_kwargs['reply_to_message_id'] = reply_to_message_id
+            if ext in ('.gif',):
+                await self.bot.send_animation(**send_kwargs, animation=(display_name, io.BytesIO(file_content)))
+            elif ext in ('.webm', '.mp4'):
+                await self.bot.send_video(**send_kwargs, video=(display_name, io.BytesIO(file_content)))
+            else:
+                await self.bot.send_document(**send_kwargs, document=(display_name, io.BytesIO(file_content)))
+            logger.info(f"动画表情已转发至 Telegram: {display_name}")
+        except Exception as e:
+            logger.error(f"转发动画表情至 Telegram 失败: {e}", exc_info=True)
+            try:
+                qq_gid = config_loader.get('qq.group_id')
+                await onebot_client.send_group_msg(qq_gid, f"❌ 动画表情同步失败")
+            except Exception:
+                pass
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
+
     async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file", reply_to_message_id: int = None):
         """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
@@ -803,6 +839,32 @@ class SyncEngine:
             file_name += ext
 
         await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, caption=prefix, reply_to_message_id=reply_to_message_id)
+
+    @staticmethod
+    def _detect_extension_from_content(file_path: str) -> str | None:
+        MAGIC_MAP = [
+            (b'\x25\x50\x44\x46', '.pdf'),
+            (b'\xD0\xCF\x11\xE0', '.doc'),
+            (b'\x50\x4B\x03\x04', '.zip'),
+            (b'\x89\x50\x4E\x47', '.png'),
+            (b'\xFF\xD8\xFF', '.jpg'),
+            (b'\x47\x49\x46\x38', '.gif'),
+            (b'\x52\x61\x72\x21', '.rar'),
+            (b'\x1A\x45\xDF\xA3', '.webm'),
+            (b'\x00\x00\x00\x18\x66\x74\x79\x70', '.mp4'),
+            (b'\x66\x74\x79\x70\x69\x73\x6F\x6D', '.mp4'),
+            (b'\x49\x44\x33', '.mp3'),
+            (b'\x7B\x5C\x72\x74\x66', '.rtf'),
+        ]
+        try:
+            with open(file_path, 'rb') as f:
+                header = f.read(16)
+            for magic, ext in MAGIC_MAP:
+                if header.startswith(magic):
+                    return ext
+        except Exception:
+            pass
+        return None
 
     async def _send_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, send_func, file_key: str, **kwargs):
         """通用文件转发到 Telegram 方法，支持本地路径中转"""
@@ -852,6 +914,18 @@ class SyncEngine:
                     download_filename = original_filename if original_filename != 'unknown_file' else f"file_{uuid.uuid4().hex[:8]}{ext}"
                     downloaded_path = await self._download_to_temp(temp_path, download_filename)
                     temp_path = downloaded_path
+
+                    # 文件内容探针：当扩展名为通用占位符时，从文件头部魔数检测真实类型
+                    if ext in ('.dat', '.tmp', ''):
+                        detected_ext = self._detect_extension_from_content(temp_path)
+                        if detected_ext and detected_ext != ext:
+                            new_path = os.path.splitext(temp_path)[0] + detected_ext
+                            os.rename(temp_path, new_path)
+                            temp_path = new_path
+                            original_filename = os.path.splitext(original_filename)[0] + detected_ext
+                            ext = detected_ext
+                            kwargs['filename'] = original_filename
+                            logger.info(f"从文件内容检测到真实扩展名: {detected_ext}")
 
             # 以二进制流形式发送给 Telegram
             if os.path.exists(temp_path):

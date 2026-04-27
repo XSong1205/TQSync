@@ -71,6 +71,7 @@ async def handle_qq_webhook(request):
             video_url = None
             file_url = None
             voice_url = None
+            mface_url = None
             reply_to_tg_id = None
             file_name = "unknown_file"
             at_tg_ids = []
@@ -93,12 +94,21 @@ async def handle_qq_webhook(request):
                     video_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
-                    file_name = msg_part['data'].get('name', 'unknown_file')
+                    file_name = msg_part['data'].get('name', '')
+                    if not file_name:
+                        file_path = msg_part['data'].get('file', '')
+                        if file_path:
+                            file_path = file_path.replace('file:///', '').replace('file://', '')
+                            file_name = os.path.basename(file_path)
+                    if not file_name:
+                        file_name = 'unknown_file'
                 elif msg_type == 'record':
                     voice_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                 elif msg_type == 'forward':
                     is_forward = True
                     forward_content = msg_part.get('data', {})
+                elif msg_type == 'mface' and not mface_url:
+                    mface_url = msg_part['data'].get('url')
             
             combined_text = "".join(text_parts).strip()
             
@@ -210,6 +220,9 @@ async def handle_qq_webhook(request):
             elif video_url:
                 logger.info(f"[QQ] {nickname} 发送了一个视频")
                 engine.enqueue_sync_task(engine.forward_video_to_tg, qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id)
+            elif mface_url:
+                logger.info(f"[QQ] {nickname} 发送了一个动画表情")
+                engine.enqueue_sync_task(engine.forward_mface_to_tg, qq_id, nickname, mface_url, reply_to_message_id=reply_to_tg_id)
             elif file_url:
                 logger.info(f"[QQ] {nickname} 发送了一个文件 ({file_name}) ")
                 engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
