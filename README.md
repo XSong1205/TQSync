@@ -22,7 +22,7 @@ TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegra
 
 ### FFmpeg (推荐安装)
 FFmpeg 用于以下功能：
-- 动态贴纸转换 (WebM -> GIF)
+- WebM 格式动态贴纸转换 (WebM -> GIF)
 - 语音消息转码 (OGG -> AMR)
 
 **自动下载（推荐）：**
@@ -37,27 +37,16 @@ FFmpeg 用于以下功能：
 
 安装完成后，请重启 TQSync 以生效。
 
-### GTK+ (Windows 用户必需)
+### rlottie (推荐安装)
 
-如果您在 Windows 上使用 TGS 动态贴纸同步功能，需要安装 GTK+ 运行时环境以支持 `pycairo` 库。
-
-**安装方法:**
-1. 访问 [GTK+ for Windows](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases)
-2. 下载最新版本的 `.exe` 安装包
-3. 运行安装程序，保持默认选项即可
-4. 安装完成后重启 TQSync
+`rlottie-python` 用于将 TGS 格式动态贴纸渲染为 GIF。安装 `requirements.txt` 中的依赖后即可使用，无需额外配置。
 
 **验证安装:**
 ```bash
-python -c "import cairo; print('GTK+ 安装成功')"
+python -c "from rlottie_python import LottieAnimation; print('rlottie 安装成功')"
 ```
 
-**替代方案:**
-- 使用 WSL (Windows Subsystem for Linux) 部署
-- 使用 Linux 服务器部署（推荐，无需额外配置）
-- 仅使用 WebM 格式的动态贴纸（Telegram 部分新贴纸已是 WebM 格式）
-
-**注意:** Linux 和 macOS 用户无需单独安装 GTK+，通过 `pip install pycairo` 即可自动配置。
+**注意:** 如果未安装 `rlottie-python`，动态贴纸将无法转换为 GIF，但仍可正常同步静态贴纸。
 
 ## 安装
 
