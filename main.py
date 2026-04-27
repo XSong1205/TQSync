@@ -429,7 +429,7 @@ async def main():
     proxy_url = config_loader.get('telegram.proxy_url')
     
     # 配置请求超时时间，防止大文件获取时超时 (连接10s, 读取30s)
-    request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
+    request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0, verify=False)
     
     builder = Application.builder().token(token).request(request)
     if proxy_url:

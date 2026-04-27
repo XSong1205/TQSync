@@ -5,7 +5,7 @@ def bump_version(part='patch'):
     version_file = os.path.join(os.path.dirname(__file__), '..', 'VERSION')
     
     try:
-        with open(version_file, 'r', encoding='utf-8') as f:
+        with open(version_file, 'r', encoding='utf-8-sig') as f:
             version_str = f.read().strip()
         
         parts = list(map(int, version_str.split('.')))
@@ -26,7 +26,7 @@ def bump_version(part='patch'):
             
         new_version = f"{major}.{minor}.{patch}"
         
-        with open(version_file, 'w', encoding='utf-8') as f:
+        with open(version_file, 'w', encoding='utf-8-sig') as f:
             f.write(new_version + '\n')
             
         print(f"Version bumped to {new_version}")
@@ -38,9 +38,9 @@ def bump_version(part='patch'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Bump project version')
-    parser.add_argument('-a', action='store_true', dest='bump_major', help='Bump major version')
-    parser.add_argument('-b', action='store_true', dest='bump_minor', help='Bump minor version')
-    parser.add_argument('-c', action='store_true', dest='bump_patch', help='Bump patch version')
+    parser.add_argument('-major', action='store_true', dest='bump_major', help='Bump major version')
+    parser.add_argument('-minor', action='store_true', dest='bump_minor', help='Bump minor version')
+    parser.add_argument('-patch', action='store_true', dest='bump_patch', help='Bump patch version')
     
     args = parser.parse_args()
     
