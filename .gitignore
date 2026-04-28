@@ -43,3 +43,7 @@ config.yaml
 *.log
 temp/
 .db
+
+#autopusher 相关
+push.py
+utils/version_bumper.py
