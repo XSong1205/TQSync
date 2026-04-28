@@ -30,7 +30,7 @@ elif bump_type == "minor":
 elif bump_type == "patch":
     run("python ./utils/version_bumper.py -patch")
 else:
-    print("未知输入内容，未做版本号更改")
+    print("输入为空，未做版本号更改")
 
 print("2.Git Commit")
 ret = run("git add .")
@@ -44,7 +44,7 @@ if ret != 0:
     sys.exit(1)
 
 print("3.Git Push")
-ret = run("git push", capture=True)
+ret = run("git push")
 if ret != 0:
-    print("git push failed — see error above")
+    print("git push failed")
     sys.exit(1)

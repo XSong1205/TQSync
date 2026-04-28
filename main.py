@@ -430,21 +430,18 @@ async def main():
     if proxy_url and not proxy_url.startswith(('http://', 'https://', 'socks5://')):
         proxy_url = f"http://{proxy_url}"
     
-    # 配置请求超时时间和 SSL 上下文
-    import httpx, ssl
+    # 禁用 SSL 证书验证（系统代理/VPN 环境必需）
+    import ssl
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
-    client_kwargs = {
-        "verify": ssl_context,
-        "http2": False,
-        "timeout": httpx.Timeout(30.0, connect=10.0),
-    }
-    if proxy_url:
-        client_kwargs["proxy"] = proxy_url
     
     request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
-    request._client = httpx.AsyncClient(**client_kwargs)
+    request._client_kwargs["verify"] = ssl_context
+    request._client_kwargs["http2"] = False
+    if proxy_url:
+        request._client_kwargs["proxy"] = proxy_url
+    # 不手动替换 _client，让 PTB 自己懒加载创建
     
     builder = Application.builder().token(token).request(request)
     if proxy_url:
