@@ -427,19 +427,28 @@ async def main():
     # 初始化 Telegram Bot
     token = config_loader.get('telegram.bot_token')
     proxy_url = config_loader.get('telegram.proxy_url')
+    if proxy_url and not proxy_url.startswith(('http://', 'https://', 'socks5://')):
+        proxy_url = f"http://{proxy_url}"
     
-    # 配置请求超时时间，防止大文件获取时超时 (连接10s, 读取30s)
+    # 配置请求超时时间和 SSL 上下文
+    import httpx, ssl
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    client_kwargs = {
+        "verify": ssl_context,
+        "http2": False,
+        "timeout": httpx.Timeout(30.0, connect=10.0),
+    }
+    if proxy_url:
+        client_kwargs["proxy"] = proxy_url
+    
     request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
-    import httpx
-    request._client_kwargs["verify"] = False
-    request._client = httpx.AsyncClient(**request._client_kwargs)
+    request._client = httpx.AsyncClient(**client_kwargs)
     
     builder = Application.builder().token(token).request(request)
     if proxy_url:
         logger.info(f"Using Telegram proxy: {proxy_url}")
-        # 确保代理地址包含协议头，否则 PTB 可能会报错
-        if not proxy_url.startswith(('http://', 'https://', 'socks5://')):
-            proxy_url = f"http://{proxy_url}"
         builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
     else:
         logger.warning("未配置 Telegram 代理，国内服务器可能无法连接！")
