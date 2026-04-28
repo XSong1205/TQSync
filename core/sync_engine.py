@@ -237,7 +237,7 @@ class SyncEngine:
         
         return f"{fallback_name} [未绑定]"
 
-    async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = ""):
+    async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = "", reply_segment: list = None, tg_message_id: int = None):
         """将 Telegram 图片转发到 QQ (本地文件中转方案，支持 Caption 图文混排)"""
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
@@ -255,9 +255,13 @@ class SyncEngine:
             temp_path = await self._download_to_temp(file_url, original_filename)
             
             # 3. 构造消息段 (实现图文混排：文字在上，图片在下)
-            message_array = [
-                {"type": "text", "data": {"text": f"[TG] {display_name}\n"}},
-            ]
+            if reply_segment:
+                message_array = list(reply_segment)
+                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name}\n"}})
+            else:
+                message_array = [
+                    {"type": "text", "data": {"text": f"[TG] {display_name}\n"}},
+                ]
             
             # 如果有 Caption，则添加在图片上方
             if caption:
@@ -266,6 +270,14 @@ class SyncEngine:
             message_array.append({"type": "image", "data": {"file": temp_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if result and tg_message_id:
+                qq_msg_id = self._extract_qq_message_id(result)
+                if qq_msg_id:
+                    await db.save_message_mapping(
+                        tg_message_id=tg_message_id,
+                        qq_message_id=qq_msg_id,
+                        sender_tg_id=tg_user_id
+                    )
             logger.info(f"图片已成功发送至 QQ: {original_filename}")
             return result
 
@@ -292,7 +304,7 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def forward_video_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+    async def forward_video_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, reply_segment: list = None, tg_message_id: int = None):
         """将 Telegram 视频转发到 QQ"""
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
@@ -308,12 +320,24 @@ class SyncEngine:
             original_filename = f"video_{uuid.uuid4().hex[:8]}{ext}"
             temp_path = await self._download_to_temp(file_url, original_filename)
             
-            message_array = [
-                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}},
-                {"type": "video", "data": {"file": temp_path}}
-            ]
+            if reply_segment:
+                message_array = list(reply_segment)
+                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}})
+            else:
+                message_array = [
+                    {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}},
+                ]
+            message_array.append({"type": "video", "data": {"file": temp_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if result and tg_message_id:
+                qq_msg_id = self._extract_qq_message_id(result)
+                if qq_msg_id:
+                    await db.save_message_mapping(
+                        tg_message_id=tg_message_id,
+                        qq_message_id=qq_msg_id,
+                        sender_tg_id=tg_user_id
+                    )
             logger.info(f"视频已成功发送至 QQ: {original_filename}")
             return result
 
@@ -340,7 +364,7 @@ class SyncEngine:
             if temp_path:
                 self._cleanup_temp(temp_path)
 
-    async def forward_file_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, filename: str):
+    async def forward_file_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, filename: str, reply_segment: list = None, tg_message_id: int = None):
         """将 Telegram 通用文件转发到 QQ (卡片形式)"""
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
         temp_path = None
@@ -354,12 +378,24 @@ class SyncEngine:
             # 直接使用原始文件名
             temp_path = await self._download_to_temp(file_url, filename)
             
-            message_array = [
-                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}},
-                {"type": "file", "data": {"file": temp_path}}
-            ]
+            if reply_segment:
+                message_array = list(reply_segment)
+                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}})
+            else:
+                message_array = [
+                    {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}},
+                ]
+            message_array.append({"type": "file", "data": {"file": temp_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if result and tg_message_id:
+                qq_msg_id = self._extract_qq_message_id(result)
+                if qq_msg_id:
+                    await db.save_message_mapping(
+                        tg_message_id=tg_message_id,
+                        qq_message_id=qq_msg_id,
+                        sender_tg_id=tg_user_id
+                    )
             logger.info(f"文件已成功发送至 QQ: {filename}")
             return result
 
@@ -559,7 +595,7 @@ class SyncEngine:
         
         raise Exception(f"TGS 转换失败，已尝试: {', '.join(errors)}")
 
-    async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str):
+    async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, reply_segment: list = None, tg_message_id: int = None):
         """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
         display_name = await self.get_display_name(tg_user_id, tg_username)
 
@@ -589,12 +625,24 @@ class SyncEngine:
                 .run(cmd=ffmpeg_path, quiet=True)
             ))
             
-            message_array = [
-                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一条语音\n"}},
-                {"type": "record", "data": {"file": amr_path}}
-            ]
+            if reply_segment:
+                message_array = list(reply_segment)
+                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name} 发送了一条语音\n"}})
+            else:
+                message_array = [
+                    {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一条语音\n"}},
+                ]
+            message_array.append({"type": "record", "data": {"file": amr_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if result and tg_message_id:
+                qq_msg_id = self._extract_qq_message_id(result)
+                if qq_msg_id:
+                    await db.save_message_mapping(
+                        tg_message_id=tg_message_id,
+                        qq_message_id=qq_msg_id,
+                        sender_tg_id=tg_user_id
+                    )
             logger.info(f"语音已转发至 QQ 群 {self.qq_group_id}")
             return result
         except FileNotFoundError:
@@ -663,7 +711,7 @@ class SyncEngine:
         else:
             return "贴纸转换失败，请查看日志"
 
-    async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False):
+    async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False, reply_segment: list = None, tg_message_id: int = None):
         """将 Telegram 贴纸转发到 QQ (支持静态和动态)
         
         Args:
@@ -688,9 +736,13 @@ class SyncEngine:
             
             actual_format = self._detect_sticker_format(temp_path)
             
-            message_array = [
-                {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
-            ]
+            if reply_segment:
+                message_array = list(reply_segment)
+                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}})
+            else:
+                message_array = [
+                    {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个贴纸\n"}},
+                ]
             
             final_send_path = temp_path
             
@@ -722,6 +774,14 @@ class SyncEngine:
                 message_array.append({"type": "image", "data": {"file": final_send_path}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if result and tg_message_id:
+                qq_msg_id = self._extract_qq_message_id(result)
+                if qq_msg_id:
+                    await db.save_message_mapping(
+                        tg_message_id=tg_message_id,
+                        qq_message_id=qq_msg_id,
+                        sender_tg_id=tg_user_id
+                    )
             logger.info(f"贴纸已成功发送至 QQ。结果: {result}")
             return result
 
@@ -734,7 +794,7 @@ class SyncEngine:
             if gif_path:
                 self._cleanup_temp(gif_path)
 
-    async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, reply_to_message_id: int = None):
+    async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, reply_to_message_id: int = None, qq_message_id: int = None):
         """转发 QQ 语音消息到 Telegram (带 FFmpeg 转码)"""
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
         
@@ -767,6 +827,13 @@ class SyncEngine:
                     reply_to_message_id=reply_to_message_id
                 )
             
+            if result and qq_message_id:
+                await db.save_message_mapping(
+                    tg_message_id=result.message_id,
+                    qq_message_id=qq_message_id,
+                    sender_qq_id=qq_user_id
+                )
+            
             logger.info(f"语音已转发至 TG 群 {self.tg_group_id}")
             return result
         except Exception as e:
@@ -778,21 +845,21 @@ class SyncEngine:
             if 'ogg_path' in locals() and ogg_path:
                 self._cleanup_temp(ogg_path)
 
-    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None):
+    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None, qq_message_id: int = None):
         """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
         full_caption = f"{prefix}\n{caption}" if caption else prefix
-        await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, "photo", caption=full_caption, reply_to_message_id=reply_to_message_id)
+        await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, "photo", caption=full_caption, reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
 
-    async def forward_video_to_tg(self, qq_user_id: int, qq_nickname: str, video_url: str, caption: str = "", reply_to_message_id: int = None):
+    async def forward_video_to_tg(self, qq_user_id: int, qq_nickname: str, video_url: str, caption: str = "", reply_to_message_id: int = None, qq_message_id: int = None):
         """将 QQ 视频转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
         full_caption = f"{prefix}\n{caption}" if caption else prefix
-        await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption, reply_to_message_id=reply_to_message_id)
+        await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption, reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
 
-    async def forward_mface_to_tg(self, qq_user_id: int, qq_nickname: str, mface_url: str, reply_to_message_id: int = None):
+    async def forward_mface_to_tg(self, qq_user_id: int, qq_nickname: str, mface_url: str, reply_to_message_id: int = None, qq_message_id: int = None):
         """将 QQ 动画表情 (mface) 转发到 Telegram"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
@@ -808,12 +875,18 @@ class SyncEngine:
             if reply_to_message_id:
                 send_kwargs['reply_to_message_id'] = reply_to_message_id
             if ext in ('.gif',):
-                await self.bot.send_animation(**send_kwargs, animation=(display_name, io.BytesIO(file_content)))
+                result = await self.bot.send_animation(**send_kwargs, animation=(display_name, io.BytesIO(file_content)))
             elif ext in ('.webm', '.mp4'):
-                await self.bot.send_video(**send_kwargs, video=(display_name, io.BytesIO(file_content)))
+                result = await self.bot.send_video(**send_kwargs, video=(display_name, io.BytesIO(file_content)))
             else:
-                await self.bot.send_document(**send_kwargs, document=(display_name, io.BytesIO(file_content)))
+                result = await self.bot.send_document(**send_kwargs, document=(display_name, io.BytesIO(file_content)))
             logger.info(f"动画表情已转发至 Telegram: {display_name}")
+            if result and qq_message_id:
+                await db.save_message_mapping(
+                    tg_message_id=result.message_id,
+                    qq_message_id=qq_message_id,
+                    sender_qq_id=qq_user_id
+                )
         except Exception as e:
             logger.error(f"转发动画表情至 Telegram 失败: {e}", exc_info=True)
             try:
@@ -828,7 +901,7 @@ class SyncEngine:
                 except Exception:
                     pass
 
-    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file", reply_to_message_id: int = None):
+    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file", reply_to_message_id: int = None, qq_message_id: int = None):
         """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
         binding = await db.get_binding_by_qq(qq_user_id)
         prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
@@ -838,7 +911,7 @@ class SyncEngine:
             ext = os.path.splitext(file_url.split('?')[0])[1] or '.dat'
             file_name += ext
 
-        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, caption=prefix, reply_to_message_id=reply_to_message_id)
+        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, caption=prefix, reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
 
     @staticmethod
     def _detect_extension_from_content(file_path: str) -> str | None:
@@ -866,6 +939,16 @@ class SyncEngine:
             pass
         return None
 
+    @staticmethod
+    def _extract_qq_message_id(result) -> int:
+        """Extract QQ message_id from OneBot send_group_msg response"""
+        if result and isinstance(result, dict):
+            data = result.get('data', {})
+            if isinstance(data, dict):
+                return data.get('message_id')
+            return result.get('message_id')
+        return None
+
     async def _send_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, send_func, file_key: str, **kwargs):
         """通用文件转发到 Telegram 方法，支持本地路径中转"""
         binding = await db.get_binding_by_qq(qq_user_id)
@@ -891,6 +974,8 @@ class SyncEngine:
             # 处理回复 ID
             if "reply_to_message_id" in kwargs:
                 send_kwargs["reply_to_message_id"] = kwargs.pop("reply_to_message_id")
+            
+            qq_message_id = kwargs.pop("qq_message_id", None)
             
             # 处理 Caption
             if "caption" in kwargs:
@@ -936,8 +1021,14 @@ class SyncEngine:
                         send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), io.BytesIO(file_content))
                     else:
                         send_kwargs[file_key] = io.BytesIO(file_content)
-                    await send_func(**send_kwargs)
+                    result = await send_func(**send_kwargs)
                     logger.info(f"文件已成功发送至 Telegram: {os.path.basename(temp_path)}")
+                    if result and qq_message_id:
+                        await db.save_message_mapping(
+                            tg_message_id=result.message_id,
+                            qq_message_id=qq_message_id,
+                            sender_qq_id=qq_user_id
+                        )
             else:
                 raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
                 
@@ -966,13 +1057,24 @@ class SyncEngine:
                 logger.debug(f"发送 QQ 错误通知失败: {send_err}")
             return None
 
-    async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str):
+    async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str, reply_segment: list = None, tg_message_id: int = None):
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
-        message = f"[TG] {display_name}: {text}"
+        if reply_segment:
+            message = reply_segment + [{"type": "text", "data": {"text": f"[TG] {display_name}: {text}"}}]
+        else:
+            message = f"[TG] {display_name}: {text}"
         result = await onebot_client.send_group_msg(self.qq_group_id, message)
+        if result and tg_message_id:
+            qq_msg_id = self._extract_qq_message_id(result)
+            if qq_msg_id:
+                await db.save_message_mapping(
+                    tg_message_id=tg_message_id,
+                    qq_message_id=qq_msg_id,
+                    sender_tg_id=tg_user_id
+                )
         return result
 
-    async def forward_merged_to_tg(self, qq_user_id: int, qq_nickname: str, content_data):
+    async def forward_merged_to_tg(self, qq_user_id: int, qq_nickname: str, content_data, qq_message_id: int = None):
         """
         解析并转发 QQ 合并转发消息到 Telegram (单层支持)
         :param content_data: OneBot forward 消息段中的 data 内容
@@ -1045,6 +1147,12 @@ class SyncEngine:
                 text=final_md, 
                 parse_mode='MarkdownV2'
             )
+            if result and qq_message_id:
+                await db.save_message_mapping(
+                    tg_message_id=result.message_id,
+                    qq_message_id=qq_message_id,
+                    sender_qq_id=qq_user_id
+                )
             logger.info(f"已同步合并转发消息至 TG，共 {len(msg_list)} 条子消息")
             return result
 
@@ -1052,11 +1160,17 @@ class SyncEngine:
             logger.error(f"解析或发送合并转发消息失败: {e}")
             return None
 
-    async def forward_to_tg(self, qq_user_id: int, qq_nickname: str, text: str, reply_to_message_id: int = None):
+    async def forward_to_tg(self, qq_user_id: int, qq_nickname: str, text: str, reply_to_message_id: int = None, qq_message_id: int = None):
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
         message = f"[QQ] {display_name}: {text}"
         try:
             result = await self.bot.send_message(chat_id=self.tg_group_id, text=message, reply_to_message_id=reply_to_message_id)
+            if result and qq_message_id:
+                await db.save_message_mapping(
+                    tg_message_id=result.message_id,
+                    qq_message_id=qq_message_id,
+                    sender_qq_id=qq_user_id
+                )
             return result
         except Exception as e:
             print(f"Error sending to TG: {e}")

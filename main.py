@@ -115,13 +115,13 @@ async def handle_qq_webhook(request):
             # 优先处理合并转发消息
             if is_forward and forward_content:
                 logger.info(f"[QQ] {nickname} 发送了一条合并转发消息")
-                engine.enqueue_sync_task(engine.forward_merged_to_tg, qq_id, nickname, forward_content)
+                engine.enqueue_sync_task(engine.forward_merged_to_tg, qq_id, nickname, forward_content, data.get('message_id'))
                 return web.json_response({})
             
             # 处理语音消息 (Record)
             if voice_url:
                 logger.info(f"[QQ] {nickname} 发送了一条语音消息")
-                engine.enqueue_sync_task(engine.forward_voice_to_tg, qq_id, nickname, voice_url, reply_to_message_id=reply_to_tg_id)
+                engine.enqueue_sync_task(engine.forward_voice_to_tg, qq_id, nickname, voice_url, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
                 return web.json_response({})
             
             # 指令识别与路由
@@ -216,19 +216,19 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
                 logger.info(f"[QQ] {nickname} 发送了一张图片")
-                engine.enqueue_sync_task(engine.forward_image_to_tg, qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id)
+                engine.enqueue_sync_task(engine.forward_image_to_tg, qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif video_url:
                 logger.info(f"[QQ] {nickname} 发送了一个视频")
-                engine.enqueue_sync_task(engine.forward_video_to_tg, qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id)
+                engine.enqueue_sync_task(engine.forward_video_to_tg, qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif mface_url:
                 logger.info(f"[QQ] {nickname} 发送了一个动画表情")
-                engine.enqueue_sync_task(engine.forward_mface_to_tg, qq_id, nickname, mface_url, reply_to_message_id=reply_to_tg_id)
+                engine.enqueue_sync_task(engine.forward_mface_to_tg, qq_id, nickname, mface_url, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif file_url:
                 logger.info(f"[QQ] {nickname} 发送了一个文件 ({file_name}) ")
-                engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id)
+                engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif combined_text:
                 logger.info(f"[QQ] {nickname} 发送了一条文本消息")
-                engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id)
+                engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
         
         return web.Response(text="ok")
     except Exception as e:

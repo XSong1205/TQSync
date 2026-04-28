@@ -73,14 +73,14 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.photo[-1].file_id
         caption = msg.caption or ""
         logger.info(f"[TG] {user.username} 发送了一张图片")
-        engine.enqueue_sync_task(engine.forward_image_to_qq, user.id, user.username or str(user.id), file_id, caption)
+        engine.enqueue_sync_task(engine.forward_image_to_qq, user.id, user.username or str(user.id), file_id, caption, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
         logger.info(f"[TG] {user.username} 发送了一个视频")
-        engine.enqueue_sync_task(engine.forward_video_to_qq, user.id, user.username or str(user.id), file_id)
+        engine.enqueue_sync_task(engine.forward_video_to_qq, user.id, user.username or str(user.id), file_id, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理通用文件 (包括 GIF/Animation)
@@ -88,7 +88,7 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.document.file_id
         filename = msg.document.file_name or f"file_{uuid.uuid4().hex[:8]}.dat"
         logger.info(f"[TG] {user.username} 发送了一个文件 ({filename})")
-        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
+        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理贴纸消息 (Sticker)
@@ -96,14 +96,14 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.sticker.file_id
         is_animated = msg.sticker.is_animated or msg.sticker.is_video
         logger.info(f"[TG] {user.username} 发送了一个贴纸 (动态: {is_animated})")
-        engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated)
+        engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理语音消息 (Voice) - 仅限 Telegram 的语音消息
     if msg.voice:
         file_id = msg.voice.file_id
         logger.info(f"[TG] {user.username} 发送了一个语音消息")
-        engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id)
+        engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
     
     # 处理音频文件 (Audio) - 如 .flac, .mp3, .wav 等，作为通用文件发送
@@ -111,14 +111,14 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.audio.file_id
         filename = msg.audio.file_name or f"audio_{msg.audio.file_unique_id}.mp3"
         logger.info(f"[TG] {user.username} 发送了一个文件: {filename}")
-        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename)
+        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理文本消息
     text = update.message.text
     if text:
         logger.info(f"[TG] {user.username} 发送了一条文本消息")
-        engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text)
+        engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
 async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
