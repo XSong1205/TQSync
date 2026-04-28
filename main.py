@@ -20,6 +20,8 @@ from handlers.tg_handler import get_tg_handlers
 from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command
 from handlers.qq_handler import onebot_client
 from api.admin_api import app as admin_app
+from core.plugin_manager import PluginManager
+from core.plugin_base import PluginContext
 from utils.logger import logger
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
@@ -168,11 +170,21 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。")
                     return web.json_response({})
                 else:
+                    # 尝试插件路由（未知命令）
+                    if combined_text.strip():
+                        if await plugin_mgr.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
+                            return web.json_response({})
                     response = "未知命令。使用 /help 获取更多帮助。"
                 
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
                 return web.json_response({})
+
+            # 插件消息路由 (仅纯文本，无媒体附件)
+            combined_text_early = "".join(text_parts).strip()
+            if combined_text_early and not image_url and not video_url and not mface_url and not file_url:
+                if await plugin_mgr.route_message('qq', qq_id, engine.qq_group_id, combined_text_early):
+                    return web.json_response({})
 
             # 解析回复逻辑 (QQ -> TG)
             for msg_part in message_array:
@@ -455,6 +467,25 @@ async def main():
     # 初始化同步引擎 (单例模式)
     global_sync_engine = SyncEngine(application.bot)
     
+    # 初始化插件管理器
+    plugin_mgr = PluginManager.get_instance()
+    plugin_mgr.set_context(PluginContext(
+        tg_bot=application.bot,
+        qq_client=onebot_client,
+        config=config_loader,
+        db=db,
+        tg_group_id=config_loader.get('telegram.group_id'),
+        qq_group_id=config_loader.get('qq.group_id')
+    ))
+    await plugin_mgr.load_all()
+
+    # 发送插件加载状态通知
+    for name, info in plugin_mgr.plugins.items():
+        if info.error:
+            await plugin_mgr.broadcast_plugin_status(name, False, 0, info.error)
+        else:
+            await plugin_mgr.broadcast_plugin_status(name, True, info.load_time_ms)
+
     # FFmpeg 自动下载检测与交互
     from utils.ffmpeg_manager import ffmpeg_manager
     ffmpeg_local_path = ffmpeg_manager.get_executable_path()

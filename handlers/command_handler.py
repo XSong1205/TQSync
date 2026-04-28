@@ -127,6 +127,27 @@ async def handle_status_command():
     qq_gid = config_loader.get('qq.group_id')
     tg_gid = config_loader.get('telegram.group_id')
 
+    # 6. 获取插件状态
+    plugin_info_lines = ""
+    try:
+        from core.plugin_manager import PluginManager
+        pm = PluginManager.get_instance()
+        plugins = pm.get_plugins_status()
+        if plugins:
+            plugin_info_lines = "\n🔌 已加载插件:\n"
+            for p in plugins:
+                status_icon = "✅" if (p['loaded'] and p['enabled'] and not p['error']) else ("⏸" if not p['enabled'] else "❌")
+                plugin_info_lines += f"   {status_icon} {p['file']} v{p['version']}"
+                if p['load_time_ms'] > 0:
+                    plugin_info_lines += f" ({p['load_time_ms']}ms)"
+                if p['error']:
+                    plugin_info_lines += f" - {p['error']}"
+                plugin_info_lines += "\n"
+        else:
+            plugin_info_lines = "\n🔌 已加载插件: 无\n"
+    except Exception:
+        plugin_info_lines = "\n🔌 已加载插件: 获取失败\n"
+
     return (
         f"📊 TQSync 运行状态报告\n"
         f"--------------------------\n"
@@ -137,6 +158,7 @@ async def handle_status_command():
         f"👥 绑定用户数: {user_count} 人\n"
         f"💬 目标 QQ 群: {qq_gid}\n"
         f"✈️ 目标 TG 群: {tg_gid}\n"
+        f"{plugin_info_lines}"
         f"--------------------------"
     )
 

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -53,6 +53,32 @@ class BindingUpdate(BaseModel):
     tg_username: Optional[str] = None
     qq_nickname: Optional[str] = None
 
+@app.get("/admin/config", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_config():
+    """获取所有配置项（敏感字段自动屏蔽）"""
+    sensitive_keys = {'telegram.bot_token', 'qq.access_token', 'server.admin_api_key'}
+    config_items = []
+    
+    def flatten(prefix, obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                flatten(f"{prefix}.{k}" if prefix else k, v)
+        else:
+            key = prefix
+            is_sensitive = key in sensitive_keys
+            value = obj
+            if isinstance(value, list):
+                value = ','.join(str(x) for x in value)
+            config_items.append({
+                "key": key,
+                "value": str(value) if value is not None else '',
+                "masked": is_sensitive,
+                "section": key.split('.')[0]
+            })
+    
+    flatten('', config_loader.config)
+    return {"config": config_items}
+
 @app.post("/admin/restart", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def trigger_restart():
     from main import graceful_restart
@@ -98,6 +124,11 @@ async def get_status():
             sync_count = (await cursor.fetchone())[0]
     except:
         sync_count = 0
+
+    # 获取插件状态
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+    plugins_status = pm.get_plugins_status()
     
     return {
         "version": get_full_version_string(),
@@ -110,7 +141,13 @@ async def get_status():
         "cpu_usage": f"{cpu_percent:.1f}%",
         "memory_usage": f"{mem_info.rss / 1024 / 1024:.1f} MB",
         "disk_usage": f"{disk_usage.percent:.1f}%",
-        "db_size": f"{db_size / 1024:.1f} KB"
+        "db_size": f"{db_size / 1024:.1f} KB",
+        "plugins": {
+            "total": len(plugins_status),
+            "loaded": sum(1 for p in plugins_status if p['loaded']),
+            "enabled": sum(1 for p in plugins_status if p['enabled']),
+            "list": plugins_status
+        }
     }
 
 @app.get("/admin/logs", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
@@ -212,3 +249,113 @@ async def toggle_admin(user_id: int):
     
     config_loader.update_config('server.admin_user_ids', admins)
     return {"status": "success", "message": msg, "admins": admins}
+
+
+# ── 插件管理 API ──
+
+@app.get("/admin/plugins", dependencies=[Depends(require_permission(PERM_LEVEL_USER))])
+async def get_plugins():
+    """获取所有插件状态和详细信息"""
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+    plugins = pm.get_plugins_status()
+    return {
+        "total": len(plugins),
+        "loaded": sum(1 for p in plugins if p['loaded']),
+        "enabled": sum(1 for p in plugins if p['enabled']),
+        "plugins": plugins
+    }
+
+
+class PluginReloadResponse(BaseModel):
+    plugin_name: str
+    status: str
+    message: str
+    load_time_ms: Optional[int] = None
+    error: Optional[str] = None
+
+
+@app.post("/admin/plugins/{plugin_name}/enable", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def enable_plugin(plugin_name: str):
+    """启用指定插件"""
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+    if plugin_name not in pm.plugins:
+        raise HTTPException(status_code=404, detail=f"插件 {plugin_name} 不存在")
+    pm.enable_plugin(plugin_name)
+    return {"status": "success", "message": f"插件 {plugin_name} 已启用"}
+
+
+@app.post("/admin/plugins/{plugin_name}/disable", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def disable_plugin(plugin_name: str):
+    """禁用指定插件"""
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+    if plugin_name not in pm.plugins:
+        raise HTTPException(status_code=404, detail=f"插件 {plugin_name} 不存在")
+    pm.disable_plugin(plugin_name)
+    return {"status": "success", "message": f"插件 {plugin_name} 已禁用"}
+
+
+@app.post("/admin/plugins/{plugin_name}/reload", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def reload_plugin(plugin_name: str):
+    """热重载指定插件"""
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+    info = await pm.reload_plugin(plugin_name)
+    if info is None:
+        raise HTTPException(status_code=404, detail=f"插件 {plugin_name} 不存在或加载失败")
+    return {
+        "status": "success",
+        "message": f"插件 {plugin_name} 已重载",
+        "load_time_ms": info.load_time_ms,
+        "error": info.error
+    }
+
+
+@app.delete("/admin/plugins/{plugin_name}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def delete_plugin(plugin_name: str):
+    """删除指定插件（卸载并删除文件）"""
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+    if plugin_name not in pm.plugins:
+        raise HTTPException(status_code=404, detail=f"插件 {plugin_name} 不存在")
+    await pm.delete_plugin(plugin_name)
+    return {"status": "success", "message": f"插件 {plugin_name} 已删除"}
+
+
+@app.post("/admin/plugins/upload", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def upload_plugin(file: UploadFile = File(...)):
+    """上传并加载新插件"""
+    from core.plugin_manager import PluginManager
+    pm = PluginManager.get_instance()
+
+    if not file.filename.endswith('.py'):
+        raise HTTPException(status_code=400, detail="只允许上传 .py 文件")
+
+    filepath = os.path.join(pm.plugin_dir, file.filename)
+    content = await file.read()
+
+    with open(filepath, 'wb') as f:
+        f.write(content)
+
+    info = await pm.load_plugin(file.filename)
+    if info is None:
+        raise HTTPException(status_code=500, detail=f"插件文件已保存但加载失败")
+
+    # 向双端广播加载通知
+    if info.loaded and not info.error:
+        await pm.broadcast_plugin_status(info.name, True, info.load_time_ms)
+    else:
+        await pm.broadcast_plugin_status(info.name, False, 0, info.error)
+
+    return {
+        "status": "success",
+        "message": f"插件 {file.filename} 已上传并加载",
+        "plugin": {
+            "name": info.name,
+            "version": info.version,
+            "load_time_ms": info.load_time_ms,
+            "error": info.error
+        }
+    }

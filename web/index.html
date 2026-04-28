@@ -392,6 +392,63 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
 }
 .tbl-ei svg{width:17px;height:17px;stroke:var(--dim)}
 
+/* config page */
+.cfg-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.cfg-sect-hd{
+  padding:10px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg3);
+}
+.cfg-sect-hd svg{width:12px;height:12px;stroke:var(--primary);opacity:.75;flex-shrink:0}
+.cfg-sect-title{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.09em;color:var(--primary);font-family:var(--mono)}
+.cfg-row{
+  display:flex;align-items:center;padding:9px 18px;
+  border-bottom:1px solid var(--border);
+  transition:background .12s;
+}
+.cfg-row:last-child{border-bottom:none}
+.cfg-row:hover{background:rgba(255,255,255,.02)}
+.cfg-key{
+  font-size:11px;font-family:var(--mono);color:var(--muted);
+  width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cfg-key-sub{
+  font-size:9px;color:var(--dim);display:block;margin-top:1px;
+}
+.cfg-val-wrap{flex:1;display:flex;align-items:center;gap:10px;min-width:0}
+.cfg-val{
+  font-size:12px;font-family:var(--mono);color:var(--text);
+  background:var(--bg3);border:1px solid var(--border2);
+  padding:4px 10px;border-radius:6px;flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  min-width:0;line-height:1.6;
+}
+.cfg-val.masked{color:var(--dim);letter-spacing:.15em}
+.cfg-input{
+  flex:1;height:30px;background:var(--bg3);
+  border:1px solid var(--primary);border-radius:6px;
+  color:var(--text);font-family:var(--mono);font-size:11px;
+  padding:0 10px;outline:none;
+}
+.cfg-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.cfg-btn{
+  width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;background:transparent;
+}
+.cfg-btn-edit{color:var(--muted)}
+.cfg-btn-edit:hover{background:rgba(96,165,250,.12);color:var(--blue)}
+.cfg-btn-eye{color:var(--dim)}
+.cfg-btn-eye:hover{background:rgba(167,139,250,.12);color:var(--purple)}
+.cfg-btn-save{color:var(--primary);background:var(--prim2)}
+.cfg-btn-save:hover{background:var(--prim2);opacity:.8}
+.cfg-btn-cancel{color:var(--muted)}
+.cfg-btn-cancel:hover{background:rgba(248,113,113,.1);color:var(--red)}
+.cfg-btn svg{width:12px;height:12px}
+.cfg-empty{padding:44px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
+.cfg-empty svg{width:32px;height:32px;stroke:var(--dim);margin-bottom:10px;display:block;margin-left:auto;margin-right:auto}
+
+
 /* mobile */
 .mask{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:999;display:none}
 .mask.show{display:block}
@@ -492,6 +549,7 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
         <el-menu-item index="dash"><el-icon><Odometer/></el-icon><span>仪表盘</span></el-menu-item>
         <el-menu-item index="logs"><el-icon><Document/></el-icon><span>运行日志</span></el-menu-item>
         <el-menu-item index="binds"><el-icon><User/></el-icon><span>用户绑定</span></el-menu-item>
+        <el-menu-item index="config"><el-icon><Setting/></el-icon><span>配置管理</span></el-menu-item>
       </el-menu>
     </div>
     <div class="s-bottom">
@@ -657,6 +715,65 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
         </div>
       </div>
 
+      <!-- CONFIG -->
+      <div v-if="activeTab==='config'" class="page-in">
+        <div class="sec-hd">
+          <div class="sec-title">
+            <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="1.3" fill="currentColor"/><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width=".9"/></svg>
+            配置管理
+          </div>
+          <div class="sec-line"></div>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:12px;white-space:nowrap">{{ configItems.length }} 项配置</span>
+        </div>
+        <div class="cfg-wrap" v-for="(items, section) in configSections" :key="section" style="margin-bottom:14px">
+          <div class="cfg-sect-hd">
+            <svg viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M4 6h4M4 4h1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            <span class="cfg-sect-title">{{ section.toUpperCase() }}</span>
+          </div>
+          <div class="cfg-row" v-for="item in items" :key="item.key">
+            <div class="cfg-key">{{ item.key }}</div>
+            <div class="cfg-val-wrap">
+              <div class="cfg-val" :class="{masked:item.masked && !item.revealed}" v-if="!item.editing">
+                {{ item.masked && !item.revealed ? '••••••••••••••••' : (item.value || '(空)') }}
+              </div>
+              <input
+                class="cfg-input"
+                v-else
+                v-model="item.editValue"
+                @keyup.enter="saveConfig(item)"
+                @keyup.escape="cancelEdit(item)"
+              />
+            </div>
+            <div class="cfg-actions">
+              <button v-if="item.masked && !item.editing" class="cfg-btn cfg-btn-eye" @click="item.revealed=!item.revealed" :title="item.revealed ? '隐藏' : '显示'">
+                <svg v-if="!item.revealed" viewBox="0 0 14 14" fill="none">
+                  <path d="M1 7S3.3 3 7 3s6 4 6 4-2.3 4-6 4-6-4-6-4z" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="7" cy="7" r="1.6" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+                <svg v-else viewBox="0 0 14 14" fill="none">
+                  <path d="M2 2l10 10M6 6.3A1.6 1.6 0 008.8 9M3.5 4.5C2.3 5.4 1.4 6.6 1.4 7c.4 1 2 3.6 5.6 3.9M8 10.8c2-.7 3.6-2.5 4-3.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <button v-if="!item.editing" class="cfg-btn cfg-btn-edit" @click="startEdit(item)" title="编辑">
+                <svg viewBox="0 0 14 14" fill="none"><path d="M10.5 2.5l1 1-7.5 7.5-1.5.5.5-1.5 7.5-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <template v-if="item.editing">
+                <button class="cfg-btn cfg-btn-save" @click="saveConfig(item)" title="保存">
+                  <svg viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3.5 3.5 6.5-6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="cfg-btn cfg-btn-cancel" @click="cancelEdit(item)" title="取消">
+                  <svg viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                </button>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div class="cfg-empty" v-if="configItems.length===0">
+          <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="1.3"/><path d="M16 12v4M16 21v.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          暂无配置数据
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -686,6 +803,7 @@ createApp({
     const logs         = ref([]);
     const logFilter    = ref('');
     const bindings     = ref([]);
+    const configItems  = ref([]);
     const logBodyRef   = ref(null);
 
     const sparkBars = ref(Array.from({length:24}, () => Math.floor(Math.random()*70+10)));
@@ -752,10 +870,46 @@ createApp({
       try { const res = await api.get('/admin/bindings'); bindings.value = res.data; } catch(e) {}
     };
 
+    const fetchConfig = async () => {
+      try {
+        const res = await api.get('/admin/config');
+        configItems.value = (res.data.config || []).map(c => ({...c, editing: false, editValue: c.value, revealed: false}));
+      } catch(e) {}
+    };
+
+    const configSections = computed(() => {
+      const groups = {};
+      configItems.value.forEach(item => {
+        if (!groups[item.section]) groups[item.section] = [];
+        groups[item.section].push(item);
+      });
+      return groups;
+    });
+
+    const startEdit = (item) => {
+      item.editing = true;
+      item.editValue = item.value;
+    };
+    const cancelEdit = (item) => {
+      item.editing = false;
+      item.editValue = item.value;
+    };
+    const saveConfig = async (item) => {
+      try {
+        await api.put(`/admin/config/${encodeURIComponent(item.key)}`, { key: item.key, value: item.editValue });
+        item.value = item.editValue;
+        item.editing = false;
+        ElMessage.success(`已更新 ${item.key}`);
+      } catch(e) {
+        ElMessage.error('更新失败: ' + (e.response?.data?.detail || e.message));
+      }
+    };
+
     const handleMenu = (idx) => {
       activeTab.value = idx; mobileOpen.value = false;
       if (idx === 'logs') fetchLogs();
       if (idx === 'binds') fetchBindings();
+      if (idx === 'config') fetchConfig();
     };
 
     const doRestart = async () => {
@@ -782,7 +936,7 @@ createApp({
       return '';
     };
 
-    const pageTitle = computed(() => ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理'})[activeTab.value]);
+    const pageTitle = computed(() => ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理',config:'系统配置'})[activeTab.value]);
 
     onMounted(() => {
       checkScreen();
@@ -802,8 +956,9 @@ createApp({
     return {
       isLoggedIn, loggingIn, loginLoading, loginErr, inputKey, showPw,
       activeTab, mobileOpen, status, logs, logFilter, filteredLogs,
-      bindings, logBodyRef, sparkBars, maxBar, pageTitle,
-      doLogin, doLogout, handleMenu, doRestart, unbind, getLogCls
+      bindings, configItems, configSections, logBodyRef, sparkBars, maxBar, pageTitle,
+      doLogin, doLogout, handleMenu, doRestart, unbind, getLogCls,
+      fetchConfig, startEdit, cancelEdit, saveConfig
     };
   }
 }).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');

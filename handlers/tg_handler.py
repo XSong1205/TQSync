@@ -5,6 +5,7 @@ from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
 from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command
+from core.plugin_manager import PluginManager
 import time
 import uuid
 from utils.logger import logger
@@ -117,6 +118,10 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 处理文本消息
     text = update.message.text
     if text:
+        pm = PluginManager.get_instance()
+        if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
+            return
+
         logger.info(f"[TG] {user.username} 发送了一条文本消息")
         engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
@@ -246,6 +251,30 @@ async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYP
     await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
     await update.message.reply_text("已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。")
 
+async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """路由未被前置 CommandHandler 处理的 /command 到插件系统"""
+    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
+        return
+    user = update.effective_user
+    if user.is_bot:
+        return
+
+    text = update.message.text
+    if not text:
+        return
+
+    cmd = text.split()[0].lower()
+    known = ['/bind', '/setprefix', '/help', '/status', '/reboot', '/confirm', '/cancel']
+    if cmd in known:
+        return  # 已被前置 CommandHandler 处理
+
+    engine = SyncEngine.get_instance()
+    pm = PluginManager.get_instance()
+    if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
+        return
+
+    await update.message.reply_text("未知命令。使用 /help 获取更多帮助。")
+
 def get_tg_handlers():
     return [
         # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
@@ -256,5 +285,7 @@ def get_tg_handlers():
         CommandHandler('status', handle_status_command_tg),
         CommandHandler('reboot', handle_reboot_command_tg),
         CommandHandler('confirm', handle_confirm_ffmpeg),
-        CommandHandler('cancel', handle_cancel_ffmpeg)
+        CommandHandler('cancel', handle_cancel_ffmpeg),
+        # 兜底：未被注册的 /command 路由到插件系统
+        MessageHandler(filters.COMMAND, handle_unhandled_command),
     ]
