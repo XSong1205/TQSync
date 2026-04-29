@@ -202,14 +202,8 @@ class PluginManager:
                 for m in info.matchers:
                     self._matchers.append((m, name))
 
+# 让插件拦截消息以便处理
     async def route_message(self, platform: str, user_id: int, group_id: int, message: str) -> bool:
-        """将文本消息路由到匹配的插件
-
-        Returns:
-            True 表示消息已被插件拦截处理
-            False 表示没有插件处理，应走正常转发流程
-        """
-        if not message:
             return False
 
         for matcher, plugin_name in self._matchers:
@@ -246,8 +240,8 @@ class PluginManager:
 
         return False
 
+# 在文件夹中寻找插件
     def get_plugins_status(self) -> list:
-        """获取所有插件状态列表"""
         result = []
         for name, info in self.plugins.items():
             result.append({
@@ -264,8 +258,8 @@ class PluginManager:
             })
         return result
 
+# 加载插件
     async def load_all(self) -> list:
-        """加载所有已发现的插件"""
         files = self.discover_plugins()
         results = []
         for f in files:
@@ -273,8 +267,8 @@ class PluginManager:
             results.append(info)
         return results
 
+# 插件启动时向双端发送状态通知
     async def broadcast_plugin_status(self, name: str, success: bool, elapsed_ms: int, error: str = None) -> None:
-        """向双端广播插件加载状态通知"""
         if not self._ctx:
             return
 

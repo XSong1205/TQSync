@@ -480,14 +480,6 @@ async def main():
         tg_group_id=config_loader.get('telegram.group_id'),
         qq_group_id=config_loader.get('qq.group_id')
     ))
-    await plugin_mgr.load_all()
-
-    # 发送插件加载状态通知
-    for name, info in plugin_mgr.plugins.items():
-        if info.error:
-            await plugin_mgr.broadcast_plugin_status(name, False, 0, info.error)
-        else:
-            await plugin_mgr.broadcast_plugin_status(name, True, info.load_time_ms)
 
     # FFmpeg 自动下载检测与交互
     from utils.ffmpeg_manager import ffmpeg_manager
@@ -606,7 +598,15 @@ async def main():
             logger.error(f"处理重启信息失败: {e}")
     
     await engine.send_startup_notification()
-    
+
+    # 插件在启动通知后加载
+    await plugin_mgr.load_all()
+    for name, info in plugin_mgr.plugins.items():
+        if info.error:
+            await plugin_mgr.broadcast_plugin_status(name, False, 0, info.error)
+        else:
+            await plugin_mgr.broadcast_plugin_status(name, True, info.load_time_ms)
+
     # 等待重启信号或任务结束
     try:
         await restart_event.wait()
