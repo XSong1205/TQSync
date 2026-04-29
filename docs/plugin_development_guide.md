@@ -204,6 +204,80 @@ async with self.ctx.db._Database__get_connection() as conn:
     rows = await cursor.fetchall()
 ```
 
+### 插件数据持久化
+
+TQSync 为每个插件提供了内置的键值存储，通过 `self.ctx.db` 即可读写，**无需自己创建数据库**。
+
+#### 存储数据
+
+```python
+# 保存单个键值对（自动创建或更新）
+await self.ctx.db.set_plugin_data(self.name, "last_user", "123456")
+
+# 保存多个配置项
+await self.ctx.db.set_plugin_data(self.name, "api_key", "sk-xxxxx")
+await self.ctx.db.set_plugin_data(self.name, "language", "zh-CN")
+```
+
+#### 读取数据
+
+```python
+# 读取指定 key 的值（不存在则返回 None）
+api_key = await self.ctx.db.get_plugin_data(self.name, "api_key")
+
+# 读取插件的所有数据
+all_data = await self.ctx.db.get_plugin_data(self.name)
+# 返回: [{"key": "api_key", "value": "sk-xxxxx", "updated_at": "..."}, ...]
+
+# 获取所有已存储数据的插件列表
+from db.database import db
+plugins = await db.get_all_plugin_names()
+```
+
+#### 删除数据
+
+```python
+# 删除指定 key
+await self.ctx.db.delete_plugin_data(self.name, "api_key")
+
+# 删除插件的所有数据
+await self.ctx.db.delete_plugin_data(self.name)
+```
+
+#### 完整示例
+
+```python
+from core.plugin_base import PluginBase
+
+class Counter(PluginBase):
+    name = "Counter"
+    version = "1.0"
+    description = "统计用户发言次数"
+
+    async def on_load(self):
+        # 从持久化存储中恢复计数
+        count = await self.ctx.db.get_plugin_data(self.name, "total_count")
+        self.total_count = int(count) if count else 0
+
+    async def on_unload(self):
+        # 持久化当前计数
+        await self.ctx.db.set_plugin_data(self.name, "total_count", str(self.total_count))
+
+    async def on_message(self, platform, user_id, group_id, message):
+        self.total_count += 1
+```
+
+#### 与 Admin API 联动
+
+插件存储的数据可通过 Admin API 查看和修改（权限等级 Admin）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/admin/plugins/data` | 查看所有插件的存储数据 |
+| `GET` | `/admin/plugins/{name}/data?key=` | 获取插件数据（可选指定 key） |
+| `PUT` | `/admin/plugins/{name}/data` | 设置插件键值对 `{"key": "...", "value": "..."}` |
+| `DELETE` | `/admin/plugins/{name}/data/{key}` | 删除插件指定键 |
+
 ### 可用权限
 
 | 资源 | 可用操作 |
@@ -211,7 +285,7 @@ async with self.ctx.db._Database__get_connection() as conn:
 | `tg_bot` | `send_message`, `send_photo`, `send_document`, `send_video`, `send_sticker`, `send_voice`, `delete_message`, `get_chat` 等 |
 | `qq_client` | `send_group_msg`, `send_private_msg`, `delete_msg`, `get_bot_id` |
 | `config` | `get(key, default)` 读取配置 |
-| `db` | `get_all_bindings()`, `get_setting()`, `get_binding_by_qq()`, `get_binding_by_tg()` |
+| `db` | `get_all_bindings()`, `get_setting()`, `get_binding_by_qq()`, `get_binding_by_tg()`, `get_plugin_data()`, `set_plugin_data()`, `delete_plugin_data()` |
 
 ---
 
@@ -530,6 +604,10 @@ async def on_message(self, platform, user_id, group_id, message):
 | POST | `/admin/plugins/{name}/reload` | Admin | 热重载指定插件 |
 | DELETE | `/admin/plugins/{name}` | Admin | 删除插件（卸载+删除文件） |
 | POST | `/admin/plugins/upload` | Admin | 上传新插件并自动加载 |
+| GET | `/admin/plugins/data` | Admin | 查看所有插件存储数据概览 |
+| GET | `/admin/plugins/{name}/data` | Admin | 获取插件存储数据（支持 `?key=` 筛选） |
+| PUT | `/admin/plugins/{name}/data` | Admin | 设置插件键值对 `{"key": "...", "value": "..."}` |
+| DELETE | `/admin/plugins/{name}/data/{key}` | Admin | 删除插件指定键 |
 
 ### 查看插件状态
 
@@ -599,6 +677,75 @@ POST /admin/plugins/Weather/reload
 }
 ```
 
+### 管理插件数据
+
+#### 查看所有插件数据概览
+
+```
+GET /admin/plugins/data
+```
+
+响应示例：
+
+```json
+{
+  "plugins": {
+    "DailySign": {
+      "total_sign_count": "42",
+      "last_sign_date": "2026-04-29"
+    },
+    "Counter": {
+      "total_count": "1337"
+    }
+  }
+}
+```
+
+#### 获取单个插件数据
+
+```
+GET /admin/plugins/DailySign/data
+GET /admin/plugins/DailySign/data?key=total_sign_count
+```
+
+响应示例（指定 key）：
+
+```json
+{
+  "plugin_name": "DailySign",
+  "key": "total_sign_count",
+  "value": "42"
+}
+```
+
+响应示例（全部数据）：
+
+```json
+{
+  "plugin_name": "DailySign",
+  "data": {
+    "total_sign_count": "42",
+    "last_sign_date": "2026-04-29"
+  },
+  "count": 2
+}
+```
+
+#### 写入/更新插件数据
+
+```
+PUT /admin/plugins/DailySign/data
+Content-Type: application/json
+
+{"key": "total_sign_count", "value": "100"}
+```
+
+#### 删除插件数据
+
+```
+DELETE /admin/plugins/DailySign/data/total_sign_count
+```
+
 ---
 
 ## 完整示例
@@ -659,8 +806,7 @@ class Weather(PluginBase):
 ### 示例二：数据持久化插件
 
 ```python
-import os
-import aiosqlite
+from datetime import date
 from core.plugin_base import PluginBase
 from utils.logger import logger
 
@@ -677,46 +823,27 @@ class DailySign(PluginBase):
         ]
 
     async def on_load(self):
-        """初始化本地数据库"""
-        db_dir = os.path.join(os.path.dirname(__file__), '..', 'plugin_data')
-        os.makedirs(db_dir, exist_ok=True)
-        self.db = await aiosqlite.connect(os.path.join(db_dir, 'sign.db'))
-        await self.db.execute('''
-            CREATE TABLE IF NOT EXISTS sign_records (
-                user_id INTEGER,
-                date TEXT,
-                PRIMARY KEY (user_id, date)
-            )
-        ''')
-        await self.db.commit()
-        logger.info(f"[{self.name}] 签到数据库已初始化")
-
-    async def on_unload(self):
-        """关闭数据库连接"""
-        if hasattr(self, 'db') and self.db:
-            await self.db.close()
-            logger.info(f"[{self.name}] 签到数据库已关闭")
+        logger.info(f"[{self.name}] 签到插件已加载")
 
     async def on_message(self, platform, user_id, group_id, message):
-        from datetime import date
         today = date.today().isoformat()
+        key = f"sign_{user_id}_{today}"
 
         # 检查今日是否已签到
-        cursor = await self.db.execute(
-            'SELECT 1 FROM sign_records WHERE user_id = ? AND date = ?',
-            (user_id, today)
-        )
-        if await cursor.fetchone():
+        signed = await self.ctx.db.get_plugin_data(self.name, key)
+        if signed:
             await self._reply(platform, group_id, "你今天已经签到过了！")
             return
 
         # 记录签到
-        await self.db.execute(
-            'INSERT INTO sign_records (user_id, date) VALUES (?, ?)',
-            (user_id, today)
-        )
-        await self.db.commit()
-        await self._reply(platform, group_id, "✅ 签到成功！")
+        await self.ctx.db.set_plugin_data(self.name, key, "1")
+
+        # 更新累计签到次数
+        total = await self.ctx.db.get_plugin_data(self.name, f"total_{user_id}")
+        total_count = str(int(total) + 1) if total else "1"
+        await self.ctx.db.set_plugin_data(self.name, f"total_{user_id}", total_count)
+
+        await self._reply(platform, group_id, f"✅ 签到成功！你已累计签到 {total_count} 天")
 
     async def _reply(self, platform, group_id, text):
         if platform == 'tg':
@@ -745,11 +872,18 @@ async def on_message(self, platform, user_id, group_id, message):
 ### 2. 副作用隔离
 
 ```python
-# ✅ 推荐: 插件数据存放在 plugin_data/<PluginName>/ 目录
+# ✅ 推荐: 使用内置插件数据存储 API（无需自建数据库）
+async def on_load(self):
+    saved_count = await self.ctx.db.get_plugin_data(self.name, "count")
+    self.count = int(saved_count) if saved_count else 0
+
+async def on_unload(self):
+    await self.ctx.db.set_plugin_data(self.name, "count", str(self.count))
+
+# ⚠️ 可接受: 插件数据文件存放在 plugin_data/<PluginName>/ 目录
 async def on_load(self):
     data_dir = os.path.join('plugin_data', self.name)
     os.makedirs(data_dir, exist_ok=True)
-    self.data_path = data_dir
 
 # ❌ 避免: 直接操作主程序数据目录（db/, logs/, temp/）
 ```

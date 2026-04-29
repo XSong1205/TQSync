@@ -359,3 +359,49 @@ async def upload_plugin(file: UploadFile = File(...)):
             "error": info.error
         }
     }
+
+
+# ── 插件数据存储 API ──
+
+class PluginDataUpdate(BaseModel):
+    key: str
+    value: str
+
+
+@app.get("/admin/plugins/data", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_all_plugin_data_overview():
+    """获取所有插件的存储数据概览"""
+    names = await db.get_all_plugin_names()
+    result = {}
+    for name in names:
+        data = await db.get_plugin_data(name)
+        result[name] = {item['key']: item['value'] for item in data} if data else {}
+    return {"plugins": result}
+
+
+@app.get("/admin/plugins/{plugin_name}/data", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_plugin_data(plugin_name: str, key: Optional[str] = None):
+    """获取指定插件的存储数据，可选指定 key"""
+    if key:
+        value = await db.get_plugin_data(plugin_name, key)
+        return {"plugin_name": plugin_name, "key": key, "value": value}
+    data = await db.get_plugin_data(plugin_name)
+    return {
+        "plugin_name": plugin_name,
+        "data": {item['key']: item['value'] for item in data} if data else {},
+        "count": len(data) if data else 0
+    }
+
+
+@app.put("/admin/plugins/{plugin_name}/data", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def set_plugin_data(plugin_name: str, update: PluginDataUpdate):
+    """设置/更新插件的键值数据"""
+    await db.set_plugin_data(plugin_name, update.key, update.value)
+    return {"status": "success", "message": f"Plugin {plugin_name} data '{update.key}' updated"}
+
+
+@app.delete("/admin/plugins/{plugin_name}/data/{key}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def delete_plugin_data(plugin_name: str, key: str):
+    """删除插件指定键的数据"""
+    await db.delete_plugin_data(plugin_name, key)
+    return {"status": "success", "message": f"Plugin {plugin_name} data '{key}' deleted"}

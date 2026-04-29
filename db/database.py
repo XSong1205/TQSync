@@ -61,6 +61,19 @@ class Database:
                 )
             ''')
             
+            # 插件数据存储表（键值对，按插件隔离）
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS plugin_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    plugin_name TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(plugin_name, key)
+                )
+            ''')
+            
             await db.commit()
 
     async def save_message_mapping(self, tg_message_id: int, qq_message_id: int, sender_tg_id: int = None, sender_qq_id: int = None):
@@ -277,5 +290,55 @@ class Database:
                 VALUES (?, ?)
             ''', (key, value))
             await db.commit()
+
+    # --- Plugin Data CRUD ---
+    async def get_plugin_data(self, plugin_name: str, key: str = None):
+        if key:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    'SELECT value FROM plugin_data WHERE plugin_name = ? AND key = ?',
+                    (plugin_name, key)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    return row[0] if row else None
+        else:
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(
+                    'SELECT key, value, updated_at FROM plugin_data WHERE plugin_name = ? ORDER BY key',
+                    (plugin_name,)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    return [{'key': r[0], 'value': r[1], 'updated_at': r[2]} for r in rows]
+
+    async def set_plugin_data(self, plugin_name: str, key: str, value: str):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute('''
+                INSERT INTO plugin_data (plugin_name, key, value, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(plugin_name, key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (plugin_name, key, value))
+            await db.commit()
+
+    async def delete_plugin_data(self, plugin_name: str, key: str = None):
+        async with aiosqlite.connect(self.db_path) as db:
+            if key:
+                await db.execute(
+                    'DELETE FROM plugin_data WHERE plugin_name = ? AND key = ?',
+                    (plugin_name, key)
+                )
+            else:
+                await db.execute(
+                    'DELETE FROM plugin_data WHERE plugin_name = ?',
+                    (plugin_name,)
+                )
+            await db.commit()
+
+    async def get_all_plugin_names(self):
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT DISTINCT plugin_name FROM plugin_data ORDER BY plugin_name') as cursor:
+                rows = await cursor.fetchall()
+                return [r[0] for r in rows]
 
 db = Database()

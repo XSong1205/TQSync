@@ -12,6 +12,9 @@ import uvicorn
 
 # 记录全局启动时间，必须在模块加载时立即执行
 GLOBAL_START_TIME = time.time()
+# 修复: main.py 作为入口脚本时模块名为 __main__，导致 from main import X 触发二次导入
+# 将 __main__ 模块注册为 'main'，避免 GLOBAL_START_TIME 被重新计算
+sys.modules['main'] = sys.modules[__name__]
 
 from config.config_loader import config_loader
 from db.database import db
