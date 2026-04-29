@@ -202,9 +202,8 @@ class PluginManager:
                 for m in info.matchers:
                     self._matchers.append((m, name))
 
-# 让插件拦截消息以便处理
+    # 让插件拦截消息以便处理
     async def route_message(self, platform: str, user_id: int, group_id: int, message: str) -> bool:
-            return False
 
         for matcher, plugin_name in self._matchers:
             info = self.plugins.get(plugin_name)
@@ -240,7 +239,7 @@ class PluginManager:
 
         return False
 
-# 在文件夹中寻找插件
+    # 在文件夹中寻找插件
     def get_plugins_status(self) -> list:
         result = []
         for name, info in self.plugins.items():
