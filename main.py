@@ -245,10 +245,10 @@ async def handle_qq_webhook(request):
                 logger.info(f"[QQ] {nickname} 发送了一条文本消息")
                 engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
         
-        return web.Response(text="ok")
+        return web.json_response({"status": "ok"})
     except Exception as e:
         logger.error(f"Webhook error: {e}")
-        return web.Response(text="error", status=500)
+        return web.json_response({"status": "error"}, status=500)
 
 async def start_qq_webhook():
     app = web.Application()
