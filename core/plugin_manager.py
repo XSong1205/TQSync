@@ -281,9 +281,9 @@ class PluginManager:
         filename = self.plugins[name].file if name in self.plugins else f"{name}.py"
 
         if success:
-            msg = f"✅ {filename} 插件已加载(启动耗时 {elapsed_ms} ms)"
+            msg = f"{filename} 插件已加载({elapsed_ms} ms)"
         else:
-            msg = f"❌ {filename} 插件加载失败: {error}"
+            msg = f"{filename} 插件加载失败: {error}"
 
         try:
             await self._ctx.tg_bot.send_message(

@@ -207,12 +207,12 @@ class SyncEngine:
     def _get_friendly_error_message(self, error_type: str, filename: str = "") -> str:
         """根据错误类型生成友好的错误消息"""
         messages = {
-            'timeout': f"⚠️ 文件同步失败：下载超时\n文件: {filename}\n建议：检查网络连接或稍后重试",
-            'disk_full': "⚠️ 文件同步失败：磁盘空间不足\n请清理 temp 目录或增加磁盘空间",
-            'permission': "⚠️ 文件同步失败：权限不足\n请检查 temp 目录的读写权限",
-            'network': f"⚠️ 文件同步失败：网络错误\n文件: {filename}\n建议：检查网络连接或代理设置",
-            'too_large': f"⚠️ 文件同步失败：文件过大\n文件: {filename}\n平台对文件大小有限制",
-            'unknown': f"⚠️ 文件同步失败\n文件: {filename}\n详情请查看日志"
+            'timeout': f"文件同步失败：下载超时\n文件: {filename}\n建议：检查网络连接或稍后重试\n[TIMEOUT]",
+            'disk_full': "文件同步失败：磁盘空间不足\n请清理 temp 目录或增加磁盘空间\n[DISK_FULL]",
+            'permission': "文件同步失败：权限不足\n请检查 temp 目录的读写权限\n[PERMISSION]",
+            'network': f"文件同步失败：网络错误\n文件: {filename}\n建议：检查网络连接或代理设置\[NETWORK]",
+            'too_large': f"文件同步失败：文件过大\n文件: {filename}\n平台对文件大小有限制[TOO_LARGE]",
+            'unknown': f"文件同步失败\n文件: {filename}\n详情请查看日志 [UNKNOWN]"
         }
         return messages.get(error_type, messages['unknown'])
 

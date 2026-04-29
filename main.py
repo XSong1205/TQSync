@@ -154,20 +154,20 @@ async def handle_qq_webhook(request):
                     from utils.ffmpeg_manager import ffmpeg_manager
                     status = await db.get_setting('ffmpeg_auto_download_confirmed')
                     if status == 'confirmed':
-                        await onebot_client.send_group_msg(engine.qq_group_id, "⚠️ 您已经确认过自动下载，无需重复操作。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "您已经确认过自动下载，无需重复操作。\n如因数据库迁移等原因导致没有自动启动下载：\n发送 /cancel 后 再发送 /confirm")
                         return web.json_response({})
                     
-                    await onebot_client.send_group_msg(engine.qq_group_id, "📥 正在开始下载并安装 FFmpeg，请稍候...（由于下载较大，请耐心等待）")
+                    await onebot_client.send_group_msg(engine.qq_group_id, "正在开始下载并安装 FFmpeg")
                     success = await ffmpeg_manager.download_and_install()
                     if success:
                         await db.set_setting('ffmpeg_auto_download_confirmed', 'confirmed')
-                        await onebot_client.send_group_msg(engine.qq_group_id, "✅ FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
                     else:
-                        await onebot_client.send_group_msg(engine.qq_group_id, "❌ FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
                     return web.json_response({})
                 elif cmd == '/cancel':
                     await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
-                    await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。")
+                    await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。或发送 /confirm 重新开始下载")
                     return web.json_response({})
                 else:
                     # 尝试插件路由（未知命令）
@@ -197,9 +197,9 @@ async def handle_qq_webhook(request):
                         logger.debug(f"正在查询 QQ 回复映射: original_qq_id={original_qq_id}")
                         reply_to_tg_id = await db.get_tg_msg_id_by_qq(original_qq_id)
                         if reply_to_tg_id:
-                            logger.info(f"✅ 成功映射 QQ 回复到 TG 消息 ID: {reply_to_tg_id}")
+                            logger.info(f"QQ 回复到 TG 消息 ID: {reply_to_tg_id}")
                         else:
-                            logger.warning(f"⚠️ 未能找到 QQ 消息 {original_qq_id} 对应的 TG 映射，回复将作为普通消息发送")
+                            logger.warning(f"未能找到 QQ消息{original_qq_id} 对应的 TG 映射，回复将作为普通消息发送")
                         break
             
             combined_text = "".join(text_parts).strip()
@@ -226,7 +226,7 @@ async def handle_qq_webhook(request):
                         )
                 except Exception as e:
                     logger.error(f"发送 HTML 消息至 Telegram 失败: {e}")
-                    error_msg = [{"type": "text", "data": {"text": f"❌ 同步到 Telegram 失败: {str(e)[:30]}"}}, 
+                    error_msg = [{"type": "text", "data": {"text": f"同步到 Telegram 失败: {str(e)[:30]}"}}, 
                                  {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
@@ -289,7 +289,7 @@ REBOOT_INFO_FILE = "logs/.reboot_info"
 
 async def graceful_restart(platform: str = 'qq'):
     """优雅重启：启动新进程后退出当前进程，实现无缝重启"""
-    logger.info("正在触发优雅重启...")
+    logger.info("正在重启...")
     
     reboot_info = {
         "start_time": time.time() * 1000,
@@ -463,7 +463,7 @@ async def main():
         logger.info(f"Using Telegram proxy: {proxy_url}")
         builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
     else:
-        logger.warning("未配置 Telegram 代理，国内服务器可能无法连接！")
+        logger.warning("未配置代理，如果用的clash也建议填入系统代理那栏对应的地址，更稳定")
     
     application = builder.build()
     
