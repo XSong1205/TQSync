@@ -93,6 +93,24 @@ class SyncEngine:
         
         logger.info(f"开始下载文件: {original_filename} ({file_url[:60]}...)")
         
+        # 处理本地文件路径（file:// 或绝对路径）
+        if file_url.startswith("file://") or (os.path.isabs(file_url) and not file_url.startswith("http")):
+            local_path = file_url.replace("file://", "")
+            if os.path.exists(local_path):
+                final_path = os.path.join(temp_dir, original_filename)
+                if os.path.exists(final_path):
+                    name, ext = os.path.splitext(original_filename)
+                    counter = 1
+                    while os.path.exists(final_path):
+                        final_path = os.path.join(temp_dir, f"{name}_{counter}{ext}")
+                        counter += 1
+                shutil.copy2(local_path, final_path)
+                file_size = os.path.getsize(final_path)
+                logger.info(f"本地文件复制完成: {os.path.basename(final_path)} ({self._format_size(file_size)})")
+                return os.path.abspath(final_path)
+            else:
+                raise FileNotFoundError(f"Local file not found: {local_path}")
+        
         connector = aiohttp.TCPConnector(ssl=False)
         timeout = aiohttp.ClientTimeout(total=300, connect=30)
         start_time = time.time()
@@ -984,8 +1002,9 @@ class SyncEngine:
                 send_kwargs["caption"] = prefix
 
             # 关键修复：即使是 http URL，如果 Telegram 无法访问（如内网或需代理），也应下载到本地再上传
-            # 我们统一采用“下载到本地 -> 上传给 TG”的策略以确保稳定性
-            temp_path = file_url
+            # 我们统一采用"下载到本地 -> 上传给 TG"的策略以确保稳定性
+            if not os.path.exists(temp_path):
+                temp_path = file_url
             if not os.path.exists(temp_path) or temp_path.startswith("http"):
                 # 如果是 URL，先下载到临时文件
                 if temp_path.startswith("http"):

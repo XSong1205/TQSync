@@ -110,7 +110,7 @@ async def handle_qq_webhook(request):
                     is_forward = True
                     forward_content = msg_part.get('data', {})
                 elif msg_type == 'mface' and not mface_url:
-                    mface_url = msg_part['data'].get('url')
+                    mface_url = msg_part['data'].get('url') or msg_part['data'].get('file')
             
             combined_text = "".join(text_parts).strip()
             
