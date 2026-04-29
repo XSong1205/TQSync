@@ -172,10 +172,12 @@ async def handle_qq_webhook(request):
                 else:
                     # 尝试插件路由（未知命令）
                     if combined_text.strip():
-                        if await plugin_mgr.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
-                            return web.json_response({})
+                        if combined_text.strip():
+                            pm = PluginManager.get_instance()
+                            if await pm.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
+                                return web.json_response({})
                     response = "未知命令。使用 /help 获取更多帮助。"
-                
+
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
                 return web.json_response({})
@@ -183,7 +185,8 @@ async def handle_qq_webhook(request):
             # 插件消息路由 (仅纯文本，无媒体附件)
             combined_text_early = "".join(text_parts).strip()
             if combined_text_early and not image_url and not video_url and not mface_url and not file_url:
-                if await plugin_mgr.route_message('qq', qq_id, engine.qq_group_id, combined_text_early):
+                pm = PluginManager.get_instance()
+                if await pm.route_message('qq', qq_id, engine.qq_group_id, combined_text_early):
                     return web.json_response({})
 
             # 解析回复逻辑 (QQ -> TG)
