@@ -210,7 +210,7 @@ class SyncEngine:
             'timeout': f"文件同步失败：下载超时\n文件: {filename}\n建议：检查网络连接或稍后重试\n[TIMEOUT]",
             'disk_full': "文件同步失败：磁盘空间不足\n请清理 temp 目录或增加磁盘空间\n[DISK_FULL]",
             'permission': "文件同步失败：权限不足\n请检查 temp 目录的读写权限\n[PERMISSION]",
-            'network': f"文件同步失败：网络错误\n文件: {filename}\n建议：检查网络连接或代理设置\[NETWORK]",
+            'network': f"文件同步失败：网络错误\n文件: {filename}\n建议：检查网络连接或代理设置\n[NETWORK]",
             'too_large': f"文件同步失败：文件过大\n文件: {filename}\n平台对文件大小有限制[TOO_LARGE]",
             'unknown': f"文件同步失败\n文件: {filename}\n详情请查看日志 [UNKNOWN]"
         }
@@ -300,7 +300,7 @@ class SyncEngine:
             return result
 
         except asyncio.TimeoutError:
-            error_msg = f"⚠️ 图片同步失败：下载超时\n建议：检查网络连接或稍后重试"
+            error_msg = f"图片同步失败：下载超时\n建议：检查网络连接或稍后重试[TIMEOUT]"
             await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
             return None
             
@@ -360,7 +360,7 @@ class SyncEngine:
             return result
 
         except asyncio.TimeoutError:
-            error_msg = f"⚠️ 视频同步失败：下载超时\n文件: {original_filename}\n可能原因：文件过大或网络不稳定"
+            error_msg = f"视频同步失败：下载超时\n文件: {original_filename}\n可能原因：文件过大或网络不稳定[TIMEOUT]"
             await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
             return None
             
@@ -418,7 +418,7 @@ class SyncEngine:
             return result
 
         except asyncio.TimeoutError:
-            error_msg = f"⚠️ 文件同步失败：下载超时\n文件名: {filename}\n可能原因：文件过大或网络不稳定"
+            error_msg = f"⚠️ 文件同步失败：下载超时\n文件名: {filename}\n可能原因：文件过大或网络不稳定[TIMEOUT]"
             await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
             return None
             
@@ -1219,11 +1219,11 @@ class SyncEngine:
         # 3. 构造消息
         version_str = get_full_version_string()
         message = (
-            f"🚀 TQSync {version_str} 已成功启动并正在运行！\n"
+            f"| TQSync {version_str} \n"
             f"--------------------------\n"
-            f"🕒 最后更新: {last_update}\n"
-            f"💬 目标 QQ 群: {qq_gid}\n"
-            f"✈️ 目标 TG 群: {tg_gid}\n"
+            f"- 最后更新: {last_update}\n"
+            f"- 目标 QQ 群: {qq_gid}\n"
+            f"- 目标 TG 群: {tg_gid}\n"
             f"--------------------------"
         )
         
@@ -1231,14 +1231,14 @@ class SyncEngine:
         # 发送到 Telegram
         try:
             await self.bot.send_message(chat_id=self.tg_group_id, text=message)
-            logger.info("Startup notification sent to Telegram.")
+            logger.info("向 TG 发送启动通知")
         except Exception as e:
             logger.error(f"Failed to send startup notification to Telegram: {e}")
             
         # 发送到 QQ
         try:
             await onebot_client.send_group_msg(self.qq_group_id, message)
-            logger.info("Startup notification sent to QQ.")
+            logger.info("向 QQ 发送启动通知")
         except Exception as e:
             logger.error(f"Failed to send startup notification to QQ: {e}")
 
