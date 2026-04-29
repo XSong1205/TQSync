@@ -1219,7 +1219,7 @@ class SyncEngine:
         # 3. 构造消息
         version_str = get_full_version_string()
         message = (
-            f"| TQSync {version_str} \n"
+            f"| TQSync NEXT {version_str} \n"
             f"--------------------------\n"
             f"- 最后更新: {last_update}\n"
             f"- 目标 QQ 群: {qq_gid}\n"
