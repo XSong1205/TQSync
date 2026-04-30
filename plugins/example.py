@@ -21,4 +21,4 @@ class ThumbsUp(PluginBase):
         elif platform == 'qq':
             await self.ctx.qq_client.send_group_msg(group_id, "Example Plugin is working.")
 
-        return None
+        return True

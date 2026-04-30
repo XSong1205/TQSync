@@ -44,13 +44,15 @@ class PluginBase:
         """
         return []
 
-    async def on_message(self, platform: str, user_id: int, group_id: int, message: str) -> None:
+    async def on_message(self, platform: str, user_id: int, group_id: int, message: str) -> bool:
         """处理匹配到的文本消息
-        
+
+        返回 True 表示消息已被处理，False 表示未处理（消息将继续正常转发）
+
         Args:
             platform: 'tg' 或 'qq'
             user_id: 发送者 ID
             group_id: 群组 ID
             message: 消息文本
         """
-        pass
+        return False

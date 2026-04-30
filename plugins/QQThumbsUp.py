@@ -54,14 +54,17 @@ class QQThumbsUp(PluginBase):
 
     async def on_message(self, platform, user_id, group_id, message):
         if platform != 'qq':
-            return
+            return False
 
         if message.strip() == "赞我":
             await self._handle_manual_like(user_id, group_id)
-            return
+            return True
 
         if message.startswith("/autothumbsup"):
             await self._handle_autothumbsup(user_id, group_id, message)
+            return True
+
+        return False
 
     # ========== 手动点赞 ==========
 

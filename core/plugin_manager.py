@@ -229,13 +229,14 @@ class PluginManager:
             if not matched:
                 continue
 
-            try:
-                await info.instance.on_message(platform, user_id, group_id, message)
+        try:
+            handled = await info.instance.on_message(platform, user_id, group_id, message)
+            if handled:
                 logger.debug(f"插件 {plugin_name} 拦截了消息: {message[:50]}")
                 return True
-            except Exception as e:
-                logger.error(f"插件 {plugin_name} on_message 异常: {e}")
-                return True
+        except Exception as e:
+            logger.error(f"插件 {plugin_name} on_message 异常: {e}")
+            return True
 
         return False
 
