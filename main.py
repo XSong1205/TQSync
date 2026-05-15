@@ -153,6 +153,25 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, "正在重启，请稍候...")
                     asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
+                elif cmd == '/checkupdate':
+                    admin_ids = config_loader.get('server.admin_user_ids', [])
+                    if admin_ids and qq_id not in admin_ids:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        return web.json_response({})
+
+                    await onebot_client.send_group_msg(engine.qq_group_id, "🔍 正在检查更新...")
+                    from handlers.command_handler import handle_checkupdate_command
+                    info = await handle_checkupdate_command()
+
+                    if info.get("update_found") and info.get("update_notice"):
+                        await onebot_client.send_group_msg(engine.qq_group_id, info["update_notice"])
+
+                    await onebot_client.send_group_msg(engine.qq_group_id, info["result"])
+
+                    if info.get("need_restart"):
+                        await asyncio.sleep(2)
+                        asyncio.create_task(graceful_restart('qq'))
+                    return web.json_response({})
                 elif cmd == '/confirm':
                     from utils.ffmpeg_manager import ffmpeg_manager
                     status = await db.get_setting('ffmpeg_auto_download_confirmed')
@@ -627,7 +646,48 @@ async def main():
             logger.debug(f"数据库关闭（最终清理）: {e}")
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Stopped by user")
+    MAX_RESTARTS = 5
+    RESTART_BASE_DELAY = 10  # 秒
+    STABLE_RUN_THRESHOLD = 60  # 运行超过此秒数后重置重启计数
+
+    restart_count = 0
+    while True:
+        try:
+            loop_start = time.time()
+            asyncio.run(main())
+            logger.info("TQSync 正常退出")
+            break
+        except KeyboardInterrupt:
+            logger.info("Stopped by user")
+            break
+        except SystemExit as e:
+            if e.code == 0:
+                logger.info("TQSync 正常退出 (SystemExit code 0)")
+            else:
+                logger.error(f"TQSync 异常退出 (SystemExit code {e.code})")
+            break
+        except Exception as e:
+            elapsed = time.time() - loop_start
+
+            if elapsed > STABLE_RUN_THRESHOLD:
+                logger.info(f"已稳定运行 {elapsed:.0f}s，重置重启计数")
+                restart_count = 0
+
+            restart_count += 1
+            logger.error(
+                f"程序异常退出 (运行 {elapsed:.0f}s): {e}",
+                exc_info=True
+            )
+
+            if restart_count >= MAX_RESTARTS:
+                logger.error(f"已达到最大重启次数 {MAX_RESTARTS}，程序终止")
+                try:
+                    import traceback
+                    traceback.print_exc()
+                except Exception:
+                    pass
+                break
+
+            cooldown = RESTART_BASE_DELAY * restart_count
+            logger.info(f"将在 {cooldown}s 后第 {restart_count} 次重启 (最多 {MAX_RESTARTS} 次)...")
+            time.sleep(cooldown)

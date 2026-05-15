@@ -3,24 +3,22 @@ from db.database import db
 from config.config_loader import config_loader
 import time
 import os
+import sys
 import subprocess
 from datetime import datetime
 from utils.logger import logger
 
 HELP_TEXT = (
-    "🤖 TQSync 帮助文档\n\n"
+    "| TQSync Help\n\n"
     "可用命令：\n"
     "/bind - 发起绑定流程（QQ端获取验证码，TG端输入验证码）\n"
     "/setprefix <nickname> - 设置您在双端显示的统一昵称\n"
     "/status - 查看机器人运行状态\n"
+    "/checkupdate - 从 GitHub 拉取最新源码并自动重启更新（仅限管理员）\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
     "/confirm - 确认自动下载 FFmpeg\n"
     "/cancel - 取消自动下载提示\n"
     "/help - 显示此帮助信息\n\n"
-    "绑定流程：\n"
-    "1. 在 QQ 群发送 /bind 获取6位验证码\n"
-    "2. 在 Telegram 使用 /bind <验证码> 完成绑定\n"
-    "3. 绑定后消息将自动双向同步"
 )
 
 async def handle_bind_command(user_id: int, platform: str, args: list = None):
@@ -136,7 +134,7 @@ async def handle_status_command(start_time: float = None):
         pm = PluginManager.get_instance()
         plugins = pm.get_plugins_status()
         if plugins:
-            plugin_info_lines = "\n🔌 已加载插件:\n"
+            plugin_info_lines = "\n已加载插件:\n"
             for p in plugins:
                 status_icon = "✅" if (p['loaded'] and p['enabled'] and not p['error']) else ("⏸" if not p['enabled'] else "❌")
                 plugin_info_lines += f"   {status_icon} {p['file']} v{p['version']}"
@@ -146,20 +144,21 @@ async def handle_status_command(start_time: float = None):
                     plugin_info_lines += f" - {p['error']}"
                 plugin_info_lines += "\n"
         else:
-            plugin_info_lines = "\n🔌 已加载插件: 无\n"
+            plugin_info_lines = "\n已加载插件: 无\n"
     except Exception:
-        plugin_info_lines = "\n🔌 已加载插件: 获取失败\n"
+        plugin_info_lines = "\n已加载插件: 获取失败\n"
 
     return (
-        f"📊 TQSync 运行状态报告\n"
+        f"| TQSync Status\n"
         f"--------------------------\n"
-        f"📦 版本信息: {get_full_version_string()}\n"
-        f"🕒 上次更新: {last_update}\n"
-        f"⏱️ 运行时长: {uptime_str}\n"
-        f"🔗 已同步消息: {sync_count} 条\n"
-        f"👥 绑定用户数: {user_count} 人\n"
-        f"💬 目标 QQ 群: {qq_gid}\n"
-        f"✈️ 目标 TG 群: {tg_gid}\n"
+        f"- 版本信息: {get_full_version_string()}\n"
+        f"- 上次更新: {last_update}\n"
+        f"- 运行时长: {uptime_str}\n"
+        f"- 已同步消息: {sync_count} 条\n"
+        f"- 绑定用户数: {user_count} 人\n"
+        f"- 目标 QQ 群: {qq_gid}\n"
+        f"- 目标 TG 群: {tg_gid}\n"
+        f"--------------------------\n"
         f"{plugin_info_lines}"
         f"--------------------------"
     )
@@ -167,3 +166,137 @@ async def handle_status_command(start_time: float = None):
 async def handle_help_command():
     """处理 /help 指令"""
     return HELP_TEXT
+
+
+async def handle_checkupdate_command() -> dict:
+    """处理 /checkupdate 指令
+
+    Returns:
+        dict 包含:
+        - ok: bool, 是否成功
+        - update_found: bool, 是否检测到更新
+        - update_notice: str|None, 检测到更新时的通知消息 (含版本/commit)
+        - result: str, 执行结果文本
+        - need_restart: bool, 是否需要重启
+    """
+    logger.info("执行 /checkupdate 更新检查")
+    r = {"ok": False, "update_found": False, "update_notice": None, "result": "", "need_restart": False}
+
+    # 1. Fetch 远程更新
+    try:
+        result = subprocess.run(
+            ['git', 'fetch', 'origin'],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            r["result"] = f"更新失败：git fetch \n{result.stderr.strip()[:500]}"
+            return r
+        logger.info("git fetch 完成")
+    except subprocess.TimeoutExpired:
+        r["result"] = "更新失败：git fetch 超时，请检查网络"
+        return r
+    except FileNotFoundError:
+        r["result"] = "更新失败：未找到 git 命令，请确认已安装 Git"
+        return r
+    except Exception as e:
+        r["result"] = f"更新失败：git fetch 异常\n{e}"
+        return r
+
+    # 2. 获取当前分支和远程对比
+    try:
+        branch_result = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            capture_output=True, text=True, timeout=10
+        )
+        current_branch = branch_result.stdout.strip()
+        if not current_branch:
+            current_branch = 'main'
+
+        local_result = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            capture_output=True, text=True, timeout=10
+        )
+        local_commit = local_result.stdout.strip()[:7]
+        local_full = local_result.stdout.strip()
+
+        remote_result = subprocess.run(
+            ['git', 'rev-parse', f'origin/{current_branch}'],
+            capture_output=True, text=True, timeout=10
+        )
+        if remote_result.returncode != 0:
+            r["result"] = f"更新失败：无法获取远程分支 origin/{current_branch}\n请确认远程仓库配置正确"
+            return r
+
+        remote_commit = remote_result.stdout.strip()[:7]
+        remote_full = remote_result.stdout.strip()
+
+        parts = [f"📍 当前分支: {current_branch}", f"🔖 本地: {local_commit}  →  远程: {remote_commit}"]
+
+        if local_full == remote_full:
+            parts.append("已是最新版本，无需更新")
+            r["ok"] = True
+            r["result"] = "\n".join(parts)
+            return r
+
+        # 有更新
+        r["update_found"] = True
+        r["update_notice"] = (
+            f"检测到更新：\n"
+            f"TQSync [Commit hash: {remote_commit}]\n"
+            f"即将开始更新"
+        )
+
+    except Exception as e:
+        r["result"] = f"更新失败：版本对比异常\n{e}"
+        return r
+
+    # 3. 获取更新日志
+    try:
+        log_result = subprocess.run(
+            ['git', 'log', '--oneline', f'{local_commit}..{remote_commit}', '-n', '10'],
+            capture_output=True, text=True, timeout=10
+        )
+        if log_result.stdout.strip():
+            parts.append(f"\n更新日志:\n{log_result.stdout.strip()}")
+    except Exception:
+        pass
+
+    # 4. 执行 pull
+    try:
+        pull_result = subprocess.run(
+            ['git', 'pull', 'origin', current_branch],
+            capture_output=True, text=True, timeout=60
+        )
+        if pull_result.returncode != 0:
+            r["result"] = f"更新失败：git pull 出错\n{pull_result.stderr.strip()[:500]}"
+            return r
+        parts.append("git pull 成功")
+        logger.info("git pull 完成")
+    except subprocess.TimeoutExpired:
+        r["result"] = "更新失败：git pull 超时"
+        return r
+    except Exception as e:
+        r["result"] = f"更新失败：git pull 异常\n{e}"
+        return r
+
+    # 5. 安装依赖
+    try:
+        pip_result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt', '--quiet'],
+            capture_output=True, text=True, timeout=120
+        )
+        if pip_result.returncode == 0:
+            parts.append("依赖安装成功")
+            logger.info("pip install 完成")
+        else:
+            parts.append(f"依赖安装可能存在问题:\n{pip_result.stderr.strip()[:300]}")
+    except subprocess.TimeoutExpired:
+        parts.append("依赖安装超时，将继续重启")
+    except Exception as e:
+        parts.append(f"依赖安装异常: {e}")
+
+    parts.append("\n即将重启以应用更新...")
+    r["ok"] = True
+    r["need_restart"] = True
+    r["result"] = "\n".join(parts)
+    return r

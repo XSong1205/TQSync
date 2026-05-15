@@ -23,6 +23,36 @@ from db.database import db
 from utils.logger import logger
 from utils.ffmpeg_manager import ffmpeg_manager
 
+
+async def retry_async(func, *args, max_retries=3, base_delay=1.0, retry_on=None, **kwargs):
+    """带指数退避的异步重试
+
+    Args:
+        func: 异步函数
+        max_retries: 最大重试次数 (含首次调用)
+        base_delay: 首次重试等待秒数
+        retry_on: 可重试的异常类型元组，None 表示所有异常都重试
+    """
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return await func(*args, **kwargs)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            last_error = e
+            if retry_on and not isinstance(e, retry_on):
+                raise
+
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                func_name = getattr(func, '__name__', str(func))
+                logger.warning(f"重试 {func_name} (第 {attempt + 1}/{max_retries} 次失败): {e}，{delay:.1f}s 后重试...")
+                await asyncio.sleep(delay)
+
+    raise last_error
+
+
 class SyncEngine:
     _instance = None
 
@@ -46,16 +76,18 @@ class SyncEngine:
         SyncEngine._instance = self
 
     async def _sync_worker(self, worker_id: int):
-        """后台同步工作者：从队列中获取任务并执行"""
+        """后台同步工作者：从队列中获取任务并执行，失败自动重试"""
         logger.info(f"同步工作者 #{worker_id} 已启动")
         while True:
             try:
                 task_func, args, kwargs = await self.sync_queue.get()
                 logger.debug(f"工作者 #{worker_id} 开始处理任务: {task_func.__name__}")
                 try:
-                    await task_func(*args, **kwargs)
+                    await retry_async(task_func, *args, max_retries=3, base_delay=2.0, **kwargs)
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
-                    logger.error(f"工作者 #{worker_id} 执行任务失败: {e}", exc_info=True)
+                    logger.error(f"工作者 #{worker_id} 执行任务失败 (已重试3次): {e}", exc_info=True)
                 finally:
                     self.sync_queue.task_done()
             except asyncio.CancelledError:
@@ -1035,19 +1067,46 @@ class SyncEngine:
             if os.path.exists(temp_path):
                 async with aiofiles.open(temp_path, 'rb') as f:
                     file_content = await f.read()
-                    # 对于文档类型，需要传递 filename 参数以便 TG 显示正确的文件名
+
+                if file_key == "photo":
+                    try:
+                        img = Image.open(io.BytesIO(file_content))
+                        w, h = img.size
+                        if w < 10 or h < 10 or w + h < 20:
+                            logger.warning(f"图片尺寸过小 ({w}x{h})，改为文档形式发送")
+                            file_key = "document"
+                            send_func = self.bot.send_document
+                            if "caption" not in send_kwargs:
+                                send_kwargs["caption"] = send_kwargs.get("caption", prefix)
+                            kwargs["filename"] = kwargs.get("filename", os.path.basename(temp_path))
+                            if not os.path.splitext(kwargs["filename"])[1]:
+                                kwargs["filename"] = kwargs["filename"] + (os.path.splitext(temp_path)[1] or ".png")
+                    except Exception as img_err:
+                        logger.warning(f"无法解析图片尺寸，改为文档形式发送: {img_err}")
+                        file_key = "document"
+                        send_func = self.bot.send_document
+                        if "caption" not in send_kwargs:
+                            send_kwargs["caption"] = send_kwargs.get("caption", prefix)
+                        kwargs["filename"] = kwargs.get("filename", os.path.basename(temp_path))
+                        if not os.path.splitext(kwargs["filename"])[1]:
+                            kwargs["filename"] = kwargs["filename"] + (os.path.splitext(temp_path)[1] or ".png")
+
+                async def _do_send():
                     if file_key == "document":
-                        send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), io.BytesIO(file_content))
+                        buf = io.BytesIO(file_content)
+                        send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), buf)
                     else:
                         send_kwargs[file_key] = io.BytesIO(file_content)
-                    result = await send_func(**send_kwargs)
-                    logger.info(f"文件已成功发送至 Telegram: {os.path.basename(temp_path)}")
-                    if result and qq_message_id:
-                        await db.save_message_mapping(
-                            tg_message_id=result.message_id,
-                            qq_message_id=qq_message_id,
-                            sender_qq_id=qq_user_id
-                        )
+                    return await send_func(**send_kwargs)
+
+                result = await retry_async(_do_send, max_retries=3, base_delay=2.0)
+                logger.info(f"文件已成功发送至 Telegram: {os.path.basename(temp_path)}")
+                if result and qq_message_id:
+                    await db.save_message_mapping(
+                        tg_message_id=result.message_id,
+                        qq_message_id=qq_message_id,
+                        sender_qq_id=qq_user_id
+                    )
             else:
                 raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
                 
@@ -1183,7 +1242,14 @@ class SyncEngine:
         display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
         message = f"[QQ] {display_name}: {text}"
         try:
-            result = await self.bot.send_message(chat_id=self.tg_group_id, text=message, reply_to_message_id=reply_to_message_id)
+            result = await retry_async(
+                self.bot.send_message,
+                chat_id=self.tg_group_id,
+                text=message,
+                reply_to_message_id=reply_to_message_id,
+                max_retries=3,
+                base_delay=1.0
+            )
             if result and qq_message_id:
                 await db.save_message_mapping(
                     tg_message_id=result.message_id,
@@ -1192,7 +1258,7 @@ class SyncEngine:
                 )
             return result
         except Exception as e:
-            print(f"Error sending to TG: {e}")
+            logger.error(f"转发文本至 Telegram 失败 (已重试3次): {e}")
             return None
 
     async def send_startup_notification(self):

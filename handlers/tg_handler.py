@@ -4,7 +4,7 @@ from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
-from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command
+from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command
 from core.plugin_manager import PluginManager
 import time
 import uuid
@@ -159,6 +159,35 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("重启中，可能需要 5-10 秒，请稍候")
     asyncio.create_task(graceful_restart('tg'))
 
+
+async def handle_checkupdate_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    import asyncio
+    from main import graceful_restart
+    from config.config_loader import config_loader
+
+    admin_ids = config_loader.get('server.admin_user_ids', [])
+    user_id = update.effective_user.id
+
+    if admin_ids and user_id not in admin_ids:
+        await update.message.reply_text("您的权限不足以执行此操作")
+        return
+
+    status_msg = await update.message.reply_text("🔍 正在检查更新...")
+    info = await handle_checkupdate_command()
+
+    if info.get("update_found") and info.get("update_notice"):
+        await update.message.reply_text(info["update_notice"])
+        await asyncio.sleep(1)
+
+    try:
+        await status_msg.edit_text(info["result"])
+    except Exception:
+        pass
+
+    if info.get("need_restart"):
+        await asyncio.sleep(2)
+        asyncio.create_task(graceful_restart('tg'))
+
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = await handle_help_command_logic()
     await update.message.reply_text(response)
@@ -263,11 +292,6 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if not text:
         return
 
-    cmd = text.split()[0].lower()
-    known = ['/bind', '/setprefix', '/help', '/status', '/reboot', '/confirm', '/cancel']
-    if cmd in known:
-        return  # 已被前置 CommandHandler 处理
-
     engine = SyncEngine.get_instance()
     pm = PluginManager.get_instance()
     if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
@@ -284,6 +308,7 @@ def get_tg_handlers():
         CommandHandler('help', handle_help_command),
         CommandHandler('status', handle_status_command_tg),
         CommandHandler('reboot', handle_reboot_command_tg),
+        CommandHandler('checkupdate', handle_checkupdate_command_tg),
         CommandHandler('confirm', handle_confirm_ffmpeg),
         CommandHandler('cancel', handle_cancel_ffmpeg),
         # 兜底：未被注册的 /command 路由到插件系统
