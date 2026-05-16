@@ -79,22 +79,31 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
                 return
         logger.info(f"[TG] {user.username} 发送了一张图片")
-        engine.enqueue_sync_task(engine.forward_image_to_qq, user.id, user.username or str(user.id), file_id, caption, reply_segment=reply_segment, tg_message_id=msg.message_id)
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
+            user.username or str(user.id), file_id,
+            reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理视频消息 (优先于 document 判断)
     if msg.video:
         file_id = msg.video.file_id
+        file_name = msg.video.file_name or f'video_{uuid.uuid4().hex[:8]}.mp4'
         logger.info(f"[TG] {user.username} 发送了一个视频")
-        engine.enqueue_sync_task(engine.forward_video_to_qq, user.id, user.username or str(user.id), file_id, reply_segment=reply_segment, tg_message_id=msg.message_id)
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
+            user.username or str(user.id), file_id,
+            file_name=file_name, file_size=msg.video.file_size or 0,
+            reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
-    # 处理通用文件 (包括 GIF/Animation)
+    # 处理通用文件
     if msg.document:
         file_id = msg.document.file_id
         filename = msg.document.file_name or f"file_{uuid.uuid4().hex[:8]}.dat"
         logger.info(f"[TG] {user.username} 发送了一个文件 ({filename})")
-        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename, reply_segment=reply_segment, tg_message_id=msg.message_id)
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
+            user.username or str(user.id), file_id,
+            file_name=filename, file_size=msg.document.file_size or 0,
+            reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理贴纸消息 (Sticker)
@@ -117,7 +126,10 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.audio.file_id
         filename = msg.audio.file_name or f"audio_{msg.audio.file_unique_id}.mp3"
         logger.info(f"[TG] {user.username} 发送了一个文件: {filename}")
-        engine.enqueue_sync_task(engine.forward_file_to_qq, user.id, user.username or str(user.id), file_id, filename, reply_segment=reply_segment, tg_message_id=msg.message_id)
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
+            user.username or str(user.id), file_id,
+            file_name=filename, file_size=msg.audio.file_size or 0,
+            reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理文本消息

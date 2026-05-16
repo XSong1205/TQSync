@@ -20,6 +20,7 @@ sys.modules['main'] = sys.modules[__name__]
 from config.config_loader import config_loader
 from db.database import db
 from core.sync_engine import SyncEngine
+from core.file_transfer import FileSource
 from handlers.tg_handler import get_tg_handlers
 from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command
 from handlers.qq_handler import onebot_client
@@ -94,6 +95,10 @@ async def handle_qq_webhook(request):
             file_url = None
             voice_url = None
             mface_url = None
+            raw_image_file = ''
+            raw_video_file = ''
+            raw_file_file = ''
+            raw_mface_file = ''
             reply_to_tg_id = None
             file_name = "unknown_file"
             at_tg_ids = []
@@ -112,10 +117,13 @@ async def handle_qq_webhook(request):
                             at_tg_ids.append(binding[0]) # tg_user_id
                 elif msg_type == 'image' and not image_url:
                     image_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    raw_image_file = msg_part['data'].get('file', '')
                 elif msg_type == 'video' and not video_url:
                     video_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    raw_video_file = msg_part['data'].get('file', '')
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    raw_file_file = msg_part['data'].get('file', '')
                     file_name = msg_part['data'].get('name', '')
                     if not file_name:
                         file_path = msg_part['data'].get('file', '')
@@ -131,6 +139,7 @@ async def handle_qq_webhook(request):
                     forward_content = msg_part.get('data', {})
                 elif msg_type == 'mface' and not mface_url:
                     mface_url = msg_part['data'].get('url') or msg_part['data'].get('file')
+                    raw_mface_file = msg_part['data'].get('file', '')
             
             combined_text = "".join(text_parts).strip()
             
@@ -319,16 +328,32 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
                 logger.info(f"[QQ] {nickname} 发送了一张图片")
-                engine.enqueue_sync_task(engine.forward_image_to_tg, qq_id, nickname, image_url, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
+                source = FileSource.from_qq_webhook(image_url, '',
+                    raw_file=raw_image_file)
+                engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
+                    source, caption=combined_text,
+                    reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif video_url:
                 logger.info(f"[QQ] {nickname} 发送了一个视频")
-                engine.enqueue_sync_task(engine.forward_video_to_tg, qq_id, nickname, video_url, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
+                source = FileSource.from_qq_webhook(video_url, '',
+                    raw_file=raw_video_file)
+                engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
+                    source, caption=combined_text,
+                    reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif mface_url:
                 logger.info(f"[QQ] {nickname} 发送了一个动画表情")
-                engine.enqueue_sync_task(engine.forward_mface_to_tg, qq_id, nickname, mface_url, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
+                source = FileSource.from_qq_webhook(mface_url, '',
+                    raw_file=raw_mface_file)
+                engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
+                    source, reply_to_message_id=reply_to_tg_id,
+                    qq_message_id=data.get('message_id'))
             elif file_url:
                 logger.info(f"[QQ] {nickname} 发送了一个文件 ({file_name}) ")
-                engine.enqueue_sync_task(engine.forward_file_to_tg, qq_id, nickname, file_url, file_name, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
+                source = FileSource.from_qq_webhook(file_url, file_name,
+                    raw_file=raw_file_file)
+                engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
+                    source, reply_to_message_id=reply_to_tg_id,
+                    qq_message_id=data.get('message_id'))
             elif combined_text:
                 logger.info(f"[QQ] {nickname} 发送了一条文本消息")
                 engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))

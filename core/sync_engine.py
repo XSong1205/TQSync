@@ -8,12 +8,8 @@ import re
 import io
 import gzip
 import time
-import shutil
-import aiofiles
-import ffmpeg
-from PIL import Image
-import aiohttp
 import asyncio
+import ffmpeg
 import subprocess
 from datetime import datetime
 from utils.version_utils import get_full_version_string
@@ -22,6 +18,7 @@ from handlers.qq_handler import onebot_client
 from db.database import db
 from utils.logger import logger
 from utils.ffmpeg_manager import ffmpeg_manager
+from core.file_transfer import FileTransfer, FileSource, MediaType
 
 
 async def retry_async(func, *args, max_retries=3, base_delay=1.0, retry_on=None, **kwargs):
@@ -62,6 +59,11 @@ class SyncEngine:
         self.bot = bot
         self.tg_group_id = config_loader.get('telegram.group_id')
         self.qq_group_id = config_loader.get('qq.group_id')
+        
+        # 初始化统一文件传输模块
+        FileTransfer.tg_bot = bot
+        FileTransfer.tg_group_id = self.tg_group_id
+        FileTransfer.qq_group_id = self.qq_group_id
         
         # 异步同步队列：限制并发数为 3，防止大文件耗尽资源
         self.sync_queue = asyncio.Queue(maxsize=50)
@@ -109,163 +111,49 @@ class SyncEngine:
             raise RuntimeError("SyncEngine has not been initialized. Call SyncEngine(bot) first.")
         return cls._instance
 
-    async def _download_to_temp(self, file_url: str, original_filename: str) -> str:
-        """下载文件到 temp 目录并返回本地绝对路径
-        
-        流程：
-        1. 使用 UUID 作为临时文件名下载
-        2. 下载完成后移动到最终文件名
-        3. 返回最终文件路径
-        """
-        temp_dir = os.path.join(os.getcwd(), 'temp')
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        temp_filename = f"{uuid.uuid4().hex}.tmp"
-        temp_path = os.path.join(temp_dir, temp_filename)
-        
-        logger.info(f"开始下载文件: {original_filename} ({file_url[:60]}...)")
-        
-        # 处理本地文件路径（file:// 或绝对路径）
-        if file_url.startswith("file://") or (os.path.isabs(file_url) and not file_url.startswith("http")):
-            local_path = file_url.replace("file://", "")
-            if os.path.exists(local_path):
-                final_path = os.path.join(temp_dir, original_filename)
-                if os.path.exists(final_path):
-                    name, ext = os.path.splitext(original_filename)
-                    counter = 1
-                    while os.path.exists(final_path):
-                        final_path = os.path.join(temp_dir, f"{name}_{counter}{ext}")
-                        counter += 1
-                shutil.copy2(local_path, final_path)
-                file_size = os.path.getsize(final_path)
-                logger.info(f"本地文件复制完成: {os.path.basename(final_path)} ({self._format_size(file_size)})")
-                return os.path.abspath(final_path)
-            else:
-                raise FileNotFoundError(f"Local file not found: {local_path}")
-        
-        connector = aiohttp.TCPConnector(ssl=False)
-        timeout = aiohttp.ClientTimeout(total=300, connect=30)
-        start_time = time.time()
-        download_success = False
-        
-        try:
-            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-                async with session.get(file_url) as resp:
-                    if resp.status != 200:
-                        raise Exception(f"Download failed with status {resp.status}")
-                    
-                    total_size = int(resp.headers.get('content-length', 0))
-                    downloaded_size = 0
-                    last_log_time = time.time()
-                    
-                    async with aiofiles.open(temp_path, 'wb') as f:
-                        while True:
-                            chunk = await resp.content.read(65536)
-                            if not chunk:
-                                break
-                            await f.write(chunk)
-                            downloaded_size += len(chunk)
-                            
-                            current_time = time.time()
-                            if total_size > 0 and (current_time - last_log_time >= 1.0):
-                                elapsed = current_time - start_time
-                                progress = (downloaded_size / total_size) * 100
-                                speed = downloaded_size / elapsed if elapsed > 0 else 0
-                                logger.debug(f"下载进度: {progress:.1f}% ({self._format_size(downloaded_size)}/{self._format_size(total_size)}) | 速度: {self._format_size(speed)}/s")
-                                last_log_time = current_time
-            
-            download_success = True
-            
-            final_path = os.path.join(temp_dir, original_filename)
-            if os.path.exists(final_path):
-                name, ext = os.path.splitext(original_filename)
-                counter = 1
-                while os.path.exists(final_path):
-                    final_path = os.path.join(temp_dir, f"{name}_{counter}{ext}")
-                    counter += 1
-            
-            shutil.move(temp_path, final_path)
-            file_size = os.path.getsize(final_path)
-            elapsed = time.time() - start_time
-            logger.info(f"文件下载完成: {os.path.basename(final_path)} ({self._format_size(file_size)}) | 耗时: {elapsed:.1f}s")
-            
-            return os.path.abspath(final_path)
-            
-        except asyncio.TimeoutError:
-            raise Exception(f"下载超时: {original_filename}")
-        except Exception as e:
-            raise e
-        finally:
-            if not download_success and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
+    # ---- 统一媒体转发 (QQ → TG) ------------------------------------------
 
-    def _cleanup_temp(self, file_path: str):
-        """清理临时文件"""
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"已清理临时文件: {file_path}")
-        except Exception as e:
-            logger.warning(f"清理临时文件失败 {file_path}: {e}")
+    async def forward_media_to_tg(self, qq_user_id: int, qq_nickname: str,
+                                  source: FileSource, *, caption: str = '',
+                                  reply_to_message_id: int = None,
+                                  qq_message_id: int = None):
+        """统一 QQ → TG 媒体文件转发入口。"""
+        display_name = await self.get_display_name(
+            qq_user_id=qq_user_id, fallback_name=qq_nickname
+        )
+        await FileTransfer.transfer_qq_to_tg(
+            source,
+            qq_user_id=qq_user_id,
+            display_name=display_name,
+            caption=caption,
+            reply_to=reply_to_message_id,
+            qq_message_id=qq_message_id
+        )
 
-    def _format_size(self, size_bytes: int) -> str:
-        """格式化文件大小"""
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.2f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.2f} TB"
+    # ---- 统一媒体转发 (TG → QQ) ------------------------------------------
 
-    def _classify_error(self, error: Exception) -> str:
-        """分类错误类型"""
-        error_str = str(error).lower()
-        
-        if isinstance(error, asyncio.TimeoutError) or 'timeout' in error_str:
-            return 'timeout'
-        elif 'no space' in error_str or 'disk full' in error_str:
-            return 'disk_full'
-        elif 'permission' in error_str or 'access denied' in error_str:
-            return 'permission'
-        elif 'network' in error_str or 'connection' in error_str:
-            return 'network'
-        elif 'file too large' in error_str or 'size limit' in error_str:
-            return 'too_large'
-        else:
-            return 'unknown'
-
-    def _get_friendly_error_message(self, error_type: str, filename: str = "") -> str:
-        """根据错误类型生成友好的错误消息"""
-        messages = {
-            'timeout': f"文件同步失败：下载超时\n文件: {filename}\n建议：检查网络连接或稍后重试\n[TIMEOUT]",
-            'disk_full': "文件同步失败：磁盘空间不足\n请清理 temp 目录或增加磁盘空间\n[DISK_FULL]",
-            'permission': "文件同步失败：权限不足\n请检查 temp 目录的读写权限\n[PERMISSION]",
-            'network': f"文件同步失败：网络错误\n文件: {filename}\n建议：检查网络连接或代理设置\n[NETWORK]",
-            'too_large': f"文件同步失败：文件过大\n文件: {filename}\n平台对文件大小有限制[TOO_LARGE]",
-            'unknown': f"文件同步失败\n文件: {filename}\n详情请查看日志 [UNKNOWN]"
-        }
-        return messages.get(error_type, messages['unknown'])
-
-    async def _send_error_notification(self, tg_user_id: int = None, qq_group_id: int = None, error_msg: str = ""):
-        """向双端发送错误通知"""
-        # 发送到 Telegram
-        if tg_user_id and hasattr(self, 'bot') and self.bot:
-            try:
-                await self.bot.send_message(
-                    chat_id=self.tg_group_id,
-                    text=error_msg
-                )
-            except Exception as e:
-                logger.debug(f"发送 TG 错误通知失败: {e}")
-        
-        # 发送到 QQ
-        if qq_group_id:
-            try:
-                await onebot_client.send_group_msg(qq_group_id, error_msg)
-            except Exception as e:
-                logger.debug(f"发送 QQ 错误通知失败: {e}")
+    async def forward_media_to_qq(self, tg_user_id: int, tg_username: str,
+                                  file_id: str, *, file_name: str = '',
+                                  file_size: int = 0,
+                                  reply_segment: list = None,
+                                  tg_message_id: int = None):
+        """统一 TG → QQ 媒体文件转发入口。"""
+        display_name = await self.get_display_name(
+            tg_user_id=tg_user_id, fallback_name=tg_username
+        )
+        source = FileSource.from_telegram(
+            file_id,
+            file_name=file_name,
+            file_size=file_size,
+            token=self.bot.token
+        )
+        await FileTransfer.transfer_tg_to_qq(
+            source,
+            tg_user_id=tg_user_id,
+            display_name=display_name,
+            reply_segment=reply_segment,
+            tg_message_id=tg_message_id
+        )
 
     async def get_display_name(self, tg_user_id: int = None, qq_user_id: int = None, fallback_name: str = "Unknown"):
         """根据绑定关系获取统一显示名称，优先使用自定义前缀"""
@@ -286,191 +174,6 @@ class SyncEngine:
             return binding[3] or binding[2] or fallback_name
         
         return f"{fallback_name} [未绑定]"
-
-    async def forward_image_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, caption: str = "", reply_segment: list = None, tg_message_id: int = None):
-        """将 Telegram 图片转发到 QQ (本地文件中转方案，支持 Caption 图文混排)"""
-        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
-        temp_path = None
-        
-        try:
-            # 1. 获取 Telegram 文件链接
-            file = await self.bot.get_file(file_id)
-            file_url = file.file_path
-            if not file_url.startswith("http"):
-                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
-            
-            # 2. 下载到本地 temp（使用原始文件名）
-            ext = os.path.splitext(file_url)[1] or '.jpg'
-            original_filename = f"image_{uuid.uuid4().hex[:8]}{ext}"
-            temp_path = await self._download_to_temp(file_url, original_filename)
-            
-            # 3. 构造消息段 (实现图文混排：文字在上，图片在下)
-            if reply_segment:
-                message_array = list(reply_segment)
-                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name}\n"}})
-            else:
-                message_array = [
-                    {"type": "text", "data": {"text": f"[TG] {display_name}\n"}},
-                ]
-            
-            # 如果有 Caption，则添加在图片上方
-            if caption:
-                message_array.append({"type": "text", "data": {"text": f"{caption}\n"}})
-            
-            message_array.append({"type": "image", "data": {"file": temp_path}})
-            
-            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            if result and tg_message_id:
-                qq_msg_id = self._extract_qq_message_id(result)
-                if qq_msg_id:
-                    await db.save_message_mapping(
-                        tg_message_id=tg_message_id,
-                        qq_message_id=qq_msg_id,
-                        sender_tg_id=tg_user_id
-                    )
-            logger.info(f"图片已成功发送至 QQ: {original_filename}")
-            return result
-
-        except asyncio.TimeoutError:
-            error_msg = f"图片同步失败：下载超时\n建议：检查网络连接或稍后重试[TIMEOUT]"
-            await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
-            return None
-            
-        except Exception as e:
-            logger.error(f"转发图片至 QQ 失败: {e}", exc_info=True)
-            
-            # 判断错误类型并发送友好提示
-            error_type = self._classify_error(e)
-            error_msg = self._get_friendly_error_message(error_type, original_filename if 'original_filename' in locals() else "")
-            
-            await self._send_error_notification(
-                tg_user_id=tg_user_id, 
-                qq_group_id=self.qq_group_id, 
-                error_msg=error_msg
-            )
-            return None
-            
-        finally:
-            if temp_path:
-                self._cleanup_temp(temp_path)
-
-    async def forward_video_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, reply_segment: list = None, tg_message_id: int = None):
-        """将 Telegram 视频转发到 QQ"""
-        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
-        temp_path = None
-        original_filename = None
-        
-        try:
-            file = await self.bot.get_file(file_id)
-            file_url = file.file_path
-            if not file_url.startswith("http"):
-                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
-            
-            ext = os.path.splitext(file_url)[1] or '.mp4'
-            original_filename = f"video_{uuid.uuid4().hex[:8]}{ext}"
-            temp_path = await self._download_to_temp(file_url, original_filename)
-            
-            if reply_segment:
-                message_array = list(reply_segment)
-                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}})
-            else:
-                message_array = [
-                    {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个视频\n"}},
-                ]
-            message_array.append({"type": "video", "data": {"file": temp_path}})
-            
-            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            if result and tg_message_id:
-                qq_msg_id = self._extract_qq_message_id(result)
-                if qq_msg_id:
-                    await db.save_message_mapping(
-                        tg_message_id=tg_message_id,
-                        qq_message_id=qq_msg_id,
-                        sender_tg_id=tg_user_id
-                    )
-            logger.info(f"视频已成功发送至 QQ: {original_filename}")
-            return result
-
-        except asyncio.TimeoutError:
-            error_msg = f"视频同步失败：下载超时\n文件: {original_filename}\n可能原因：文件过大或网络不稳定[TIMEOUT]"
-            await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
-            return None
-            
-        except Exception as e:
-            logger.error(f"转发视频至 QQ 失败: {e}", exc_info=True)
-            
-            # 判断错误类型并发送友好提示
-            error_type = self._classify_error(e)
-            error_msg = self._get_friendly_error_message(error_type, original_filename or "")
-            
-            await self._send_error_notification(
-                tg_user_id=tg_user_id, 
-                qq_group_id=self.qq_group_id, 
-                error_msg=error_msg
-            )
-            return None
-            
-        finally:
-            if temp_path:
-                self._cleanup_temp(temp_path)
-
-    async def forward_file_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, filename: str, reply_segment: list = None, tg_message_id: int = None):
-        """将 Telegram 通用文件转发到 QQ (卡片形式)"""
-        display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
-        temp_path = None
-        
-        try:
-            file = await self.bot.get_file(file_id)
-            file_url = file.file_path
-            if not file_url.startswith("http"):
-                file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
-            
-            # 直接使用原始文件名
-            temp_path = await self._download_to_temp(file_url, filename)
-            
-            if reply_segment:
-                message_array = list(reply_segment)
-                message_array.append({"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}})
-            else:
-                message_array = [
-                    {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一个文件: {filename}\n"}},
-                ]
-            message_array.append({"type": "file", "data": {"file": temp_path}})
-            
-            result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
-            if result and tg_message_id:
-                qq_msg_id = self._extract_qq_message_id(result)
-                if qq_msg_id:
-                    await db.save_message_mapping(
-                        tg_message_id=tg_message_id,
-                        qq_message_id=qq_msg_id,
-                        sender_tg_id=tg_user_id
-                    )
-            logger.info(f"文件已成功发送至 QQ: {filename}")
-            return result
-
-        except asyncio.TimeoutError:
-            error_msg = f"⚠️ 文件同步失败：下载超时\n文件名: {filename}\n可能原因：文件过大或网络不稳定[TIMEOUT]"
-            await self._send_error_notification(tg_user_id, qq_group_id=self.qq_group_id, error_msg=error_msg)
-            return None
-            
-        except Exception as e:
-            logger.error(f"转发文件至 QQ 失败: {e}", exc_info=True)
-            
-            # 判断错误类型并发送友好提示
-            error_type = self._classify_error(e)
-            error_msg = self._get_friendly_error_message(error_type, filename)
-            
-            await self._send_error_notification(
-                tg_user_id=tg_user_id, 
-                qq_group_id=self.qq_group_id, 
-                error_msg=error_msg
-            )
-            return None
-            
-        finally:
-            if temp_path:
-                self._cleanup_temp(temp_path)
 
     async def _tgs_to_gif_lottie(self, tgs_path: str, gif_path: str, fps: int = 30, width: int = 512, height: int = 512):
         """使用 lottie 库将 TGS 贴纸转换为 GIF（备用方案）
@@ -648,7 +351,7 @@ class SyncEngine:
     async def forward_voice_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, reply_segment: list = None, tg_message_id: int = None):
         """转发 Telegram 语音消息到 QQ (带 FFmpeg 转码)"""
         display_name = await self.get_display_name(tg_user_id, tg_username)
-
+        temp_path = None
         try:
             file_url = await self.bot.get_file(file_id)
             if isinstance(file_url, dict):
@@ -656,10 +359,9 @@ class SyncEngine:
             if not file_url.startswith('http'):
                 file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_url}"
             
-            # 提取原始文件名或生成默认名
             original_name = getattr(file_url, 'name', None) or f"voice_{tg_user_id}.ogg"
             temp_filename = f"voice_{uuid.uuid4().hex}_{original_name}"
-            temp_path = await self._download_to_temp(file_url, temp_filename)
+            temp_path = await FileTransfer._http_download(file_url, temp_filename)
             
             # 使用 FFmpeg 转换为 AMR (QQ 兼容格式)
             amr_filename = f"voice_{uuid.uuid4().hex}.amr"
@@ -718,10 +420,12 @@ class SyncEngine:
             logger.error(f"转发语音至 QQ 失败: {e}")
             return None
         finally:
-            if 'temp_path' in locals() and temp_path:
-                self._cleanup_temp(temp_path)
-            if 'amr_path' in locals() and amr_path:
-                self._cleanup_temp(amr_path)
+            if 'temp_path' in locals() and temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+            if 'amr_path' in locals() and amr_path and os.path.exists(amr_path):
+                try: os.remove(amr_path)
+                except: pass
 
     def _detect_sticker_format(self, file_path: str) -> str:
         """通过文件头检测贴纸格式
@@ -782,7 +486,7 @@ class SyncEngine:
             
             ext = os.path.splitext(file_url)[1] if '.' in file_url else ''
             temp_filename = f"sticker_{uuid.uuid4().hex}{ext}"
-            temp_path = await self._download_to_temp(file_url, temp_filename)
+            temp_path = await FileTransfer._http_download(file_url, temp_filename)
             
             actual_format = self._detect_sticker_format(temp_path)
             
@@ -839,10 +543,12 @@ class SyncEngine:
             logger.error(f"转发贴纸至 QQ 失败: {e}", exc_info=True)
             return None
         finally:
-            if temp_path:
-                self._cleanup_temp(temp_path)
-            if gif_path:
-                self._cleanup_temp(gif_path)
+            if temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+            if gif_path and os.path.exists(gif_path):
+                try: os.remove(gif_path)
+                except: pass
 
     async def forward_voice_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, reply_to_message_id: int = None, qq_message_id: int = None):
         """转发 QQ 语音消息到 Telegram (带 FFmpeg 转码)"""
@@ -852,7 +558,7 @@ class SyncEngine:
             # 提取原始文件名或生成默认名
             original_name = os.path.basename(file_url).split('?')[0] or f"voice_{qq_user_id}.amr"
             temp_filename = f"voice_{uuid.uuid4().hex}_{original_name}"
-            temp_path = await self._download_to_temp(file_url, temp_filename)
+            temp_path = await FileTransfer._http_download(file_url, temp_filename)
             
             # 使用 FFmpeg 转换为 OGG Opus (Telegram 兼容格式)
             ogg_filename = f"voice_{uuid.uuid4().hex}.ogg"
@@ -890,253 +596,12 @@ class SyncEngine:
             logger.error(f"转发语音至 Telegram 失败: {e}")
             return None
         finally:
-            if 'temp_path' in locals() and temp_path:
-                self._cleanup_temp(temp_path)
-            if 'ogg_path' in locals() and ogg_path:
-                self._cleanup_temp(ogg_path)
-
-    async def forward_image_to_tg(self, qq_user_id: int, qq_nickname: str, image_url: str, caption: str = "", reply_to_message_id: int = None, qq_message_id: int = None):
-        """将 QQ 图片转发到 Telegram (支持本地文件中转)"""
-        binding = await db.get_binding_by_qq(qq_user_id)
-        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        full_caption = f"{prefix}\n{caption}" if caption else prefix
-        await self._send_file_to_tg(qq_user_id, qq_nickname, image_url, self.bot.send_photo, "photo", caption=full_caption, reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
-
-    async def forward_video_to_tg(self, qq_user_id: int, qq_nickname: str, video_url: str, caption: str = "", reply_to_message_id: int = None, qq_message_id: int = None):
-        """将 QQ 视频转发到 Telegram (支持本地文件中转)"""
-        binding = await db.get_binding_by_qq(qq_user_id)
-        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        full_caption = f"{prefix}\n{caption}" if caption else prefix
-        await self._send_file_to_tg(qq_user_id, qq_nickname, video_url, self.bot.send_video, "video", caption=full_caption, reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
-
-    async def forward_mface_to_tg(self, qq_user_id: int, qq_nickname: str, mface_url: str, reply_to_message_id: int = None, qq_message_id: int = None):
-        """将 QQ 动画表情 (mface) 转发到 Telegram"""
-        binding = await db.get_binding_by_qq(qq_user_id)
-        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        temp_path = None
-        try:
-            download_name = f"mface_{uuid.uuid4().hex[:8]}"
-            temp_path = await self._download_to_temp(mface_url, download_name)
-            ext = self._detect_extension_from_content(temp_path) or '.gif'
-            async with aiofiles.open(temp_path, 'rb') as f:
-                file_content = await f.read()
-            display_name = f"{download_name}{ext}"
-            send_kwargs = dict(chat_id=self.tg_group_id, caption=prefix)
-            if reply_to_message_id:
-                send_kwargs['reply_to_message_id'] = reply_to_message_id
-            if ext in ('.gif',):
-                result = await self.bot.send_animation(**send_kwargs, animation=(display_name, io.BytesIO(file_content)))
-            elif ext in ('.webm', '.mp4'):
-                result = await self.bot.send_video(**send_kwargs, video=(display_name, io.BytesIO(file_content)))
-            else:
-                result = await self.bot.send_document(**send_kwargs, document=(display_name, io.BytesIO(file_content)))
-            logger.info(f"动画表情已转发至 Telegram: {display_name}")
-            if result and qq_message_id:
-                await db.save_message_mapping(
-                    tg_message_id=result.message_id,
-                    qq_message_id=qq_message_id,
-                    sender_qq_id=qq_user_id
-                )
-        except Exception as e:
-            logger.error(f"转发动画表情至 Telegram 失败: {e}", exc_info=True)
-            try:
-                qq_gid = config_loader.get('qq.group_id')
-                await onebot_client.send_group_msg(qq_gid, f"❌ 动画表情同步失败")
-            except Exception:
-                pass
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-
-    async def forward_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, file_name: str = "file", reply_to_message_id: int = None, qq_message_id: int = None):
-        """将 QQ 文件转发到 Telegram (支持本地文件中转)"""
-        binding = await db.get_binding_by_qq(qq_user_id)
-        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        
-        # 确保文件名有扩展名
-        if not os.path.splitext(file_name)[1]:
-            ext = os.path.splitext(file_url.split('?')[0])[1] or '.dat'
-            file_name += ext
-
-        await self._send_file_to_tg(qq_user_id, qq_nickname, file_url, self.bot.send_document, "document", filename=file_name, caption=prefix, reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
-
-    @staticmethod
-    def _detect_extension_from_content(file_path: str) -> str | None:
-        MAGIC_MAP = [
-            (b'\x25\x50\x44\x46', '.pdf'),
-            (b'\xD0\xCF\x11\xE0', '.doc'),
-            (b'\x50\x4B\x03\x04', '.zip'),
-            (b'\x89\x50\x4E\x47', '.png'),
-            (b'\xFF\xD8\xFF', '.jpg'),
-            (b'\x47\x49\x46\x38', '.gif'),
-            (b'\x52\x61\x72\x21', '.rar'),
-            (b'\x1A\x45\xDF\xA3', '.webm'),
-            (b'\x00\x00\x00\x18\x66\x74\x79\x70', '.mp4'),
-            (b'\x66\x74\x79\x70\x69\x73\x6F\x6D', '.mp4'),
-            (b'\x49\x44\x33', '.mp3'),
-            (b'\x7B\x5C\x72\x74\x66', '.rtf'),
-        ]
-        try:
-            with open(file_path, 'rb') as f:
-                header = f.read(16)
-            for magic, ext in MAGIC_MAP:
-                if header.startswith(magic):
-                    return ext
-        except Exception:
-            pass
-        return None
-
-    @staticmethod
-    def _extract_qq_message_id(result) -> int:
-        """Extract QQ message_id from OneBot send_group_msg response"""
-        if result and isinstance(result, dict):
-            data = result.get('data', {})
-            if isinstance(data, dict):
-                return data.get('message_id')
-            return result.get('message_id')
-        return None
-
-    async def _send_file_to_tg(self, qq_user_id: int, qq_nickname: str, file_url: str, send_func, file_key: str, **kwargs):
-        """通用文件转发到 Telegram 方法，支持本地路径中转"""
-        binding = await db.get_binding_by_qq(qq_user_id)
-        prefix = f"[QQ] {binding[2] or qq_nickname}" if binding else f"[QQ] {qq_nickname}"
-        temp_path = None
-        original_filename = None
-        
-        try:
-            # 判断是否为本地路径或内网地址
-            if file_url.startswith(("file:///", "/", "C:\\", "D:\\")) or "127.0.0.1" in file_url or "localhost" in file_url:
-                local_path = file_url.replace("file://", "")
-                if os.path.exists(local_path):
-                    temp_path = local_path
-                    original_filename = os.path.basename(local_path)
-                else:
-                    raise FileNotFoundError(f"Local file not found: {local_path}")
-            else:
-                temp_path = file_url
-
-            # 准备发送参数
-            send_kwargs = {"chat_id": self.tg_group_id}
-            
-            # 处理回复 ID
-            if "reply_to_message_id" in kwargs:
-                send_kwargs["reply_to_message_id"] = kwargs.pop("reply_to_message_id")
-            
-            qq_message_id = kwargs.pop("qq_message_id", None)
-            
-            # 处理 Caption
-            if "caption" in kwargs:
-                send_kwargs["caption"] = kwargs.pop("caption")
-            elif file_key == "document":
-                send_kwargs["caption"] = prefix
-
-            # 关键修复：即使是 http URL，如果 Telegram 无法访问（如内网或需代理），也应下载到本地再上传
-            # 我们统一采用"下载到本地 -> 上传给 TG"的策略以确保稳定性
-            if not os.path.exists(temp_path):
-                if file_url.startswith("http"):
-                    temp_path = file_url
-                else:
-                    raise FileNotFoundError(f"Local file not found and no HTTP fallback available: {temp_path}")
-            if not os.path.exists(temp_path) or temp_path.startswith("http"):
-                # 如果是 URL，先下载到临时文件
-                if temp_path.startswith("http"):
-                    ext = os.path.splitext(temp_path.split('?')[0])[1]
-                    original_filename = kwargs.get('filename', 'unknown_file')
-                    if not ext and original_filename != 'unknown_file':
-                        ext = os.path.splitext(original_filename)[1]
-                    ext = ext or '.tmp'
-                    
-                    # 使用原始文件名下载
-                    download_filename = original_filename if original_filename != 'unknown_file' else f"file_{uuid.uuid4().hex[:8]}{ext}"
-                    downloaded_path = await self._download_to_temp(temp_path, download_filename)
-                    temp_path = downloaded_path
-
-                    # 文件内容探针：当扩展名为通用占位符时，从文件头部魔数检测真实类型
-                    if ext in ('.dat', '.tmp', ''):
-                        detected_ext = self._detect_extension_from_content(temp_path)
-                        if detected_ext and detected_ext != ext:
-                            new_path = os.path.splitext(temp_path)[0] + detected_ext
-                            os.rename(temp_path, new_path)
-                            temp_path = new_path
-                            original_filename = os.path.splitext(original_filename)[0] + detected_ext
-                            ext = detected_ext
-                            kwargs['filename'] = original_filename
-                            logger.info(f"从文件内容检测到真实扩展名: {detected_ext}")
-
-            # 以二进制流形式发送给 Telegram
-            if os.path.exists(temp_path):
-                async with aiofiles.open(temp_path, 'rb') as f:
-                    file_content = await f.read()
-
-                if file_key == "photo":
-                    try:
-                        img = Image.open(io.BytesIO(file_content))
-                        w, h = img.size
-                        if w < 10 or h < 10 or w + h < 20:
-                            logger.warning(f"图片尺寸过小 ({w}x{h})，改为文档形式发送")
-                            file_key = "document"
-                            send_func = self.bot.send_document
-                            if "caption" not in send_kwargs:
-                                send_kwargs["caption"] = send_kwargs.get("caption", prefix)
-                            kwargs["filename"] = kwargs.get("filename", os.path.basename(temp_path))
-                            if not os.path.splitext(kwargs["filename"])[1]:
-                                kwargs["filename"] = kwargs["filename"] + (os.path.splitext(temp_path)[1] or ".png")
-                    except Exception as img_err:
-                        logger.warning(f"无法解析图片尺寸，改为文档形式发送: {img_err}")
-                        file_key = "document"
-                        send_func = self.bot.send_document
-                        if "caption" not in send_kwargs:
-                            send_kwargs["caption"] = send_kwargs.get("caption", prefix)
-                        kwargs["filename"] = kwargs.get("filename", os.path.basename(temp_path))
-                        if not os.path.splitext(kwargs["filename"])[1]:
-                            kwargs["filename"] = kwargs["filename"] + (os.path.splitext(temp_path)[1] or ".png")
-
-                async def _do_send():
-                    if file_key == "document":
-                        buf = io.BytesIO(file_content)
-                        send_kwargs[file_key] = (kwargs.get('filename', os.path.basename(temp_path)), buf)
-                    else:
-                        send_kwargs[file_key] = io.BytesIO(file_content)
-                    return await send_func(**send_kwargs)
-
-                result = await retry_async(_do_send, max_retries=3, base_delay=2.0)
-                logger.info(f"文件已成功发送至 Telegram: {os.path.basename(temp_path)}")
-                if result and qq_message_id:
-                    await db.save_message_mapping(
-                        tg_message_id=result.message_id,
-                        qq_message_id=qq_message_id,
-                        sender_qq_id=qq_user_id
-                    )
-            else:
-                raise FileNotFoundError(f"File not found for forwarding: {temp_path}")
-                
-        except asyncio.TimeoutError:
-            error_msg = f"⚠️ 文件同步失败：上传至 Telegram 超时\n文件: {original_filename or os.path.basename(temp_path) if temp_path else '未知'}\n可能原因：文件过大或网络不稳定"
-            # 发送到 QQ
-            try:
-                qq_gid = config_loader.get('qq.group_id')
-                await onebot_client.send_group_msg(qq_gid, error_msg)
-            except Exception as send_err:
-                logger.debug(f"发送 QQ 错误通知失败: {send_err}")
-            return None
-                
-        except Exception as e:
-            logger.error(f"转发消息至 Telegram 失败: {e}", exc_info=True)
-            
-            # 判断错误类型并发送友好提示
-            error_type = self._classify_error(e)
-            error_msg = self._get_friendly_error_message(error_type, original_filename or os.path.basename(temp_path) if temp_path else "")
-            
-            # 发送到 QQ
-            try:
-                qq_gid = config_loader.get('qq.group_id')
-                await onebot_client.send_group_msg(qq_gid, error_msg)
-            except Exception as send_err:
-                logger.debug(f"发送 QQ 错误通知失败: {send_err}")
-            return None
+            if 'temp_path' in locals() and temp_path and os.path.exists(temp_path):
+                try: os.remove(temp_path)
+                except: pass
+            if 'ogg_path' in locals() and ogg_path and os.path.exists(ogg_path):
+                try: os.remove(ogg_path)
+                except: pass
 
     async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str, reply_segment: list = None, tg_message_id: int = None):
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
