@@ -21,7 +21,7 @@ HELP_TEXT = (
     "/blockwords - 查看当前屏蔽词列表\n"
     "/confirm - 确认自动下载 FFmpeg\n"
     "/cancel - 取消自动下载提示\n"
-    "/help - 显示此帮助信息\n\n"
+    "/help - 显示此帮助信息"
 )
 
 async def handle_bind_command(user_id: int, platform: str, args: list = None):
@@ -161,7 +161,7 @@ async def handle_status_command(start_time: float = None):
         f"- 绑定用户数: {user_count} 人\n"
         f"- 目标 QQ 群: {qq_gid}\n"
         f"- 目标 TG 群: {tg_gid}\n"
-        f"--------------------------\n"
+        f"--------------------------"
         f"{plugin_info_lines}"
         f"--------------------------"
     )

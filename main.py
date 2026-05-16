@@ -4,6 +4,7 @@ import sys
 import time
 import subprocess
 import json
+import shutil
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
@@ -29,6 +30,22 @@ from utils.logger import logger
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
+
+def _copy_to_temp(file_url: str) -> str:
+    """若是本地 file:// 路径则复制到 temp 目录并返回新路径；否则原样返回"""
+    if not file_url or file_url.startswith('http'):
+        return file_url
+    local_path = file_url.replace('file:///', '').replace('file://', '')
+    if not os.path.exists(local_path):
+        logger.warning(f"本地文件不存在，无法复制到 temp: {local_path}")
+        return file_url
+    temp_dir = os.path.join(os.getcwd(), 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    dest = os.path.join(temp_dir, f"webhook_{int(time.time() * 1000)}_{os.path.basename(local_path)}")
+    shutil.copy(local_path, dest)
+    logger.debug(f"已复制本地文件到 temp: {os.path.basename(local_path)}")
+    return dest
+
 
 async def handle_qq_webhook(request):
     try:
@@ -116,6 +133,12 @@ async def handle_qq_webhook(request):
                     mface_url = msg_part['data'].get('url') or msg_part['data'].get('file')
             
             combined_text = "".join(text_parts).strip()
+            
+            # 立即复制本地文件到 temp 目录，防止 NapCat 提前清理缓存
+            image_url = _copy_to_temp(image_url) if image_url else None
+            video_url = _copy_to_temp(video_url) if video_url else None
+            file_url = _copy_to_temp(file_url) if file_url else None
+            mface_url = _copy_to_temp(mface_url) if mface_url else None
             
             # 优先处理合并转发消息
             if is_forward and forward_content:

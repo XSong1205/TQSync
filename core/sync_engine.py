@@ -1036,7 +1036,10 @@ class SyncEngine:
             # 关键修复：即使是 http URL，如果 Telegram 无法访问（如内网或需代理），也应下载到本地再上传
             # 我们统一采用"下载到本地 -> 上传给 TG"的策略以确保稳定性
             if not os.path.exists(temp_path):
-                temp_path = file_url
+                if file_url.startswith("http"):
+                    temp_path = file_url
+                else:
+                    raise FileNotFoundError(f"Local file not found and no HTTP fallback available: {temp_path}")
             if not os.path.exists(temp_path) or temp_path.startswith("http"):
                 # 如果是 URL，先下载到临时文件
                 if temp_path.startswith("http"):
