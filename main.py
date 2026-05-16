@@ -191,6 +191,42 @@ async def handle_qq_webhook(request):
                     await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
                     await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。或发送 /confirm 重新开始下载")
                     return web.json_response({})
+                elif cmd == '/blockword':
+                    admin_ids = config_loader.get('server.admin_user_ids', [])
+                    if admin_ids and qq_id not in admin_ids:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        return web.json_response({})
+                    if not args:
+                        response = "Usage: /blockword <关键词>"
+                    else:
+                        word = " ".join(args)
+                        success = await db.add_blocked_word(word)
+                        if success:
+                            response = f"已添加屏蔽词: {word}"
+                            logger.info(f"[屏蔽词] QQ管理员 {qq_id} 添加屏蔽词: {word}")
+                        else:
+                            response = f"屏蔽词已存在: {word}"
+                elif cmd == '/unblockword':
+                    admin_ids = config_loader.get('server.admin_user_ids', [])
+                    if admin_ids and qq_id not in admin_ids:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        return web.json_response({})
+                    if not args:
+                        response = "Usage: /unblockword <关键词>"
+                    else:
+                        word = " ".join(args)
+                        success = await db.remove_blocked_word(word)
+                        if success:
+                            response = f"已删除屏蔽词: {word}"
+                            logger.info(f"[屏蔽词] QQ管理员 {qq_id} 删除屏蔽词: {word}")
+                        else:
+                            response = f"屏蔽词不存在: {word}"
+                elif cmd == '/blockwords':
+                    words = await db.get_blocked_words()
+                    if words:
+                        response = f"当前屏蔽词 ({len(words)}个):\n" + "\n".join(f"  {i+1}. {w}" for i, w in enumerate(words))
+                    else:
+                        response = "当前没有屏蔽词。"
                 else:
                     # 尝试插件路由（未知命令）
                     if combined_text.strip():
@@ -203,6 +239,13 @@ async def handle_qq_webhook(request):
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
                 return web.json_response({})
+
+            # 屏蔽词检测 (所有非命令文本消息)
+            if combined_text:
+                blocked_word = await db.check_blocked_word_in_text(combined_text)
+                if blocked_word:
+                    logger.info(f"[屏蔽] QQ用户 {qq_id}({nickname}) 的消息被拦截 (关键词: {blocked_word})")
+                    return web.json_response({})
 
             # 插件消息路由 (仅纯文本，无媒体附件)
             combined_text_early = "".join(text_parts).strip()

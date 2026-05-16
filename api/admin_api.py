@@ -215,7 +215,31 @@ def update_config(config_key: str, update: ConfigUpdate):
 @app.get("/admin/bindings", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def get_bindings():
     bindings = await db.get_all_bindings()
-    return [{"tg_user_id": b[0], "qq_user_id": b[1], "tg_username": b[2], "qq_nickname": b[3]} for b in bindings]
+    bound_qq_ids = set()
+    result = []
+    for b in bindings:
+        bound_qq_ids.add(b[1])
+        result.append({
+            "tg_user_id": b[0],
+            "qq_user_id": b[1],
+            "tg_username": b[2],
+            "qq_nickname": b[3],
+            "status": "已绑定",
+            "uid": b[4]
+        })
+    synced_qq = await db.get_synced_qq_users()
+    for qq_id in synced_qq:
+        if qq_id not in bound_qq_ids:
+            result.append({
+                "tg_user_id": None,
+                "qq_user_id": qq_id,
+                "tg_username": None,
+                "qq_nickname": None,
+                "status": "未绑定",
+                "uid": None
+            })
+    result.sort(key=lambda x: (0 if x["status"] == "已绑定" else 1, x["qq_user_id"] or 0))
+    return result
 
 @app.delete("/admin/bindings/{tg_user_id}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def delete_binding(tg_user_id: int):
@@ -249,6 +273,32 @@ async def toggle_admin(user_id: int):
     
     config_loader.update_config('server.admin_user_ids', admins)
     return {"status": "success", "message": msg, "admins": admins}
+
+
+# ── 屏蔽词管理 API ──
+
+@app.get("/admin/blocked_words", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_blocked_words():
+    words = await db.get_blocked_words()
+    return {"words": words, "count": len(words)}
+
+@app.post("/admin/blocked_words", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def add_blocked_word(body: BlockedWordAdd):
+    if not body.word.strip():
+        raise HTTPException(status_code=400, detail="屏蔽词不能为空")
+    success = await db.add_blocked_word(body.word)
+    if not success:
+        raise HTTPException(status_code=409, detail="屏蔽词已存在")
+    return {"status": "success", "message": f"已添加屏蔽词: {body.word}", "word": body.word}
+
+@app.delete("/admin/blocked_words/{word}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def delete_blocked_word(word: str):
+    from urllib.parse import unquote
+    word = unquote(word)
+    success = await db.remove_blocked_word(word)
+    if not success:
+        raise HTTPException(status_code=404, detail="屏蔽词不存在")
+    return {"status": "success", "message": f"已删除屏蔽词: {word}"}
 
 
 # ── 插件管理 API ──
@@ -366,6 +416,9 @@ async def upload_plugin(file: UploadFile = File(...)):
 class PluginDataUpdate(BaseModel):
     key: str
     value: str
+
+class BlockedWordAdd(BaseModel):
+    word: str
 
 
 @app.get("/admin/plugins/data", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])

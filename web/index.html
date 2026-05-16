@@ -384,6 +384,12 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
 }
 .tbl-wrap .el-table th{font-size:10px !important;text-transform:uppercase !important;letter-spacing:.08em !important;font-weight:500 !important}
 .tbl-wrap .el-button--danger{background:rgba(248,113,113,.1) !important;border-color:rgba(248,113,113,.3) !important;color:var(--red) !important}
+.btag{
+  font-size:10px;font-family:var(--mono);font-weight:500;
+  padding:2px 8px;border-radius:4px;white-space:nowrap;
+}
+.btag.bgood{background:rgba(65,224,163,.12);color:var(--primary);border:1px solid rgba(65,224,163,.25)}
+.btag.bgray{background:rgba(255,255,255,.04);color:var(--dim);border:1px solid var(--border)}
 .tbl-empty{padding:44px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
 .tbl-ei{
   width:36px;height:36px;border:1px dashed var(--border2);
@@ -691,27 +697,54 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
         <div class="sec-hd">
           <div class="sec-title">
             <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="3.5" r="2.2" stroke="currentColor" stroke-width=".9"/><path d="M1 10c0-2.2 2-3.8 4.5-3.8S10 7.8 10 10" stroke="currentColor" stroke-width=".9" stroke-linecap="round"/></svg>
-            绑定列表
+            用户列表
           </div>
           <div class="sec-line"></div>
-          <span style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:12px;white-space:nowrap">{{ bindings.length }} 条记录</span>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:12px;white-space:nowrap">{{ bindings.length }} 条记录 &middot; 已绑定 {{ bindings.filter(b=>b.status==='已绑定').length }} 人</span>
         </div>
         <el-table :data="bindings" style="width:100%">
-          <el-table-column prop="tg_user_id" label="Telegram ID"></el-table-column>
-          <el-table-column prop="qq_user_id" label="QQ 号码"></el-table-column>
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="scope">
+              <span class="btag" :class="scope.row.status==='已绑定'?'bgood':'bgray'">{{ scope.row.status }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="tg_user_id" label="Telegram ID">
+            <template #default="scope">
+              <span style="font-family:var(--mono);font-size:12px" v-if="scope.row.tg_user_id">{{ scope.row.tg_user_id }}</span>
+              <span style="color:var(--dim);font-size:11px" v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="TG 用户名">
+            <template #default="scope">
+              <span style="font-family:var(--mono);font-size:12px" v-if="scope.row.tg_username">@{{ scope.row.tg_username }}</span>
+              <span style="color:var(--dim);font-size:11px" v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="QQ 号码">
+            <template #default="scope">
+              <span style="font-family:var(--mono);font-size:12px">{{ scope.row.qq_user_id }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="QQ 昵称">
+            <template #default="scope">
+              <span style="font-family:var(--mono);font-size:12px" v-if="scope.row.qq_nickname">{{ scope.row.qq_nickname }}</span>
+              <span style="color:var(--dim);font-size:11px" v-else>—</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="80" align="center">
             <template #default="scope">
-              <el-popconfirm title="确认解除此绑定？" @confirm="unbind(scope.row.tg_user_id)">
+              <el-popconfirm v-if="scope.row.status==='已绑定'" title="确认解除此绑定？" @confirm="unbind(scope.row.tg_user_id)">
                 <template #reference>
                   <el-button size="small" type="danger" icon="Delete" circle></el-button>
                 </template>
               </el-popconfirm>
+              <span v-else style="color:var(--dim);font-size:11px">—</span>
             </template>
           </el-table-column>
         </el-table>
         <div class="tbl-empty" v-if="bindings.length===0">
           <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><circle cx="8.5" cy="5.5" r="3" stroke="currentColor" stroke-width="1.1"/><path d="M2 15.5c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></div>
-          暂无绑定用户
+          暂无用户数据
         </div>
       </div>
 
@@ -723,8 +756,14 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
             配置管理
           </div>
           <div class="sec-line"></div>
-          <span style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:12px;white-space:nowrap">{{ configItems.length }} 项配置</span>
+          <span style="display:flex;gap:4px;margin-left:12px">
+            <el-button :type="configSubTab==='config'?'primary':'default'" size="small" @click="configSubTab='config'" round>配置文件</el-button>
+            <el-button :type="configSubTab==='blockedWords'?'primary':'default'" size="small" @click="configSubTab='blockedWords';fetchBlockedWords()" round>屏蔽词管理</el-button>
+          </span>
         </div>
+
+        <!-- 配置文件 -->
+        <div v-if="configSubTab==='config'">
         <div class="cfg-wrap" v-for="(items, section) in configSections" :key="section" style="margin-bottom:14px">
           <div class="cfg-sect-hd">
             <svg viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M4 6h4M4 4h1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
@@ -772,6 +811,41 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
           <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="1.3"/><path d="M16 12v4M16 21v.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           暂无配置数据
         </div>
+        </div>
+
+        <!-- 屏蔽词管理 -->
+        <div v-if="configSubTab==='blockedWords'" class="page-in">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <span style="font-size:11px;color:var(--muted);font-family:var(--mono);white-space:nowrap">{{ blockedWords.length }} 个屏蔽词</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <input class="log-filter" style="flex:1;max-width:420px" v-model="newBlockedWord" placeholder="输入屏蔽词…" @keyup.enter="addBlockedWord" spellcheck="false"/>
+            <el-button type="primary" size="small" @click="addBlockedWord" :disabled="!newBlockedWord.trim()">添加</el-button>
+          </div>
+          <el-table :data="tableBlockedWords" style="width:100%" class="tbl-wrap" v-if="blockedWords.length>0">
+            <el-table-column label="# " width="50">
+              <template #default="scope">{{ scope.$index + 1 }}</template>
+            </el-table-column>
+            <el-table-column label="屏蔽词">
+              <template #default="scope">
+                <span style="font-family:var(--mono);font-size:13px;color:var(--red)">{{ scope.row }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="80" align="center">
+              <template #default="scope">
+                <el-popconfirm title="确认删除此屏蔽词？" @confirm="removeBlockedWord(scope.row)">
+                  <template #reference>
+                    <el-button size="small" type="danger" icon="Delete" circle></el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="tbl-empty" v-if="blockedWords.length===0">
+            <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><path d="M8.5 3v8M4.5 7h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+            暂无屏蔽词，输入关键词并点击添加
+          </div>
+        </div>
       </div>
 
     </div>
@@ -804,6 +878,9 @@ createApp({
     const logFilter    = ref('');
     const bindings     = ref([]);
     const configItems  = ref([]);
+    const configSubTab = ref('config');
+    const blockedWords = ref([]);
+    const newBlockedWord = ref('');
     const logBodyRef   = ref(null);
 
     const sparkBars = ref(Array.from({length:24}, () => Math.floor(Math.random()*70+10)));
@@ -877,6 +954,33 @@ createApp({
       } catch(e) {}
     };
 
+    const fetchBlockedWords = async () => {
+      try { const res = await api.get('/admin/blocked_words'); blockedWords.value = res.data.words || []; } catch(e) {}
+    };
+
+    const addBlockedWord = async () => {
+      const w = newBlockedWord.value.trim();
+      if (!w) return;
+      try {
+        await api.post('/admin/blocked_words', { word: w });
+        ElMessage.success(`已添加屏蔽词: ${w}`);
+        newBlockedWord.value = '';
+        fetchBlockedWords();
+      } catch(e) {
+        ElMessage.error(e.response?.data?.detail || '添加失败');
+      }
+    };
+
+    const removeBlockedWord = async (word) => {
+      try {
+        await api.delete(`/admin/blocked_words/${encodeURIComponent(word)}`);
+        ElMessage.success(`已删除屏蔽词: ${word}`);
+        fetchBlockedWords();
+      } catch(e) {
+        ElMessage.error('删除失败');
+      }
+    };
+
     const configSections = computed(() => {
       const groups = {};
       configItems.value.forEach(item => {
@@ -909,7 +1013,7 @@ createApp({
       activeTab.value = idx; mobileOpen.value = false;
       if (idx === 'logs') fetchLogs();
       if (idx === 'binds') fetchBindings();
-      if (idx === 'config') fetchConfig();
+      if (idx === 'config') { fetchConfig(); fetchBlockedWords(); configSubTab.value = 'config'; }
     };
 
     const doRestart = async () => {
@@ -928,6 +1032,8 @@ createApp({
       return logs.value.filter(l => l.toLowerCase().includes(q));
     });
 
+    const tableBlockedWords = computed(() => blockedWords.value.map(w => ({word: w})));
+
     const getLogCls = (l) => {
       if (/error|ERROR|失败/i.test(l)) return 'll-err';
       if (/warn|WARN/i.test(l))        return 'll-warn';
@@ -936,7 +1042,10 @@ createApp({
       return '';
     };
 
-    const pageTitle = computed(() => ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理',config:'系统配置'})[activeTab.value]);
+    const pageTitle = computed(() => {
+      if (activeTab.value === 'config' && configSubTab.value === 'blockedWords') return '系统配置 / 屏蔽词管理';
+      return ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理',config:'系统配置'})[activeTab.value] || '';
+    });
 
     onMounted(() => {
       checkScreen();
@@ -956,9 +1065,10 @@ createApp({
     return {
       isLoggedIn, loggingIn, loginLoading, loginErr, inputKey, showPw,
       activeTab, mobileOpen, status, logs, logFilter, filteredLogs,
-      bindings, configItems, configSections, logBodyRef, sparkBars, maxBar, pageTitle,
+      bindings, configItems, configSections, configSubTab, blockedWords, newBlockedWord, tableBlockedWords,
+      logBodyRef, sparkBars, maxBar, pageTitle,
       doLogin, doLogout, handleMenu, doRestart, unbind, getLogCls,
-      fetchConfig, startEdit, cancelEdit, saveConfig
+      fetchConfig, fetchBlockedWords, addBlockedWord, removeBlockedWord, startEdit, cancelEdit, saveConfig
     };
   }
 }).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');

@@ -16,6 +16,9 @@ HELP_TEXT = (
     "/status - 查看机器人运行状态\n"
     "/checkupdate - 从 GitHub 拉取最新源码并自动重启更新（仅限管理员）\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
+    "/blockword <关键词> - 添加屏蔽词（仅限管理员）\n"
+    "/unblockword <关键词> - 删除屏蔽词（仅限管理员）\n"
+    "/blockwords - 查看当前屏蔽词列表\n"
     "/confirm - 确认自动下载 FFmpeg\n"
     "/cancel - 取消自动下载提示\n"
     "/help - 显示此帮助信息\n\n"
@@ -230,7 +233,7 @@ async def handle_checkupdate_command() -> dict:
         remote_commit = remote_result.stdout.strip()[:7]
         remote_full = remote_result.stdout.strip()
 
-        parts = [f"📍 当前分支: {current_branch}", f"🔖 本地: {local_commit}  →  远程: {remote_commit}"]
+        parts = [f"当前分支: {current_branch}", f"本地: {local_commit}  =>  远程: {remote_commit}"]
 
         if local_full == remote_full:
             parts.append("已是最新版本，无需更新")

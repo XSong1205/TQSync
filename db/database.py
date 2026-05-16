@@ -291,6 +291,54 @@ class Database:
             ''', (key, value))
             await db.commit()
 
+    # --- Blocked Words (屏蔽词) ---
+    async def get_blocked_words(self) -> list:
+        data = await self.get_setting('blocked_words', '[]')
+        try:
+            import json
+            return json.loads(data)
+        except Exception:
+            return []
+
+    async def add_blocked_word(self, word: str) -> bool:
+        word = word.strip()
+        words = await self.get_blocked_words()
+        if word in words:
+            return False
+        words.append(word)
+        import json
+        await self.set_setting('blocked_words', json.dumps(words, ensure_ascii=False))
+        return True
+
+    async def remove_blocked_word(self, word: str) -> bool:
+        word = word.strip()
+        words = await self.get_blocked_words()
+        if word not in words:
+            return False
+        words.remove(word)
+        import json
+        await self.set_setting('blocked_words', json.dumps(words, ensure_ascii=False))
+        return True
+
+    async def check_blocked_word_in_text(self, text: str):
+        if not text:
+            return None
+        words = await self.get_blocked_words()
+        text_lower = text.lower()
+        for word in words:
+            if word.lower() in text_lower:
+                return word
+        return None
+
+    # --- Synced Users (从 message_mapping 获取同步过的用户) ---
+    async def get_synced_qq_users(self):
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                'SELECT DISTINCT sender_qq_id FROM message_mapping WHERE sender_qq_id IS NOT NULL ORDER BY sender_qq_id'
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [r[0] for r in rows]
+
     # --- Plugin Data CRUD ---
     async def get_plugin_data(self, plugin_name: str, key: str = None):
         if key:

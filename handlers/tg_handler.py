@@ -73,6 +73,11 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.photo:
         file_id = msg.photo[-1].file_id
         caption = msg.caption or ""
+        if caption:
+            blocked_word = await db.check_blocked_word_in_text(caption.strip())
+            if blocked_word:
+                logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+                return
         logger.info(f"[TG] {user.username} 发送了一张图片")
         engine.enqueue_sync_task(engine.forward_image_to_qq, user.id, user.username or str(user.id), file_id, caption, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
@@ -118,6 +123,11 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 处理文本消息
     text = update.message.text
     if text:
+        blocked_word = await db.check_blocked_word_in_text(text.strip())
+        if blocked_word:
+            logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+            return
+
         pm = PluginManager.get_instance()
         if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
             return
@@ -280,6 +290,53 @@ async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYP
     await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
     await update.message.reply_text("已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。")
 
+async def handle_blockword_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /blockword <关键词> (管理员)"""
+    from config.config_loader import config_loader
+    admin_ids = config_loader.get('server.admin_user_ids', [])
+    user_id = update.effective_user.id
+    if admin_ids and user_id not in admin_ids:
+        await update.message.reply_text("您的权限不足以执行此操作")
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /blockword <关键词>")
+        return
+    word = " ".join(context.args)
+    success = await db.add_blocked_word(word)
+    if success:
+        await update.message.reply_text(f"已添加屏蔽词: {word}")
+        logger.info(f"[屏蔽词] TG管理员 {user_id} 添加屏蔽词: {word}")
+    else:
+        await update.message.reply_text(f"屏蔽词已存在: {word}")
+
+async def handle_unblockword_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /unblockword <关键词> (管理员)"""
+    from config.config_loader import config_loader
+    admin_ids = config_loader.get('server.admin_user_ids', [])
+    user_id = update.effective_user.id
+    if admin_ids and user_id not in admin_ids:
+        await update.message.reply_text("您的权限不足以执行此操作")
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /unblockword <关键词>")
+        return
+    word = " ".join(context.args)
+    success = await db.remove_blocked_word(word)
+    if success:
+        await update.message.reply_text(f"已删除屏蔽词: {word}")
+        logger.info(f"[屏蔽词] TG管理员 {user_id} 删除屏蔽词: {word}")
+    else:
+        await update.message.reply_text(f"屏蔽词不存在: {word}")
+
+async def handle_blockwords_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /blockwords (查看屏蔽词列表)"""
+    words = await db.get_blocked_words()
+    if words:
+        text = f"当前屏蔽词 ({len(words)}个):\n" + "\n".join(f"  {i+1}. {w}" for i, w in enumerate(words))
+    else:
+        text = "当前没有屏蔽词。"
+    await update.message.reply_text(text)
+
 async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """路由未被前置 CommandHandler 处理的 /command 到插件系统"""
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
@@ -301,7 +358,6 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
 
 def get_tg_handlers():
     return [
-        # 使用 filters.ALL 接收所有消息，然后在 handle_tg_message 内部进行类型判断
         MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
         CommandHandler('setprefix', handle_setprefix_command),
@@ -311,6 +367,8 @@ def get_tg_handlers():
         CommandHandler('checkupdate', handle_checkupdate_command_tg),
         CommandHandler('confirm', handle_confirm_ffmpeg),
         CommandHandler('cancel', handle_cancel_ffmpeg),
-        # 兜底：未被注册的 /command 路由到插件系统
+        CommandHandler('blockword', handle_blockword_command),
+        CommandHandler('unblockword', handle_unblockword_command),
+        CommandHandler('blockwords', handle_blockwords_command),
         MessageHandler(filters.COMMAND, handle_unhandled_command),
     ]
