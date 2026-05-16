@@ -113,6 +113,15 @@ class SyncEngine:
 
     # ---- 统一媒体转发 (QQ → TG) ------------------------------------------
 
+    @staticmethod
+    def _extract_qq_message_id(result) -> int:
+        if result and isinstance(result, dict):
+            data = result.get('data', {})
+            if isinstance(data, dict):
+                return data.get('message_id')
+            return result.get('message_id')
+        return None
+
     async def forward_media_to_tg(self, qq_user_id: int, qq_nickname: str,
                                   source: FileSource, *, caption: str = '',
                                   reply_to_message_id: int = None,
