@@ -105,26 +105,27 @@ class FileSource:
     @classmethod
     def from_qq_webhook(cls, file_url: str, file_name: str = '',
                         raw_file: str = '', raw_url: str = '') -> FileSource:
-        """从 QQ webhook 数据构造 FileSource。
-
-        file_url  = data.url  or data.file  (已经是主代码中的解析结果)
-        raw_file  = data.file (原始 file 字段)
-        raw_url   = data.url  (原始 url 字段)
-        """
+        """从 QQ webhook 数据构造 FileSource。"""
         fs = cls(file_name=file_name or 'unknown_file')
 
         if not file_url:
             return fs
 
-        if file_url.startswith('http'):
+        # QQ 内部 CDN URL 不可直接 HTTP 访问，必须通过 NapCat API
+        _qq_cdn_domains = ('gchat.qpic.cn', 'multimedia.nt.qq.com.cn',
+                           'c2c.p.afjackimg.com', 'groupprocover.gtimg.cn')
+
+        if file_url.startswith('http') and any(d in file_url for d in _qq_cdn_domains):
+            fs.napcat_file = raw_file or file_url
+            fs.http_url = None  # 禁止直接 HTTP 下载
+        elif file_url.startswith('http'):
             fs.http_url = file_url
         elif file_url.startswith('file:///'):
             fs.local_path = file_url.replace('file://', '')
-            fs.napcat_file = raw_file or file_url  # 保留原始引用用于 fallback
+            fs.napcat_file = raw_file or file_url
         elif os.path.isabs(file_url):
             fs.local_path = file_url
         else:
-            # 可能是 file_id 或相对路径 — 交给 NapCat API 解析
             fs.napcat_file = file_url
 
         return fs
@@ -155,29 +156,39 @@ class NapCatFileAPI:
     """封装 NapCat 文件相关 API (get_file / get_image / download_file 等)。"""
 
     @staticmethod
-    async def get_file(file: str = None, file_id: str = None) -> Optional[dict]:
-        """调用 /get_file 或 /get_image 获取文件信息及下载路径。"""
+    async def get_file(file: str = None, file_id: str = None,
+                       file_name: str = '') -> Optional[dict]:
+        """调用 /get_image 或 /get_file 获取文件信息及下载路径。
+
+        根据文件名/扩展名自动选择正确的 API 端点:
+        - 图片格式 → /get_image
+        - 其他 → /get_file
+        """
+        if not file and not file_id:
+            return None
+
+        # 根据扩展名判断是否为图片
+        _image_exts = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.ico')
+        is_image = any(file_name.lower().endswith(e) for e in _image_exts) if file_name else False
+
         payload = {}
         if file_id:
             payload['file_id'] = file_id
         if file:
             payload['file'] = file
-        if not payload:
-            return None
 
-        try:
-            result = await onebot_client._post_json('/get_file', payload, max_retries=2, base_delay=1.0)
-            if result.get('retcode') == 0 and result.get('data'):
-                return result['data']
-        except Exception as e:
-            logger.debug(f'NapCat /get_file 失败: {e}')
+        endpoints = [('/get_image', '图片'), ('/get_file', '文件')] if is_image else [
+            ('/get_file', '文件'), ('/get_image', '图片')
+        ]
 
-        try:
-            result = await onebot_client._post_json('/get_image', payload, max_retries=2, base_delay=1.0)
-            if result.get('retcode') == 0 and result.get('data'):
-                return result['data']
-        except Exception as e:
-            logger.debug(f'NapCat /get_image 失败: {e}')
+        for endpoint, label in endpoints:
+            try:
+                result = await onebot_client._post_json(endpoint, payload, max_retries=2, base_delay=1.0)
+                if result.get('retcode') == 0 and result.get('data'):
+                    logger.debug(f'NapCat {label} API 解析成功')
+                    return result['data']
+            except Exception as e:
+                logger.debug(f'NapCat {label} API 失败: {e}')
 
         return None
 
@@ -255,12 +266,11 @@ class FileTransfer:
     async def resolve(source: FileSource) -> FileSource:
         """将 FileSource 解析为可用的本地文件路径。
 
-        解析链路:
-        1. 已有 local_path 且存在 → 直接使用
-        2. 已有 data (字节) → 写入临时文件
-        3. 有 http_url → HTTP 下载
-        4. 有 napcat_file → 调用 NapCat /get_file API 获取 url/local_path
-        5. 上述都失败 → 抛出
+        解析链路 (QQ 媒体优先走 NapCat API):
+        1. local_path 已存在 → 直接使用
+        2. data (字节) → 写入临时文件
+        3. napcat_file → 调用 NapCat API 获取本地路径/base64
+        4. http_url → HTTP 下载 (非 QQ CDN)
         """
         # 1. 本地路径
         if source.local_path and os.path.exists(source.local_path):
@@ -278,31 +288,19 @@ class FileTransfer:
             logger.debug(f'内存数据写入: {dest} ({source.size_str})')
             return source
 
-        # 3. HTTP 下载
-        if source.http_url:
-            try:
-                path = await FileTransfer._http_download(source.http_url, source.file_name)
-                source.local_path = path
-                source.file_size = os.path.getsize(path)
-                logger.debug(f'HTTP 下载完成: {path} ({source.size_str})')
-                return source
-            except Exception as e:
-                logger.warning(f'HTTP 下载失败, 尝试下一策略: {e}')
-
-        # 4. NapCat API 解析
+        # 3. NapCat API 解析 (QQ 媒体优先)
         if source.napcat_file or source.napcat_file_id:
             data = await NapCatFileAPI.get_file(
                 file=source.napcat_file,
-                file_id=source.napcat_file_id
+                file_id=source.napcat_file_id,
+                file_name=source.file_name
             )
             if data:
-                # 优先使用本地路径
                 if data.get('file') and os.path.exists(data['file']):
                     source.local_path = data['file']
                     source.file_size = int(data.get('file_size', 0)) or os.path.getsize(source.local_path)
                     source.file_name = data.get('file_name') or source.file_name
                     return source
-                # 其次使用 URL 下载
                 if data.get('url'):
                     try:
                         path = await FileTransfer._http_download(
@@ -315,7 +313,6 @@ class FileTransfer:
                         return source
                     except Exception as e:
                         logger.warning(f'NapCat URL 下载失败: {e}')
-                # 最后尝试 base64
                 if data.get('base64'):
                     try:
                         import base64
@@ -331,8 +328,18 @@ class FileTransfer:
                     except Exception as e:
                         logger.warning(f'NapCat base64 解码失败: {e}')
 
-        # 5. http_url 再次尝试（如果在第3步失败了但之前没执行过）
-        # 兜底：如果 local_path 存在但之前 os.path.exists 失败？
+        # 4. HTTP 下载 (非 QQ CDN 的普通 HTTP URL)
+        if source.http_url:
+            try:
+                path = await FileTransfer._http_download(source.http_url, source.file_name)
+                source.local_path = path
+                source.file_size = os.path.getsize(path)
+                logger.debug(f'HTTP 下载完成: {path} ({source.size_str})')
+                return source
+            except Exception as e:
+                logger.warning(f'HTTP 下载失败: {e}')
+
+        # 5. 兜底检查
         if source.local_path and os.path.exists(source.local_path):
             source.file_size = os.path.getsize(source.local_path)
             return source
