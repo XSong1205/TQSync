@@ -438,33 +438,31 @@ class FileTransfer:
             kwargs['reply_to_message_id'] = reply_to
 
         async def _do_send():
-            buf = io.BytesIO(content)
-
             if media_type == MediaType.IMAGE:
                 try:
                     img = Image.open(io.BytesIO(content))
                     w, h = img.size
                     if w < 10 and h < 10 and w + h < 20:
                         raise ValueError('图片过小')
-                    return await bot.send_photo(**kwargs, photo=buf)
+                    return await bot.send_photo(**kwargs, photo=content)
                 except Exception:
                     logger.debug(f'图片发送失败, 改为文档: {file_name}')
-                    return await bot.send_document(**kwargs, document=(file_name, buf))
+                    return await bot.send_document(**kwargs, document=(file_name, content))
 
             elif media_type == MediaType.VIDEO:
-                return await bot.send_video(**kwargs, video=(file_name, buf))
+                return await bot.send_video(**kwargs, video=(file_name, content))
 
             elif media_type == MediaType.ANIMATION:
                 try:
-                    return await bot.send_animation(**kwargs, animation=(file_name, buf))
+                    return await bot.send_animation(**kwargs, animation=(file_name, content))
                 except Exception:
-                    return await bot.send_document(**kwargs, document=(file_name, buf))
+                    return await bot.send_document(**kwargs, document=(file_name, content))
 
             elif media_type == MediaType.AUDIO:
-                return await bot.send_audio(**kwargs, audio=(file_name, buf))
+                return await bot.send_audio(**kwargs, audio=(file_name, content))
 
             else:
-                return await bot.send_document(**kwargs, document=(file_name, buf))
+                return await bot.send_document(**kwargs, document=(file_name, content))
 
         result = await _retry_async(_do_send, max_retries=3, base_delay=2.0)
         logger.info(f'已发送至 Telegram: {os.path.basename(file_path)}')
