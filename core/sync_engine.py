@@ -150,12 +150,13 @@ class SyncEngine:
         display_name = await self.get_display_name(
             tg_user_id=tg_user_id, fallback_name=tg_username
         )
-        source = FileSource.from_telegram(
-            file_id,
-            file_name=file_name,
-            file_size=file_size,
-            token=self.bot.token
-        )
+        # 先通过 Telegram API 获取实际文件 URL
+        file = await self.bot.get_file(file_id)
+        actual_path = file.file_path
+        if not actual_path.startswith('http'):
+            actual_path = f'https://api.telegram.org/file/bot{self.bot.token}/{actual_path}'
+        source = FileSource(file_name=file_name or 'unknown_file',
+                            file_size=file_size, http_url=actual_path)
         await FileTransfer.transfer_tg_to_qq(
             source,
             tg_user_id=tg_user_id,
