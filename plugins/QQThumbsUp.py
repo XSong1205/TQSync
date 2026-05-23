@@ -23,7 +23,7 @@ class QQThumbsUp(PluginBase):
 
         # 确保数据库中有默认值
         if not await self.ctx.db.get_plugin_data(self.name, "like_count"):
-            await self.ctx.db.set_plugin_data(self.name, "like_count", "50")
+            await self.ctx.db.set_plugin_data(self.name, "like_count", "10")
         if not await self.ctx.db.get_plugin_data(self.name, "like_time"):
             await self.ctx.db.set_plugin_data(self.name, "like_time", "08:00")
         if not await self.ctx.db.get_plugin_data(self.name, "auto_like_list"):
