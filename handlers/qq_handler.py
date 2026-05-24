@@ -11,20 +11,25 @@ class OneBotClient:
         if self.access_token:
             self.headers['Authorization'] = f'Bearer {self.access_token}'
         self._bot_id = None
+        self._session: aiohttp.ClientSession = None
+
+    async def _ensure_session(self):
+        if self._session is None or self._session.closed:
+            connector = aiohttp.TCPConnector(ssl=False, limit=10, limit_per_host=5)
+            self._session = aiohttp.ClientSession(connector=connector)
 
     async def _post_json(self, endpoint: str, payload: dict, max_retries: int = 3, base_delay: float = 1.5):
         """带指数退避重试的 JSON POST 请求"""
         url = f"{self.base_url}{endpoint}"
         last_error = None
-        connector = aiohttp.TCPConnector(ssl=False)
+        await self._ensure_session()
         for attempt in range(max_retries):
             try:
-                async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.post(url, json=payload, headers=self.headers) as resp:
-                        result = await resp.json()
-                        if result.get('retcode') != 0:
-                            logger.warning(f"OneBot API 返回非零状态: {endpoint} -> {result}")
-                        return result
+                async with self._session.post(url, json=payload, headers=self.headers) as resp:
+                    result = await resp.json()
+                    if result.get('retcode') != 0:
+                        logger.warning(f"OneBot API 返回非零状态: {endpoint} -> {result}")
+                    return result
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -40,12 +45,11 @@ class OneBotClient:
         """带指数退避重试的 JSON GET 请求"""
         url = f"{self.base_url}{endpoint}"
         last_error = None
-        connector = aiohttp.TCPConnector(ssl=False)
+        await self._ensure_session()
         for attempt in range(max_retries):
             try:
-                async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.get(url, headers=self.headers) as resp:
-                        return await resp.json()
+                async with self._session.get(url, headers=self.headers) as resp:
+                    return await resp.json()
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -56,6 +60,10 @@ class OneBotClient:
                     await asyncio.sleep(delay)
         logger.error(f"OneBot API {endpoint} GET 失败 (已重试{max_retries}次): {last_error}")
         raise last_error
+
+    async def close(self):
+        if self._session and not self._session.closed:
+            await self._session.close()
 
     async def get_bot_id(self) -> int:
         """获取当前登录的 Bot QQ 号"""

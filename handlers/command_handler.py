@@ -16,6 +16,7 @@ HELP_TEXT = (
     "/status - 查看机器人运行状态\n"
     "/checkupdate - 从 GitHub 拉取最新源码并自动重启更新（仅限管理员）\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
+    "/webui - 发送在config中配置的 WebUI 地址\n"
     "/blockword <关键词> - 添加屏蔽词（仅限管理员）\n"
     "/unblockword <关键词> - 删除屏蔽词（仅限管理员）\n"
     "/blockwords - 查看当前屏蔽词列表\n"

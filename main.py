@@ -559,13 +559,8 @@ async def main():
         proxy_url = f"http://{proxy_url}"
     
     # 禁用 SSL 证书验证（系统代理/VPN 环境必需）
-    import ssl
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    
     request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
-    request._client_kwargs["verify"] = ssl_context
+    request._client_kwargs["verify"] = False      # httpx 关闭 SSL 验证
     request._client_kwargs["http2"] = False
     if proxy_url:
         request._client_kwargs["proxy"] = proxy_url
