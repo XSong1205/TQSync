@@ -235,22 +235,22 @@ class CountDown(PluginBase):
             await self._reply(platform, group_id, "仅管理员可使用此命令")
             return
 
-        prefix = parts[2] if len(parts) >= 3 else ""
+        value = " ".join(parts[2:]) if len(parts) >= 3 else ""
         config = await self._get_config()
-        config["prefix"] = prefix
+        config["prefix"] = value
         await self._save_config(config)
-        await self._reply(platform, group_id, f"群名前缀已设为「{prefix}」")
+        await self._reply(platform, group_id, f"群名前缀已设为「{value}」")
 
     async def _handle_setsuffix(self, platform, user_id, group_id, parts):
         if not await self._is_admin(platform, user_id):
             await self._reply(platform, group_id, "仅管理员可使用此命令")
             return
 
-        suffix = parts[2] if len(parts) >= 3 else ""
+        value = " ".join(parts[2:]) if len(parts) >= 3 else ""
         config = await self._get_config()
-        config["suffix"] = suffix
+        config["suffix"] = value
         await self._save_config(config)
-        await self._reply(platform, group_id, f"群名后缀已设为「{suffix}」")
+        await self._reply(platform, group_id, f"群名后缀已设为「{value}」")
 
     async def _handle_help(self, platform, user_id, group_id, parts=None):
         await self._reply(platform, group_id, self._get_detailed_help())
@@ -260,7 +260,7 @@ class CountDown(PluginBase):
             await self._reply(platform, group_id, "仅管理员可使用此命令")
             return
 
-        text = parts[2] if len(parts) >= 3 else "暂无倒数日"
+        text = " ".join(parts[2:]) if len(parts) >= 3 else "暂无倒数日"
         config = await self._get_config()
         config["no_event_text"] = text
         await self._save_config(config)
