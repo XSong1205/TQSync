@@ -110,8 +110,11 @@ async def handle_qq_webhook(request):
                 if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
                 elif msg_type == 'at':
-                    target_qq = int(msg_part['data'].get('qq', 0))
-                    if target_qq != 0: # 排除 @全体成员
+                    qq_val = msg_part['data'].get('qq', '0')
+                    if qq_val == 'all':
+                        continue
+                    target_qq = int(qq_val)
+                    if target_qq != 0:
                         binding = await db.get_binding_by_qq(target_qq)
                         if binding:
                             at_tg_ids.append(binding[0]) # tg_user_id
@@ -562,6 +565,8 @@ async def main():
     request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
     request._client_kwargs["verify"] = False      # httpx 关闭 SSL 验证
     request._client_kwargs["http2"] = False
+    # PTB v21 会立即创建 _client，需重建使 verify=False 生效
+    request._client = request._build_client()
     if proxy_url:
         request._client_kwargs["proxy"] = proxy_url
     # 不手动替换 _client，让 PTB 自己懒加载创建

@@ -444,25 +444,24 @@ class FileTransfer:
                     w, h = img.size
                     if w < 10 and h < 10 and w + h < 20:
                         raise ValueError('图片过小')
-                    return await bot.send_photo(**kwargs, photo=content)
+                    return await bot.send_photo(**kwargs, photo=content, filename=file_name)
                 except Exception:
                     logger.debug(f'图片发送失败, 改为文档: {file_name}')
-                    return await bot.send_document(**kwargs, document=(file_name, content))
 
             elif media_type == MediaType.VIDEO:
-                return await bot.send_video(**kwargs, video=(file_name, content))
+                return await bot.send_video(**kwargs, video=content, filename=file_name)
 
             elif media_type == MediaType.ANIMATION:
                 try:
-                    return await bot.send_animation(**kwargs, animation=(file_name, content))
+                    return await bot.send_animation(**kwargs, animation=content, filename=file_name)
                 except Exception:
-                    return await bot.send_document(**kwargs, document=(file_name, content))
+                    logger.debug(f'动画发送失败, 改为文档: {file_name}')
 
             elif media_type == MediaType.AUDIO:
-                return await bot.send_audio(**kwargs, audio=(file_name, content))
+                return await bot.send_audio(**kwargs, audio=content, filename=file_name)
 
             else:
-                return await bot.send_document(**kwargs, document=(file_name, content))
+                return await bot.send_document(**kwargs, document=content, filename=file_name)
 
         result = await _retry_async(_do_send, max_retries=3, base_delay=2.0)
         logger.info(f'已发送至 Telegram: {os.path.basename(file_path)}')
