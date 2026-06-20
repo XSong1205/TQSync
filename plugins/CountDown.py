@@ -1,4 +1,5 @@
 import json
+import shlex
 import asyncio
 import aiohttp
 from datetime import datetime, date
@@ -44,7 +45,10 @@ class CountDown(PluginBase):
         if not message.startswith("/cd"):
             return False
 
-        parts = message.strip().split(maxsplit=3)
+        try:
+            parts = shlex.split(message.strip())
+        except ValueError:
+            parts = message.strip().split(maxsplit=3)
         if len(parts) < 2:
             await self._reply(platform, group_id, self._get_help())
             return True
@@ -235,7 +239,7 @@ class CountDown(PluginBase):
             await self._reply(platform, group_id, "仅管理员可使用此命令")
             return
 
-        value = " ".join(parts[2:]) if len(parts) >= 3 else ""
+        value = parts[2] if len(parts) >= 3 else ""
         config = await self._get_config()
         config["prefix"] = value
         await self._save_config(config)
@@ -246,7 +250,7 @@ class CountDown(PluginBase):
             await self._reply(platform, group_id, "仅管理员可使用此命令")
             return
 
-        value = " ".join(parts[2:]) if len(parts) >= 3 else ""
+        value = parts[2] if len(parts) >= 3 else ""
         config = await self._get_config()
         config["suffix"] = value
         await self._save_config(config)
@@ -260,7 +264,7 @@ class CountDown(PluginBase):
             await self._reply(platform, group_id, "仅管理员可使用此命令")
             return
 
-        text = " ".join(parts[2:]) if len(parts) >= 3 else "暂无倒数日"
+        text = parts[2] if len(parts) >= 3 else "暂无倒数日"
         config = await self._get_config()
         config["no_event_text"] = text
         await self._save_config(config)
