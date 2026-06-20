@@ -60,6 +60,7 @@ class CountDown(PluginBase):
             "setsuffix": self._handle_setsuffix,
             "setnotevent": self._handle_setnotevent,
             "help": self._handle_help,
+            "gcupdate": self._handle_gcupdate,
             "status": self._handle_status,
         }
 
@@ -70,6 +71,14 @@ class CountDown(PluginBase):
             await self._reply(platform, group_id, self._get_help())
 
         return True
+
+    async def _handle_gcupdate(self, platform, user_id, group_id, parts=None):
+        if not await self._is_admin(platform, user_id):
+            await self._reply(platform, group_id, "仅管理员可使用此命令")
+            return
+        entries = await self._get_entries()
+        await self._update_group_name(entries)
+        await self._reply(platform, group_id, "✅ 群名已更新")
 
     async def _handle_add(self, platform, user_id, group_id, parts):
         if len(parts) < 4:
@@ -436,6 +445,8 @@ class CountDown(PluginBase):
             "  设置群名前缀  例: /cd setprefix DP |\n"
             "/cd setsuffix <后缀>\n"
             "  设置群名后缀  例: /cd setsuffix 🎯\n"
+            "/cd gcupdate\n"
+            "  立即更新群名为最近倒数日\n"
             "/cd setnotevent <文案>\n"
             "  设置无倒数日时的群名文案\n"
             "  默认为「暂无倒数日」\n"
