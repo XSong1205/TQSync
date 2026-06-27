@@ -550,9 +550,18 @@ class FileTransfer:
 
         ob_type = onebot_type_map.get(media_type, 'file')
         uri_path = file_path.replace('\\', '/')
-        msg.append({'type': ob_type, 'data': {'file': f'file:///{uri_path}'}})
+        msg.append({'type': ob_type, 'data': {'file': f'file://{uri_path}'}})
 
         result = await onebot_client.send_group_msg(FileTransfer.qq_group_id, msg)
+        if not result or result.get('status') == 'failed':
+            logger.warning(f'file:// 发送失败，尝试 base64 fallback')
+            msg.pop()
+            import base64 as b64
+            async with aiofiles.open(file_path, 'rb') as f:
+                b64_data = b64.b64encode(await f.read()).decode()
+            msg.append({'type': ob_type, 'data': {'file': f'base64://{b64_data}'}})
+            result = await onebot_client.send_group_msg(FileTransfer.qq_group_id, msg)
+
         logger.info(f'已发送至 QQ: {os.path.basename(file_path)}')
         return result
 
