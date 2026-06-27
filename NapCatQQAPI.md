@@ -12,6 +12,7 @@
 - 流式接口 [上传文件流](https://napcat.apifox.cn/395363988e0.md): 以流式方式上传文件数据到机器人
 - 群组扩展 [删除群相册媒体](https://napcat.apifox.cn/395455119e0.md): 
 - 群组扩展 [点赞群相册媒体](https://napcat.apifox.cn/395457331e0.md): 
+- 群组扩展 [取消点赞群相册媒体](https://napcat.apifox.cn/462330906e0.md): 
 - 群组扩展 [发表群相册评论](https://napcat.apifox.cn/395458911e0.md): 
 - 群组扩展 [获取群相册媒体列表](https://napcat.apifox.cn/395459066e0.md): 
 - 群组扩展 [获取群相册列表](https://napcat.apifox.cn/395460287e0.md): 
@@ -22,8 +23,8 @@
 - 群组扩展 [设置群备注](https://napcat.apifox.cn/283136268e0.md): 设置群备注
 - 群组扩展 [获取群详细信息 (扩展)](https://napcat.apifox.cn/226659229e0.md): 
 - 群组扩展 [群打卡](https://napcat.apifox.cn/226659329e0.md): 
-- 群组扩展 [取消点赞群相册媒体](https://napcat.apifox.cn/462330906e0.md): 
 - 群组扩展 [群打卡](https://napcat.apifox.cn/230897177e0.md): 
+- 群组扩展 [获取群组今日打卡列表](https://napcat.apifox.cn/467693191e0.md): 
 - 核心接口 [设置群待办](https://napcat.apifox.cn/395460568e0.md): 将指定消息设置为群待办
 - 核心接口 [完成群待办](https://napcat.apifox.cn/444247697e0.md): 将指定消息对应的群待办标记为已完成
 - 核心接口 [取消群待办](https://napcat.apifox.cn/444247698e0.md): 将指定消息对应的群待办取消
@@ -86,6 +87,10 @@
 - 系统扩展 [设置在线状态](https://napcat.apifox.cn/226658977e0.md): 
 - 系统扩展 [获取机器人 UIN 范围](https://napcat.apifox.cn/226658975e0.md): 
 - 系统扩展 [获取自定义表情](https://napcat.apifox.cn/226659210e0.md): 
+- 系统扩展 [获取自定义表情详情](https://napcat.apifox.cn/467693192e0.md): 
+- 系统扩展 [添加自定义表情](https://napcat.apifox.cn/467693193e0.md): 
+- 系统扩展 [删除自定义表情](https://napcat.apifox.cn/467693194e0.md): 
+- 系统扩展 [修改自定义表情描述](https://napcat.apifox.cn/467693195e0.md): 
 - 系统扩展 [设置输入状态](https://napcat.apifox.cn/226659225e0.md): 
 - 系统扩展 [获取用户在线状态](https://napcat.apifox.cn/226659292e0.md): 
 - 系统扩展 [获取 RKey](https://napcat.apifox.cn/226659297e0.md): 

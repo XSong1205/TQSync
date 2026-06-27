@@ -461,7 +461,11 @@ class FileTransfer:
     async def send_to_telegram(source: FileSource, *,
                                caption: str = '',
                                reply_to: int = None) -> Optional[int]:
-        """将已解析的文件发送到 Telegram，返回 message_id 或 None。"""
+        """将已解析的文件发送到 Telegram，返回 message_id 或 None。
+
+        使用文件路径直接发送，python-telegram-bot 内部会流式读取，
+        避免将整个文件加载到内存。
+        """
         if not source.local_path or not os.path.exists(source.local_path):
             raise FileNotFoundError(f'文件不存在: {source.local_path}')
 
@@ -470,12 +474,9 @@ class FileTransfer:
         )
         media_type = source.media_type or FileTransfer.classify_media(file_path, file_name)
 
-        async with aiofiles.open(file_path, 'rb') as f:
-            content = await f.read()
-
         bot = FileTransfer.tg_bot
         chat_id = FileTransfer.tg_group_id
-        kwargs = {'chat_id': chat_id}
+        kwargs: dict = {'chat_id': chat_id}
         if caption:
             kwargs['caption'] = caption
         if reply_to:
@@ -484,32 +485,39 @@ class FileTransfer:
         async def _do_send():
             if media_type == MediaType.IMAGE:
                 try:
-                    img = Image.open(io.BytesIO(content))
+                    header = await FileTransfer._read_file_header(file_path, 32768)
+                    img = Image.open(io.BytesIO(header))
                     w, h = img.size
                     if w < 10 and h < 10 and w + h < 20:
                         raise ValueError('图片过小')
-                    return await bot.send_photo(**kwargs, photo=content, filename=file_name)
+                    return await bot.send_photo(**kwargs, photo=file_path, filename=file_name)
                 except Exception:
                     logger.debug(f'图片发送失败, 改为文档: {file_name}')
 
             elif media_type == MediaType.VIDEO:
-                return await bot.send_video(**kwargs, video=content, filename=file_name)
+                return await bot.send_video(**kwargs, video=file_path, filename=file_name)
 
             elif media_type == MediaType.ANIMATION:
                 try:
-                    return await bot.send_animation(**kwargs, animation=content, filename=file_name)
+                    return await bot.send_animation(**kwargs, animation=file_path, filename=file_name)
                 except Exception:
                     logger.debug(f'动画发送失败, 改为文档: {file_name}')
 
             elif media_type == MediaType.AUDIO:
-                return await bot.send_audio(**kwargs, audio=content, filename=file_name)
+                return await bot.send_audio(**kwargs, audio=file_path, filename=file_name)
 
             else:
-                return await bot.send_document(**kwargs, document=content, filename=file_name)
+                return await bot.send_document(**kwargs, document=file_path, filename=file_name)
 
         result = await _retry_async(_do_send, max_retries=3, base_delay=2.0)
         logger.info(f'已发送至 Telegram: {os.path.basename(file_path)}')
         return result.message_id if result else None
+
+    @staticmethod
+    async def _read_file_header(file_path: str, size: int = 32768) -> bytes:
+        """读取文件头部用于格式检测，避免加载整个文件。"""
+        async with aiofiles.open(file_path, 'rb') as f:
+            return await f.read(size)
 
     # ---- 发送至 QQ ---------------------------------------------------------
     @staticmethod
@@ -541,7 +549,8 @@ class FileTransfer:
         }
 
         ob_type = onebot_type_map.get(media_type, 'file')
-        msg.append({'type': ob_type, 'data': {'file': file_path}})
+        uri_path = file_path.replace('\\', '/')
+        msg.append({'type': ob_type, 'data': {'file': f'file:///{uri_path}'}})
 
         result = await onebot_client.send_group_msg(FileTransfer.qq_group_id, msg)
         logger.info(f'已发送至 QQ: {os.path.basename(file_path)}')
