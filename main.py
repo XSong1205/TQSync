@@ -105,6 +105,10 @@ async def handle_qq_webhook(request):
             is_forward = False
             forward_content = None
             
+            image_file_name = ''
+            video_file_name = ''
+            mface_file_name = ''
+
             for msg_part in message_array:
                 msg_type = msg_part.get('type')
                 if msg_type == 'text':
@@ -121,9 +125,15 @@ async def handle_qq_webhook(request):
                 elif msg_type == 'image' and not image_url:
                     image_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     raw_image_file = msg_part['data'].get('file', '')
+                    image_file_name = msg_part['data'].get('file', '')
+                    if image_file_name:
+                        image_file_name = os.path.basename(image_file_name.replace('file:///', '').replace('file://', ''))
                 elif msg_type == 'video' and not video_url:
                     video_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     raw_video_file = msg_part['data'].get('file', '')
+                    video_file_name = msg_part['data'].get('file', '')
+                    if video_file_name:
+                        video_file_name = os.path.basename(video_file_name.replace('file:///', '').replace('file://', ''))
                 elif msg_type == 'file' and not file_url:
                     file_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     raw_file_file = msg_part['data'].get('file', '')
@@ -143,6 +153,9 @@ async def handle_qq_webhook(request):
                 elif msg_type == 'mface' and not mface_url:
                     mface_url = msg_part['data'].get('url') or msg_part['data'].get('file')
                     raw_mface_file = msg_part['data'].get('file', '')
+                    mface_file_name = msg_part['data'].get('file', '')
+                    if mface_file_name:
+                        mface_file_name = os.path.basename(mface_file_name.replace('file:///', '').replace('file://', ''))
             
             combined_text = "".join(text_parts).strip()
             
@@ -331,21 +344,21 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
                 logger.info(f"[QQ] {nickname} 发送了一张图片")
-                source = FileSource.from_qq_webhook(image_url, '',
+                source = FileSource.from_qq_webhook(image_url, image_file_name,
                     raw_file=raw_image_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, caption=combined_text,
                     reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif video_url:
                 logger.info(f"[QQ] {nickname} 发送了一个视频")
-                source = FileSource.from_qq_webhook(video_url, '',
+                source = FileSource.from_qq_webhook(video_url, video_file_name,
                     raw_file=raw_video_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, caption=combined_text,
                     reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif mface_url:
                 logger.info(f"[QQ] {nickname} 发送了一个动画表情")
-                source = FileSource.from_qq_webhook(mface_url, '',
+                source = FileSource.from_qq_webhook(mface_url, mface_file_name,
                     raw_file=raw_mface_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, reply_to_message_id=reply_to_tg_id,
@@ -765,9 +778,8 @@ if __name__ == '__main__':
                 restart_count = 0
 
             restart_count += 1
-            logger.error(
-                f"程序异常退出 (运行 {elapsed:.0f}s): {e}",
-                exc_info=True
+            logger.opt(exception=True).error(
+                "程序异常退出 (运行 {}s): {}", elapsed, e
             )
 
             if restart_count >= MAX_RESTARTS:

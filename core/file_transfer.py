@@ -40,6 +40,16 @@ _MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
     (b'\x7B\x5C\x72\x74\x66', '.rtf'),
     (b'\x1F\x8B', '.gz'),
     (b'\x4D\x5A', '.exe'),
+    (b'\x4F\x67\x67\x53', '.ogg'),
+    (b'\x66\x4C\x61\x43', '.flac'),
+    (b'\x52\x49\x46\x46', '.wav'),
+    (b'\x42\x4D', '.bmp'),
+    (b'\x00\x00\x01\x00', '.ico'),
+    (b'\x49\x49\x2A\x00', '.tiff'),
+    (b'\x4D\x4D\x00\x2A', '.tiff'),
+    (b'\x1A\x45\xDF\xA3', '.mkv'),
+    (b'\x30\x26\xB2\x75\x8E\x66\xCF\x11', '.wmv'),
+    (b'\x23\x21\x41\x4D\x52', '.amr'),
 ]
 
 # 大文件阈值 (50 MB)，超过此大小使用流式下载
@@ -106,7 +116,22 @@ class FileSource:
     def from_qq_webhook(cls, file_url: str, file_name: str = '',
                         raw_file: str = '', raw_url: str = '') -> FileSource:
         """从 QQ webhook 数据构造 FileSource。"""
-        fs = cls(file_name=file_name or 'unknown_file')
+        # 从 file_name 或 URL 中提取有效的文件名
+        effective_name = file_name
+        if not effective_name and file_url:
+            # 尝试从 URL 路径中提取文件名
+            url_path = file_url.split('?')[0]
+            basename = os.path.basename(url_path)
+            if basename and '.' in basename and basename not in ('index', 'file'):
+                effective_name = basename
+            # 尝试从 raw_file 路径中提取
+            elif raw_file:
+                raw_path = raw_file.replace('file:///', '').replace('file://', '')
+                raw_basename = os.path.basename(raw_path)
+                if raw_basename and '.' in raw_basename:
+                    effective_name = raw_basename
+
+        fs = cls(file_name=effective_name or 'unknown_file')
 
         if not file_url:
             return fs
@@ -299,17 +324,21 @@ class FileTransfer:
                 if data.get('file') and os.path.exists(data['file']):
                     source.local_path = data['file']
                     source.file_size = int(data.get('file_size', 0)) or os.path.getsize(source.local_path)
-                    source.file_name = data.get('file_name') or source.file_name
+                    api_name = data.get('file_name') or ''
+                    if api_name and (not source.file_name or source.file_name == 'unknown_file'):
+                        source.file_name = api_name
                     return source
                 if data.get('url'):
                     try:
+                        api_name = data.get('file_name') or ''
                         path = await FileTransfer._http_download(
                             data['url'],
-                            data.get('file_name') or source.file_name
+                            api_name or source.file_name
                         )
                         source.local_path = path
                         source.file_size = os.path.getsize(path)
-                        source.file_name = data.get('file_name') or source.file_name
+                        if api_name and (not source.file_name or source.file_name == 'unknown_file'):
+                            source.file_name = api_name
                         return source
                     except Exception as e:
                         logger.warning(f'NapCat URL 下载失败: {e}')
@@ -317,13 +346,15 @@ class FileTransfer:
                     try:
                         import base64
                         raw = base64.b64decode(data['base64'])
-                        ext = os.path.splitext(data.get('file_name', source.file_name))[1] or '.tmp'
+                        api_name = data.get('file_name') or ''
+                        ext = os.path.splitext(api_name or source.file_name)[1] or '.tmp'
                         dest = _unique_temp_path('napcat', ext)
                         async with aiofiles.open(dest, 'wb') as f:
                             await f.write(raw)
                         source.local_path = dest
                         source.file_size = len(raw)
-                        source.file_name = data.get('file_name') or source.file_name
+                        if api_name and (not source.file_name or source.file_name == 'unknown_file'):
+                            source.file_name = api_name
                         return source
                     except Exception as e:
                         logger.warning(f'NapCat base64 解码失败: {e}')
@@ -334,6 +365,16 @@ class FileTransfer:
                 path = await FileTransfer._http_download(source.http_url, source.file_name)
                 source.local_path = path
                 source.file_size = os.path.getsize(path)
+                # 如果文件名仍是 unknown_file，尝试魔数检测扩展名
+                if source.file_name == 'unknown_file' or not os.path.splitext(source.file_name)[1]:
+                    detected = FileTransfer.detect_extension(path)
+                    if detected:
+                        base = os.path.splitext(source.file_name)[0] if source.file_name != 'unknown_file' else 'file'
+                        source.file_name = f'{base}{detected}'
+                        new_path = os.path.splitext(path)[0] + detected
+                        os.rename(path, new_path)
+                        source.local_path = new_path
+                        logger.debug(f'魔数检测修正文件名: {source.file_name}')
                 logger.debug(f'HTTP 下载完成: {path} ({source.size_str})')
                 return source
             except Exception as e:
@@ -407,7 +448,10 @@ class FileTransfer:
         if detected and detected != ext:
             new_path = os.path.splitext(file_path)[0] + detected
             os.rename(file_path, new_path)
-            new_name = os.path.splitext(file_name)[0] + detected
+            if file_name == 'unknown_file' or not os.path.splitext(file_name)[1]:
+                new_name = f'file{detected}'
+            else:
+                new_name = os.path.splitext(file_name)[0] + detected
             logger.info(f'魔数检测: {ext or "无扩展名"} → {detected}')
             return new_path, new_name
         return file_path, file_name

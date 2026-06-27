@@ -155,7 +155,15 @@ class SyncEngine:
         actual_path = file.file_path
         if not actual_path.startswith('http'):
             actual_path = f'https://api.telegram.org/file/bot{self.bot.token}/{actual_path}'
-        source = FileSource(file_name=file_name or 'unknown_file',
+        # 从 URL 路径提取扩展名作为兜底文件名
+        if not file_name or file_name == 'unknown_file':
+            url_path = actual_path.split('?')[0]
+            url_basename = os.path.basename(url_path)
+            if '.' in url_basename:
+                file_name = url_basename
+            else:
+                file_name = f'file_{uuid.uuid4().hex[:8]}'
+        source = FileSource(file_name=file_name,
                             file_size=file_size, http_url=actual_path)
         await FileTransfer.transfer_tg_to_qq(
             source,
