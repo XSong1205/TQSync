@@ -402,9 +402,16 @@ class SyncEngine:
                 message_array = [
                     {"type": "text", "data": {"text": f"[TG] {display_name} 发送了一条语音\n"}},
                 ]
-            message_array.append({"type": "record", "data": {"file": amr_path}})
+            message_array.append({"type": "record", "data": {"file": f"file://{amr_path}"}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if not result or result.get('status') == 'failed':
+                logger.warning(f"file:// 语音发送失败，尝试 base64 fallback")
+                message_array.pop()
+                with open(amr_path, 'rb') as f:
+                    b64_data = base64.b64encode(f.read()).decode()
+                message_array.append({"type": "record", "data": {"file": f"base64://{b64_data}"}})
+                result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             if result and tg_message_id:
                 qq_msg_id = self._extract_qq_message_id(result)
                 if qq_msg_id:
@@ -541,11 +548,18 @@ class SyncEngine:
                     result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
                     return result
                 
-                message_array.append({"type": "image", "data": {"file": final_send_path}})
+                message_array.append({"type": "image", "data": {"file": f"file://{final_send_path}"}})
             else:
-                message_array.append({"type": "image", "data": {"file": final_send_path}})
+                message_array.append({"type": "image", "data": {"file": f"file://{final_send_path}"}})
             
             result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
+            if not result or result.get('status') == 'failed':
+                logger.warning(f"file:// 发送失败，尝试 base64 fallback")
+                message_array.pop()
+                with open(final_send_path, 'rb') as f:
+                    b64_data = base64.b64encode(f.read()).decode()
+                message_array.append({"type": "image", "data": {"file": f"base64://{b64_data}"}})
+                result = await onebot_client.send_group_msg(self.qq_group_id, message_array)
             if result and tg_message_id:
                 qq_msg_id = self._extract_qq_message_id(result)
                 if qq_msg_id:
