@@ -117,7 +117,7 @@ async def handle_status_command(start_time: float = None):
     if uptime_seconds < 0: uptime_seconds = 0
     hours, remainder = divmod(uptime_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{hours}小时 {minutes}分 {seconds}秒"
+    uptime_str = f"{hours} hrs, {minutes} min, {seconds},sec"
 
     # 3. 获取同步统计 (通过 message_mapping 表行数近似)
     async with db._Database__get_connection() as conn:
@@ -331,3 +331,43 @@ async def handle_checkupdate_command() -> dict:
     r["need_restart"] = True
     r["result"] = "\n".join(parts)
     return r
+
+
+async def handle_reboot_command(platform: str = 'qq') -> str:
+    """处理 /reboot 指令，返回重启提示消息"""
+    return "正在重启，请稍候..."
+
+
+async def handle_blockword_command(args: list, user_id: int = None, platform: str = 'qq') -> str:
+    """处理 /blockword <关键词> 指令"""
+    if not args:
+        return "Usage: /blockword <关键词>"
+    word = " ".join(args)
+    success = await db.add_blocked_word(word)
+    if success:
+        logger.info(f"[屏蔽词] {platform.upper()}管理员 {user_id} 添加屏蔽词: {word}")
+        return f"已添加屏蔽词: {word}"
+    else:
+        return f"屏蔽词已存在: {word}"
+
+
+async def handle_unblockword_command(args: list, user_id: int = None, platform: str = 'qq') -> str:
+    """处理 /unblockword <关键词> 指令"""
+    if not args:
+        return "Usage: /unblockword <关键词>"
+    word = " ".join(args)
+    success = await db.remove_blocked_word(word)
+    if success:
+        logger.info(f"[屏蔽词] {platform.upper()}管理员 {user_id} 删除屏蔽词: {word}")
+        return f"已删除屏蔽词: {word}"
+    else:
+        return f"屏蔽词不存在: {word}"
+
+
+async def handle_blockwords_command() -> str:
+    """处理 /blockwords 指令，返回屏蔽词列表"""
+    words = await db.get_blocked_words()
+    if words:
+        return f"当前屏蔽词 ({len(words)}个):\n" + "\n".join(f"  {i+1}. {w}" for i, w in enumerate(words))
+    else:
+        return "当前没有屏蔽词。"

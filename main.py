@@ -22,7 +22,7 @@ from db.database import db
 from core.sync_engine import SyncEngine
 from core.file_transfer import FileSource
 from handlers.tg_handler import get_tg_handlers
-from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command
+from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command, handle_checkupdate_command, handle_reboot_command, handle_blockword_command, handle_unblockword_command, handle_blockwords_command
 from handlers.qq_handler import onebot_client
 from api.admin_api import app as admin_app
 from core.plugin_manager import PluginManager
@@ -198,7 +198,8 @@ async def handle_qq_webhook(request):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
                     
-                    await onebot_client.send_group_msg(engine.qq_group_id, "正在重启，请稍候...")
+                    response = await handle_reboot_command('qq')
+                    await onebot_client.send_group_msg(engine.qq_group_id, response)
                     asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
                 elif cmd == '/checkupdate':
@@ -244,37 +245,15 @@ async def handle_qq_webhook(request):
                     if admin_ids and qq_id not in admin_ids:
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
-                    if not args:
-                        response = "Usage: /blockword <关键词>"
-                    else:
-                        word = " ".join(args)
-                        success = await db.add_blocked_word(word)
-                        if success:
-                            response = f"已添加屏蔽词: {word}"
-                            logger.info(f"[屏蔽词] QQ管理员 {qq_id} 添加屏蔽词: {word}")
-                        else:
-                            response = f"屏蔽词已存在: {word}"
+                    response = await handle_blockword_command(args, qq_id, 'qq')
                 elif cmd == '/unblockword':
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
-                    if not args:
-                        response = "Usage: /unblockword <关键词>"
-                    else:
-                        word = " ".join(args)
-                        success = await db.remove_blocked_word(word)
-                        if success:
-                            response = f"已删除屏蔽词: {word}"
-                            logger.info(f"[屏蔽词] QQ管理员 {qq_id} 删除屏蔽词: {word}")
-                        else:
-                            response = f"屏蔽词不存在: {word}"
+                    response = await handle_unblockword_command(args, qq_id, 'qq')
                 elif cmd == '/blockwords':
-                    words = await db.get_blocked_words()
-                    if words:
-                        response = f"当前屏蔽词 ({len(words)}个):\n" + "\n".join(f"  {i+1}. {w}" for i, w in enumerate(words))
-                    else:
-                        response = "当前没有屏蔽词。"
+                    response = await handle_blockwords_command()
                 else:
                     # 尝试插件路由（未知命令）
                     if combined_text.strip():
@@ -373,7 +352,62 @@ async def handle_qq_webhook(request):
             elif combined_text:
                 logger.info(f"[QQ] {nickname} 发送了一条文本消息")
                 engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
-        
+
+        # 处理私聊消息 - 仅管理员可用
+        if data.get('message_type') == 'private':
+            qq_id = int(data['user_id'])
+            
+            # 检查是否为管理员
+            admin_ids = config_loader.get('server.admin_user_ids', [])
+            if not admin_ids or qq_id not in admin_ids:
+                return web.json_response({})
+            
+            # 解析消息文本
+            message_array = data.get('message', [])
+            text_parts = []
+            for part in message_array:
+                if part.get('type') == 'text':
+                    text_parts.append(part.get('data', {}).get('text', ''))
+            combined_text = "".join(text_parts).strip()
+            
+            if not combined_text.startswith('/'):
+                return web.json_response({})
+            
+            parts = combined_text.split()
+            cmd = parts[0].lower()
+            args = parts[1:]
+            response = ""
+            
+            # 仅处理管理命令
+            if cmd == '/checkupdate':
+                await onebot_client.send_private_msg(qq_id, "🔍 正在检查更新...")
+                info = await handle_checkupdate_command()
+                
+                if info.get("update_found") and info.get("update_notice"):
+                    await onebot_client.send_private_msg(qq_id, info["update_notice"])
+                
+                await onebot_client.send_private_msg(qq_id, info["result"])
+                
+                if info.get("need_restart"):
+                    await asyncio.sleep(2)
+                    asyncio.create_task(graceful_restart('qq'))
+                return web.json_response({})
+            elif cmd == '/reboot':
+                response = await handle_reboot_command('qq')
+                await onebot_client.send_private_msg(qq_id, response)
+                asyncio.create_task(graceful_restart('qq'))
+                return web.json_response({})
+            elif cmd == '/blockword':
+                response = await handle_blockword_command(args, qq_id, 'qq')
+            elif cmd == '/unblockword':
+                response = await handle_unblockword_command(args, qq_id, 'qq')
+            elif cmd == '/blockwords':
+                response = await handle_blockwords_command()
+            
+            if response:
+                await onebot_client.send_private_msg(qq_id, response)
+            return web.json_response({})
+
         return web.json_response({"status": "ok"})
     except Exception as e:
         logger.error(f"Webhook error: {e}")

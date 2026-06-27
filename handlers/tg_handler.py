@@ -4,7 +4,7 @@ from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
-from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command
+from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic
 from core.plugin_manager import PluginManager
 import time
 import uuid
@@ -169,7 +169,6 @@ async def handle_status_command_tg(update: Update, context: ContextTypes.DEFAULT
 async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import asyncio
     from main import graceful_restart
-    from config.config_loader import config_loader
     
     admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
@@ -178,7 +177,8 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text("您的权限不足以执行此操作")
         return
         
-    await update.message.reply_text("重启中，可能需要 5-10 秒，请稍候")
+    response = await handle_reboot_command_logic('tg')
+    await update.message.reply_text(response)
     asyncio.create_task(graceful_restart('tg'))
 
 
@@ -304,55 +304,31 @@ async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_blockword_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /blockword <关键词> (管理员)"""
-    from config.config_loader import config_loader
     admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
     if admin_ids and user_id not in admin_ids:
         await update.message.reply_text("您的权限不足以执行此操作")
         return
-    if not context.args:
-        await update.message.reply_text("Usage: /blockword <关键词>")
-        return
-    word = " ".join(context.args)
-    success = await db.add_blocked_word(word)
-    if success:
-        await update.message.reply_text(f"已添加屏蔽词: {word}")
-        logger.info(f"[屏蔽词] TG管理员 {user_id} 添加屏蔽词: {word}")
-    else:
-        await update.message.reply_text(f"屏蔽词已存在: {word}")
+    response = await handle_blockword_command_logic(context.args or [], user_id, 'tg')
+    await update.message.reply_text(response)
 
 async def handle_unblockword_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /unblockword <关键词> (管理员)"""
-    from config.config_loader import config_loader
     admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
     if admin_ids and user_id not in admin_ids:
         await update.message.reply_text("您的权限不足以执行此操作")
         return
-    if not context.args:
-        await update.message.reply_text("Usage: /unblockword <关键词>")
-        return
-    word = " ".join(context.args)
-    success = await db.remove_blocked_word(word)
-    if success:
-        await update.message.reply_text(f"已删除屏蔽词: {word}")
-        logger.info(f"[屏蔽词] TG管理员 {user_id} 删除屏蔽词: {word}")
-    else:
-        await update.message.reply_text(f"屏蔽词不存在: {word}")
+    response = await handle_unblockword_command_logic(context.args or [], user_id, 'tg')
+    await update.message.reply_text(response)
 
 async def handle_blockwords_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /blockwords (查看屏蔽词列表)"""
-    words = await db.get_blocked_words()
-    if words:
-        text = f"当前屏蔽词 ({len(words)}个):\n" + "\n".join(f"  {i+1}. {w}" for i, w in enumerate(words))
-    else:
-        text = "当前没有屏蔽词。"
-    await update.message.reply_text(text)
+    response = await handle_blockwords_command_logic()
+    await update.message.reply_text(response)
 
 async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """路由未被前置 CommandHandler 处理的 /command 到插件系统"""
-    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
-        return
     user = update.effective_user
     if user.is_bot:
         return
@@ -361,12 +337,24 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if not text:
         return
 
+    chat = update.effective_chat
+    is_group = chat and chat.id == config_loader.get('telegram.group_id')
+    
+    # 群聊：所有人都可使用插件命令
+    # 私聊：仅管理员可使用插件命令
+    if is_group:
+        pass
+    else:
+        admin_ids = config_loader.get('server.admin_user_ids', [])
+        if not admin_ids or user.id not in admin_ids:
+            return
+
     engine = SyncEngine.get_instance()
     pm = PluginManager.get_instance()
     if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
         return
 
-    await update.message.reply_text("Unknown command. Type "/help" for help. ")
+    await update.message.reply_text("Unknown command. Type "/help" for help. ")
 
 def get_tg_handlers():
     return [
