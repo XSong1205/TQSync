@@ -366,7 +366,7 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
         return
 
-    await update.message.reply_text("未知命令。使用 /help 获取更多帮助。")
+    await update.message.reply_text("Unknown command. Type "/help" for help. ")
 
 def get_tg_handlers():
     return [

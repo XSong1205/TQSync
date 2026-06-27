@@ -282,7 +282,7 @@ async def handle_qq_webhook(request):
                             pm = PluginManager.get_instance()
                             if await pm.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
                                 return web.json_response({})
-                    response = "未知命令。使用 /help 获取更多帮助。"
+                    response = "Unknown command. Type "/help" for help. s"
 
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)

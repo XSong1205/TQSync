@@ -5,6 +5,7 @@ import time
 import os
 import sys
 import subprocess
+import re
 from datetime import datetime
 from utils.logger import logger
 
@@ -169,7 +170,33 @@ async def handle_status_command(start_time: float = None):
 
 async def handle_help_command():
     """处理 /help 指令"""
-    return HELP_TEXT
+    plugin_lines = ""
+    try:
+        from core.plugin_manager import PluginManager
+        pm = PluginManager.get_instance()
+        plugins = pm.get_plugins_status()
+        if plugins:
+            for p in plugins:
+                if not (p['loaded'] and p['enabled']):
+                    continue
+                for m in p.get('matchers', []):
+                    pattern = m.get('pattern', '')
+                    desc = m.get('description', p.get('description', ''))
+                    if not pattern:
+                        continue
+                    # 只显示主命令，跳过正则类型
+                    if m.get('type') == 'regex':
+                        continue
+                    # 清理描述中的子命令部分（如 "/cd add <名称> <日期>"）
+                    desc = re.sub(r'\s*/\S+.*$', '', desc)
+                    plugin_lines += f"/{pattern.lstrip('/')} - {desc}\n"
+    except Exception:
+        pass
+
+    base = HELP_TEXT.rstrip()
+    if plugin_lines:
+        base += "\n\n插件命令：\n" + plugin_lines.rstrip()
+    return base
 
 
 async def handle_checkupdate_command() -> dict:
