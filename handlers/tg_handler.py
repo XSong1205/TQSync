@@ -6,7 +6,6 @@ from db.database import db
 from handlers.qq_handler import onebot_client
 from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic
 from core.plugin_manager import PluginManager
-import time
 import uuid
 from utils.logger import logger
 
@@ -354,7 +353,7 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
         return
 
-    await update.message.reply_text("Unknown command. Type "/help" for help. ")
+    await update.message.reply_text('Unknown command. Type "/help" for help. ')
 
 def get_tg_handlers():
     return [
