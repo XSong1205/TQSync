@@ -18,7 +18,7 @@ TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegra
 
 ## 技术栈
 
-- **Python 3.9+**
+- **Python 3.12+**
 - **Telegram**: `python-telegram-bot` (v20+)
 - **QQ**: `aiohttp` (对接 Napcat OneBot v11 HTTP)
 - **Web Framework**: `FastAPI` + `Uvicorn` + `Vue`
