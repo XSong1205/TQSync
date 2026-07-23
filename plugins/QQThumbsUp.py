@@ -8,14 +8,14 @@ from utils.logger import logger
 
 class QQThumbsUp(PluginBase):
     name = "QQThumbsUp"
-    version = "2.0"
+    version = "2.1"
     description = "QQ点赞：手动赞我 / 自动点赞列表管理 / 定时批量点赞"
     author = "TQSync"
 
     def get_matchers(self):
         return [
             {"type": "exact", "pattern": "赞我", "description": "给QQ资料卡点赞"},
-            {"type": "prefix", "pattern": "/autothumbsup", "description": "自动点赞管理"},
+            {"type": "prefix", "pattern": "/autothumbsup", "description": "自动点赞管理 (help/likeall/status等)"},
         ]
 
     async def on_load(self):
@@ -121,6 +121,15 @@ class QQThumbsUp(PluginBase):
                 return
             await self._set_like_time(arg, group_id)
 
+        elif subcmd == "likeall":
+            if not await self._is_admin(group_id, user_id):
+                await self.ctx.qq_client.send_group_msg(group_id, "仅群管理员可使用 likeall 命令")
+                return
+            await self._run_batch_like()
+
+        elif subcmd == "help":
+            await self._show_help(group_id)
+
         else:
             await self._show_help(group_id)
 
@@ -181,7 +190,9 @@ class QQThumbsUp(PluginBase):
             "/autothumbsup add <QQ> - 添加 (管理员)\n"
             "/autothumbsup remove <QQ> - 移除 (管理员)\n"
             "/autothumbsup settime HH:MM - 设定时 (管理员)\n"
+            "/autothumbsup likeall - 立即为列表所有人点赞 (管理员)\n"
             "/autothumbsup status - 查看状态\n"
+            "/autothumbsup help - 显示本帮助\n"
             "赞我 - 手动点赞"
         )
 
