@@ -292,7 +292,18 @@ async def handle_checkupdate_command() -> dict:
     except Exception:
         pass
 
-    # 4. 执行 pull
+    # 4. 执行 pull（先 stash 本地修改避免冲突）
+    try:
+        stash_result = subprocess.run(
+            ['git', 'stash', 'push', '-m', 'auto-stash before update'],
+            capture_output=True, text=True, timeout=10
+        )
+        stashed = stash_result.returncode == 0 and 'No local changes' not in stash_result.stdout
+        if stashed:
+            parts.append("已暂存本地修改")
+    except Exception:
+        stashed = False
+
     try:
         pull_result = subprocess.run(
             ['git', 'pull', 'origin', current_branch],
@@ -303,6 +314,12 @@ async def handle_checkupdate_command() -> dict:
             return r
         parts.append("git pull 成功")
         logger.info("git pull 完成")
+
+        if stashed:
+            subprocess.run(
+                ['git', 'stash', 'drop', 'stash@{0}'],
+                capture_output=True, text=True, timeout=10
+            )
     except subprocess.TimeoutExpired:
         r["result"] = "更新失败：git pull 超时"
         return r
