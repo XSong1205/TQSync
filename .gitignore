@@ -44,6 +44,9 @@ config.yaml
 temp/
 .db
 
-#autopusher 相关
+# autopusher 相关
 push.py
 utils/version_bumper.py
+
+# Plugins
+plugins/

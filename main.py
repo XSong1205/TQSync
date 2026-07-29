@@ -208,14 +208,14 @@ async def handle_qq_webhook(request):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
 
-                    await onebot_client.send_group_msg(engine.qq_group_id, "🔍 正在检查更新...")
                     from handlers.command_handler import handle_checkupdate_command
                     info = await handle_checkupdate_command()
 
+                    nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 检查更新"}}]}}]
                     if info.get("update_found") and info.get("update_notice"):
-                        await onebot_client.send_group_msg(engine.qq_group_id, info["update_notice"])
-
-                    await onebot_client.send_group_msg(engine.qq_group_id, info["result"])
+                        nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["update_notice"]}}]}})
+                    nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["result"]}}]}})
+                    await onebot_client.send_group_forward_msg(engine.qq_group_id, nodes)
 
                     if info.get("need_restart"):
                         await asyncio.sleep(2)
@@ -380,14 +380,14 @@ async def handle_qq_webhook(request):
             
             # 仅处理管理命令
             if cmd == '/checkupdate':
-                await onebot_client.send_private_msg(qq_id, "🔍 正在检查更新...")
                 info = await handle_checkupdate_command()
-                
+
+                nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 检查更新"}}]}}]
                 if info.get("update_found") and info.get("update_notice"):
-                    await onebot_client.send_private_msg(qq_id, info["update_notice"])
-                
-                await onebot_client.send_private_msg(qq_id, info["result"])
-                
+                    nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["update_notice"]}}]}})
+                nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["result"]}}]}})
+                await onebot_client.send_private_forward_msg(qq_id, nodes)
+
                 if info.get("need_restart"):
                     await asyncio.sleep(2)
                     asyncio.create_task(graceful_restart('qq'))
@@ -731,6 +731,52 @@ async def main():
     
     cleanup_codes_task = asyncio.create_task(cleanup_verification_codes())
     background_tasks.append(cleanup_codes_task)
+
+    async def auto_check_update():
+        """每小时自动检查 GitHub 更新"""
+        from handlers.command_handler import handle_checkupdate_command
+
+        await asyncio.sleep(120)  # 启动2分钟后开始首次检查
+
+        while True:
+            try:
+                logger.debug("自动检查更新...")
+                info = await handle_checkupdate_command()
+
+                if info.get("update_found") and info.get("need_restart"):
+                    version = info.get("version", "")
+                    commit = info.get("remote_commit", "")
+                    if version and commit:
+                        display = f"v{version}({commit})"
+                    elif commit:
+                        display = f"({commit})"
+                    else:
+                        from utils.version_utils import get_full_version_string
+                        display = get_full_version_string()
+
+                    msg = f"TQSync 已自动更新到 {display}，即将重新启动以完成更新..."
+                    logger.info(f"自动更新: {msg}")
+
+                    engine = SyncEngine.get_instance()
+                    try:
+                        await engine.bot.send_message(chat_id=engine.tg_group_id, text=msg)
+                    except Exception as e:
+                        logger.error(f"自动更新通知发送到 TG 失败: {e}")
+                    try:
+                        await onebot_client.send_group_msg(engine.qq_group_id, msg)
+                    except Exception as e:
+                        logger.error(f"自动更新通知发送到 QQ 失败: {e}")
+
+                    await asyncio.sleep(2)
+                    asyncio.create_task(graceful_restart('auto'))
+                    return
+            except Exception as e:
+                logger.error(f"自动更新检查异常: {e}")
+
+            await asyncio.sleep(3600)
+
+    auto_update_task = asyncio.create_task(auto_check_update())
+    background_tasks.append(auto_update_task)
     
     logger.info("TQSync is running...")
     
@@ -763,9 +809,11 @@ async def main():
     await plugin_mgr.load_all()
     for name, info in plugin_mgr.plugins.items():
         if info.error:
-            await plugin_mgr.broadcast_plugin_status(name, False, 0, info.error)
+            await plugin_mgr.broadcast_plugin_status(name, False, 0, info.error, send_to_qq=False)
         else:
-            await plugin_mgr.broadcast_plugin_status(name, True, info.load_time_ms)
+            await plugin_mgr.broadcast_plugin_status(name, True, info.load_time_ms, send_to_qq=False)
+
+    await plugin_mgr.broadcast_plugins_forward_to_qq()
 
     # 等待重启信号或任务结束
     try:

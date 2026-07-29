@@ -327,6 +327,12 @@ async def handle_checkupdate_command() -> dict:
         parts.append(f"依赖安装异常: {e}")
 
     parts.append("\n即将重启以应用更新...")
+    r["remote_commit"] = remote_commit
+    try:
+        from utils.version_utils import get_version
+        r["version"] = get_version()
+    except Exception:
+        pass
     r["ok"] = True
     r["need_restart"] = True
     r["result"] = "\n".join(parts)

@@ -85,6 +85,22 @@ class OneBotClient:
         }
         return await self._post_json("/send_group_msg", payload)
 
+    async def send_group_forward_msg(self, group_id: int, nodes: list):
+        """发送群合并转发消息。nodes 为 node 类型消息段列表。"""
+        payload = {
+            "group_id": group_id,
+            "messages": nodes
+        }
+        return await self._post_json("/send_group_forward_msg", payload)
+
+    async def send_private_forward_msg(self, user_id: int, nodes: list):
+        """发送私聊合并转发消息。nodes 为 node 类型消息段列表。"""
+        payload = {
+            "user_id": user_id,
+            "messages": nodes
+        }
+        return await self._post_json("/send_private_forward_msg", payload)
+
     async def send_private_msg(self, user_id: int, message):
         """发送私聊消息。支持字符串（CQ码）或列表（消息段数组）。"""
         payload = {

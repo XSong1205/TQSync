@@ -267,8 +267,8 @@ class PluginManager:
             results.append(info)
         return results
 
-# 插件启动时向双端发送状态通知
-    async def broadcast_plugin_status(self, name: str, success: bool, elapsed_ms: int, error: str = None) -> None:
+ # 插件启动时向双端发送状态通知
+    async def broadcast_plugin_status(self, name: str, success: bool, elapsed_ms: int, error: str = None, send_to_qq: bool = True) -> None:
         if not self._ctx:
             return
 
@@ -287,10 +287,53 @@ class PluginManager:
         except Exception as e:
             logger.warning(f"发送插件状态通知到 TG 失败: {e}")
 
+        if send_to_qq:
+            try:
+                await self._ctx.qq_client.send_group_msg(
+                    self._ctx.qq_group_id,
+                    msg
+                )
+            except Exception as e:
+                logger.warning(f"发送插件状态通知到 QQ 失败: {e}")
+
+    async def broadcast_plugins_forward_to_qq(self, title: str = "TQSync 插件加载报告") -> None:
+        """将所有已加载插件的状态以合并转发消息发送到 QQ"""
+        if not self._ctx:
+            return
+
+        nodes = [
+            {
+                "type": "node",
+                "data": {
+                    "nickname": "TQSync",
+                    "content": [{"type": "text", "data": {"text": title}}]
+                }
+            }
+        ]
+
+        for name, info in self.plugins.items():
+            filename = info.file
+            if info.error:
+                status_text = f"❌ {filename} 加载失败: {info.error}"
+            else:
+                status_text = f"✅ {filename} 已加载 ({info.load_time_ms}ms)"
+
+            nodes.append({
+                "type": "node",
+                "data": {
+                    "nickname": name,
+                    "content": [{"type": "text", "data": {"text": status_text}}]
+                }
+            })
+
+        if len(nodes) <= 1:
+            return
+
         try:
-            await self._ctx.qq_client.send_group_msg(
+            await self._ctx.qq_client.send_group_forward_msg(
                 self._ctx.qq_group_id,
-                msg
+                nodes
             )
+            logger.info(f"已通过合并转发向 QQ 发送 {len(nodes) - 1} 个插件状态")
         except Exception as e:
-            logger.warning(f"发送插件状态通知到 QQ 失败: {e}")
+            logger.warning(f"发送插件状态合并转发到 QQ 失败: {e}")
