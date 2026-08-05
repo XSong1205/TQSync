@@ -47,7 +47,7 @@ TQSync 与 NapCat 之间存在**两条独立的 HTTP 通道**：
 
 ## 4. 验证配置
 
-1.  确保 TQSync 已经运行 (`python main.py`)。
+1.  确保 TQSync 已经运行（Windows: `venv\Scripts\python.exe main.py`；Linux: 运行 `bash scripts/tqsync.sh start` 后台启动）。
 2.  观察 TQSync 控制台输出，应同时看到：
     *   `QQ Webhook server started on port 8080`（表明 TQSync 已启动接收服务）
     *   无 `OneBot API` 相关报错（表明 TQSync 能正常连接 NapCat 的 HTTP 服务器）

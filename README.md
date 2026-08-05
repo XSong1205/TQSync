@@ -58,18 +58,55 @@ python -c "from rlottie_python import LottieAnimation; print('rlottie 安装成�
 
 ### 快速安装(Windows)
 
-执行前请确认您已安装Python。
+执行前请确认您已安装Python 3.9+。
 
+**方式一 (推荐，自动创建虚拟环境):** 双击运行 `install.bat`
+
+**方式二 (命令行):**
 ```Command-Prompt / Powershell
 python install.py
 ```
+
+两种方式都会自动创建 `venv` 虚拟环境并安装依赖，完成后使用 `venv\Scripts\python.exe main.py` 启动。
+
+### 快速安装(Linux)
+
+支持 Debian/Ubuntu、CentOS/RHEL、Arch 系发行版。脚本会自动：创建 `venv` 虚拟环境、安装依赖、安装 `ffmpeg`/`screen`、生成 `config.yaml`，并写入快捷命令。
+
+```bash
+bash scripts/install.sh
+```
+
+安装完成后，重启终端或执行 `source ~/.bashrc`，即可使用快捷命令：
+
+| 命令 | 说明 |
+| --- | --- |
+| `tqstart` | 在 screen 后台启动机器人 |
+| `tqlog` | 回到运行日志窗口 (退出按 `Ctrl+A` 再按 `D`) |
+| `tqstop` | 停止机器人 |
+| `tqrestart` | 重启机器人 |
+| `tqstatus` | 查看运行状态 |
+| `tqlogs` | 查看最近日志 |
+
+不想用别名时，也可直接调用管理脚本：
+
+```bash
+bash scripts/tqsync.sh start      # 启动
+bash scripts/tqsync.sh attach     # 回到日志窗口 (Ctrl+A D 退出)
+bash scripts/tqsync.sh stop       # 停止
+bash scripts/tqsync.sh status     # 状态
+```
+
+> **说明:** 机器人在 `screen` 会话中后台运行，`/reboot` 与自动更新会在会话内自动重启，无需手动干预。
 
 ### 手动安装(Windows/Linux/macOS)
 
 #### 1. 安装依赖
 
 ```bash
-pip install -r requirements.txt
+python -m venv venv
+venv\Scripts\pip install -r requirements.txt    # Windows
+# venv/bin/pip install -r requirements.txt      # Linux / macOS
 ```
 
 #### 2. 配置项目
@@ -97,7 +134,8 @@ cp config.yaml.example config.yaml
 ## 运行机器人
 
 ```Shell
-python main.py
+venv\Scripts\python.exe main.py    # Windows
+# venv/bin/python main.py          # Linux / macOS (或使用 tqstart 后台运行)
 ```
 
 ## Docker 部署

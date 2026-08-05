@@ -1,0 +1,5 @@
+# 保证 shell 脚本在 Windows checkout 下也能正确执行 (强制 LF)
+*.sh text eol=lf
+*.bat text eol=crlf
+# Python 源文件统一 LF，避免 Windows 上的 CRLF 干扰
+*.py text eol=lf

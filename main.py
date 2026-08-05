@@ -470,6 +470,7 @@ restart_event = asyncio.Event()
 background_tasks = []
 
 REBOOT_INFO_FILE = "logs/.reboot_info"
+RESTART_MARKER_FILE = "logs/.restart_marker"
 
 async def graceful_restart(platform: str = 'qq'):
     """优雅重启：启动新进程后退出当前进程，实现无缝重启"""
@@ -478,15 +479,24 @@ async def graceful_restart(platform: str = 'qq'):
         os._exit(0)
 
     logger.info("正在重启...")
-    
+
     reboot_info = {
         "start_time": time.time() * 1000,
         "platform": platform
     }
-    
+
     os.makedirs("logs", exist_ok=True)
     with open(REBOOT_INFO_FILE, 'w', encoding='utf-8') as f:
         json.dump(reboot_info, f)
+
+    # screen 会话 (scripts/tqsync.sh) 下：不派生新进程，写重启标记后退出，
+    # 由 scripts/tqsync-run.sh 检测标记并重新拉起，避免子进程随 screen 退出被 SIGHUP。
+    if os.environ.get("STY"):
+        logger.info("检测到 screen 会话，由外部 runner 负责重启")
+        with open(RESTART_MARKER_FILE, 'w', encoding='utf-8') as f:
+            f.write("1")
+        await asyncio.sleep(0.5)
+        os._exit(42)
     
     # 等待一小段时间确保文件写入完成
     await asyncio.sleep(0.5)

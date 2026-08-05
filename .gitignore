@@ -43,6 +43,9 @@ config.yaml
 *.log
 temp/
 .db
+logs/.restart_marker
+logs/.reboot_info
+.tqsync_aliases
 
 # Claude Code
 .claude/
