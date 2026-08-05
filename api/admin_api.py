@@ -28,6 +28,11 @@ app.add_middleware(
 PERM_LEVEL_USER = 0   # 普通用户：仅查看状态
 PERM_LEVEL_ADMIN = 1  # 管理员：所有操作
 
+@app.get("/health")
+async def health():
+    """容器健康检查专用接口（无需鉴权）"""
+    return {"status": "ok"}
+
 def get_permission_level(x_api_key: str = Header(None)):
     """获取当前 API Key 的权限等级"""
     correct_key = config_loader.get('server.admin_api_key')

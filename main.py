@@ -13,6 +13,9 @@ import uvicorn
 
 # 记录全局启动时间，必须在模块加载时立即执行
 GLOBAL_START_TIME = time.time()
+
+# Docker 容器内运行检测：由 compose 注入环境变量。容器内禁用在容器内部 git pull + 进程重启的更新方式
+IS_CONTAINER = os.environ.get('TQSYNC_CONTAINER', '0') == '1'
 # 修复: main.py 作为入口脚本时模块名为 __main__，导致 from main import X 触发二次导入
 # 将 __main__ 模块注册为 'main'，避免 GLOBAL_START_TIME 被重新计算
 sys.modules['main'] = sys.modules[__name__]
@@ -193,6 +196,11 @@ async def handle_qq_webhook(request):
                 elif cmd == '/status':
                     response = await handle_status_command()
                 elif cmd == '/reboot':
+                    if IS_CONTAINER:
+                        response = "容器环境下请使用 `docker compose restart` 或 `docker restart tqsync` 重启。"
+                        await onebot_client.send_group_msg(engine.qq_group_id, response)
+                        return web.json_response({})
+
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
@@ -203,6 +211,11 @@ async def handle_qq_webhook(request):
                     asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
                 elif cmd == '/checkupdate':
+                    if IS_CONTAINER:
+                        response = "容器环境下自动更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。"
+                        await onebot_client.send_group_msg(engine.qq_group_id, response)
+                        return web.json_response({})
+
                     admin_ids = config_loader.get('server.admin_user_ids', [])
                     if admin_ids and qq_id not in admin_ids:
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
@@ -380,6 +393,10 @@ async def handle_qq_webhook(request):
             
             # 仅处理管理命令
             if cmd == '/checkupdate':
+                if IS_CONTAINER:
+                    await onebot_client.send_private_msg(qq_id, "容器环境下自动更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。")
+                    return web.json_response({})
+
                 info = await handle_checkupdate_command()
 
                 nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 检查更新"}}]}}]
@@ -393,6 +410,10 @@ async def handle_qq_webhook(request):
                     asyncio.create_task(graceful_restart('qq'))
                 return web.json_response({})
             elif cmd == '/reboot':
+                if IS_CONTAINER:
+                    await onebot_client.send_private_msg(qq_id, "容器环境下请使用 `docker compose restart` 或 `docker restart tqsync` 重启。")
+                    return web.json_response({})
+
                 response = await handle_reboot_command('qq')
                 await onebot_client.send_private_msg(qq_id, response)
                 asyncio.create_task(graceful_restart('qq'))
@@ -452,6 +473,10 @@ REBOOT_INFO_FILE = "logs/.reboot_info"
 
 async def graceful_restart(platform: str = 'qq'):
     """优雅重启：启动新进程后退出当前进程，实现无缝重启"""
+    if IS_CONTAINER:
+        logger.warning("容器环境下不支持进程内重启，直接退出容器（由 restart 策略拉起）")
+        os._exit(0)
+
     logger.info("正在重启...")
     
     reboot_info = {
@@ -645,10 +670,14 @@ async def main():
     from utils.ffmpeg_manager import ffmpeg_manager
     ffmpeg_local_path = ffmpeg_manager.get_executable_path()
     ffmpeg_status = await db.get_setting('ffmpeg_auto_download_confirmed')
-    
-    logger.info(f"FFmpeg 检测结果: 本地路径={ffmpeg_local_path}, 数据库状态={ffmpeg_status}")
-    
-    if not ffmpeg_local_path and ffmpeg_status != 'cancelled':
+
+    # 容器内已通过 apt 预装系统 FFmpeg（shutil.which 可找到），无需触发自动下载提示
+    import shutil as _shutil
+    system_ffmpeg = _shutil.which('ffmpeg')
+
+    logger.info(f"FFmpeg 检测结果: 本地路径={ffmpeg_local_path}, 系统路径={system_ffmpeg}, 数据库状态={ffmpeg_status}")
+
+    if not ffmpeg_local_path and not system_ffmpeg and ffmpeg_status != 'cancelled':
         logger.info("未检测到 FFmpeg，正在发送自动下载提示...")
         prompt_msg = (
             "⚠️ 检测到系统未安装 FFmpeg\n"
@@ -670,8 +699,8 @@ async def main():
             logger.info("FFmpeg 提示已发送到 QQ")
         except Exception as e:
             logger.error(f"发送 FFmpeg 提示到 QQ 失败: {e}")
-    elif ffmpeg_local_path:
-        logger.info(f"FFmpeg 已存在: {ffmpeg_local_path}")
+    elif ffmpeg_local_path or system_ffmpeg:
+        logger.info(f"FFmpeg 已存在: {ffmpeg_local_path or system_ffmpeg}")
     elif ffmpeg_status == 'cancelled':
         logger.info("用户已取消 FFmpeg 自动下载提示")
     
@@ -733,7 +762,11 @@ async def main():
     background_tasks.append(cleanup_codes_task)
 
     async def auto_check_update():
-        """每小时自动检查 GitHub 更新"""
+        """每小时自动检查 GitHub 更新 (容器环境下跳过，镜像更新由 compose 负责)"""
+        if IS_CONTAINER:
+            logger.info("容器环境下跳过自动更新检查")
+            return
+
         from handlers.command_handler import handle_checkupdate_command
 
         await asyncio.sleep(120)  # 启动2分钟后开始首次检查

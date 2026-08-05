@@ -100,6 +100,41 @@ cp config.yaml.example config.yaml
 python main.py
 ```
 
+## Docker 部署
+
+TQSync 提供官方 Docker 镜像 [`xsong1205/tqsync`](https://hub.docker.com/r/xsong1205/tqsync)，镜像内已内置 FFmpeg 与 Python 依赖。
+
+### 1. 准备配置文件
+
+```bash
+cp config.yaml.example config.yaml
+```
+
+编辑 `config.yaml` 填入 Telegram Token、群组 ID、Napcat 地址与 QQ 群号。
+
+### 2. 启动
+
+```bash
+cp docker-compose.yml.example docker-compose.yml
+docker compose up -d
+```
+
+### 3. 更新镜像
+
+容器内禁用进程内自动更新，更新请使用：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### Docker 注意事项
+
+- `config.yaml` 以只读方式挂载进容器，通过 WebUI 修改的配置仅在内存中生效，不会写回宿主机文件。
+- 容器内 FFmpeg 已预装，启动时不会触发 `/confirm` 下载提示。
+- 数据持久化目录：`./db`（数据库）、`./logs`（日志）、`./plugins`（插件）、`./temp`（临时文件）。
+- 自动更新检查与 `/checkupdate`、`/reboot` 在容器内被禁用，请改用 `docker compose` 管理。
+
 ## 使用说明
 
 - **绑定用户**：在 Telegram 群组中发送 `/bind <你的QQ号>`。

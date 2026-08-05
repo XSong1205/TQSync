@@ -1,0 +1,33 @@
+# 版本控制
+.git/
+.gitignore
+.github/
+
+# 运行时目录（由 volume 挂载，不应进入镜像）
+logs/
+temp/
+db/
+bin/
+config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+env/
+.venv/
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.swp
+
+# 本地工具与文档
+push.py
+NapCatQQAPI.md
+docs/
+
+# 临时文件
+*.log
+*.tmp

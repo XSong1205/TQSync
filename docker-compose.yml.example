@@ -1,0 +1,29 @@
+services:
+  tqsync:
+    image: xsong1205/tqsync:latest
+    container_name: tqsync
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # QQ Webhook
+      - "8081:8081"   # Admin API / Web 面板
+    volumes:
+      # 配置：首次使用请复制 config.yaml.example 为 config.yaml 并填入真实信息
+      - ./config.yaml:/app/config.yaml:ro
+      - ./db:/app/db
+      - ./logs:/app/logs
+      - ./plugins:/app/plugins
+      - ./temp:/app/temp
+      - ./docs:/app/docs:ro
+    environment:
+      # 标记容器环境: 禁用进程内 git 更新/重启，并跳过配置写盘
+      - TQSYNC_CONTAINER=1
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    # 保持与 Dockerfile 中镜像 tag 一致
+    labels:
+      - "com.xsong1205.tqsync.version=latest"

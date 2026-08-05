@@ -2,6 +2,10 @@ import yaml
 import os
 from typing import Dict, Any
 
+# 容器环境下 config.yaml 以只读方式挂载，禁止写盘
+IS_CONTAINER = os.environ.get('TQSYNC_CONTAINER', '0') == '1'
+
+
 class ConfigLoader:
     def __init__(self, config_path="config.yaml"):
         self.config_path = config_path
@@ -11,7 +15,7 @@ class ConfigLoader:
     def load_config(self):
         if not os.path.exists(self.config_path):
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
-        
+
         with open(self.config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
 
@@ -36,6 +40,9 @@ class ConfigLoader:
         self.save_config()
 
     def save_config(self):
+        if IS_CONTAINER:
+            # 容器内配置只读，跳过写盘（避免 Read-only file system 报错）
+            return
         with open(self.config_path, 'w', encoding='utf-8') as f:
             yaml.dump(self.config, f, allow_unicode=True)
 
