@@ -46,6 +46,7 @@ temp/
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # autopusher 相关
 push.py
