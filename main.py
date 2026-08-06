@@ -212,7 +212,7 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
                     asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
-                elif cmd == '/checkupdate':
+                elif cmd == '/checkupdate' or cmd == '/cu':
                     if IS_CONTAINER:
                         response = "容器环境下自动更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。"
                         await onebot_client.send_group_msg(engine.qq_group_id, response)
@@ -394,7 +394,7 @@ async def handle_qq_webhook(request):
             response = ""
             
             # 仅处理管理命令
-            if cmd == '/checkupdate':
+            if cmd == '/checkupdate' or cmd == '/cu':
                 if IS_CONTAINER:
                     await onebot_client.send_private_msg(qq_id, "容器环境下自动更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。")
                     return web.json_response({})

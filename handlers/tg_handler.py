@@ -369,6 +369,7 @@ def get_tg_handlers():
         CommandHandler('status', handle_status_command_tg),
         CommandHandler('reboot', handle_reboot_command_tg),
         CommandHandler('checkupdate', handle_checkupdate_command_tg),
+        CommandHandler('cu', handle_checkupdate_command_tg),
         CommandHandler('confirm', handle_confirm_ffmpeg),
         CommandHandler('cancel', handle_cancel_ffmpeg),
         CommandHandler('blockword', handle_blockword_command),
