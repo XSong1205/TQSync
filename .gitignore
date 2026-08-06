@@ -56,4 +56,4 @@ push.py
 utils/version_bumper.py
 
 # Plugins
-plugins/
+plugins/db/tqsync.db
