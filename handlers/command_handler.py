@@ -168,6 +168,16 @@ async def handle_status_command(start_time: float = None):
         f"--------------------------"
     )
 
+async def handle_webui_command():
+    """处理 /webui 指令，返回 WebUI 地址（优先取 server.webui_url，缺省用 host:port 构造）"""
+    configured = config_loader.get('server.webui_url')
+    if configured:
+        return configured
+    host = config_loader.get('server.host', '127.0.0.1')
+    port = config_loader.get('server.admin_api_port', 8081)
+    return f"http://{host}:{port}"
+
+
 async def handle_help_command():
     """处理 /help 指令"""
     plugin_lines = ""

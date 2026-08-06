@@ -25,7 +25,7 @@ from db.database import db
 from core.sync_engine import SyncEngine
 from core.file_transfer import FileSource
 from handlers.tg_handler import get_tg_handlers
-from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command, handle_checkupdate_command, handle_reboot_command, handle_blockword_command, handle_unblockword_command, handle_blockwords_command
+from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command, handle_checkupdate_command, handle_reboot_command, handle_blockword_command, handle_unblockword_command, handle_blockwords_command, handle_webui_command
 from handlers.qq_handler import onebot_client
 from api.admin_api import app as admin_app
 from core.plugin_manager import PluginManager
@@ -193,6 +193,8 @@ async def handle_qq_webhook(request):
                     response = await handle_setprefix_command(qq_id, 'qq', args)
                 elif cmd == '/help':
                     response = await handle_help_command()
+                elif cmd == '/webui':
+                    response = "WebUI 管理面板地址:\n" + await handle_webui_command()
                 elif cmd == '/status':
                     response = await handle_status_command()
                 elif cmd == '/reboot':

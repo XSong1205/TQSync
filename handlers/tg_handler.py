@@ -4,7 +4,7 @@ from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
-from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic
+from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic, handle_webui_command as handle_webui_command_logic
 from core.plugin_manager import PluginManager
 import uuid
 from utils.logger import logger
@@ -213,6 +213,10 @@ async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     response = await handle_help_command_logic()
     await update.message.reply_text(response)
 
+async def handle_webui_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = await handle_webui_command_logic()
+    await update.message.reply_text(f"WebUI 管理面板地址:\n{url}")
+
 async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 TG 端的 /bind <验证码> 指令"""
     if not context.args:
@@ -361,6 +365,7 @@ def get_tg_handlers():
         CommandHandler('bind', handle_bind_command),
         CommandHandler('setprefix', handle_setprefix_command),
         CommandHandler('help', handle_help_command),
+        CommandHandler('webui', handle_webui_command),
         CommandHandler('status', handle_status_command_tg),
         CommandHandler('reboot', handle_reboot_command_tg),
         CommandHandler('checkupdate', handle_checkupdate_command_tg),
