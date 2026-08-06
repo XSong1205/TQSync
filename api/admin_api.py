@@ -156,6 +156,34 @@ async def get_status():
         }
     }
 
+@app.get("/admin/stats/sync_history", dependencies=[Depends(require_permission(PERM_LEVEL_USER))])
+async def get_sync_history():
+    """按 UTC 整点聚合最近 24 小时同步消息数，返回 24 个桶（空桶补 0）"""
+    import datetime
+    buckets = []
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_hour = now_utc.hour
+    try:
+        async with db._Database__get_connection() as conn:
+            cursor = await conn.execute('''
+                SELECT strftime('%H', created_at) AS h, COUNT(*)
+                FROM message_mapping
+                WHERE created_at >= datetime('now', '-24 hours')
+                GROUP BY h
+            ''')
+            rows = await cursor.fetchall()
+    except Exception:
+        rows = []
+    hour_map = {}
+    for h, count in rows:
+        hour_map[int(h)] = count
+    # 以当前 UTC 小时为末尾，倒推 24 个整点桶（hour 为 UTC 小时号，前端转本地标签）
+    for i in range(24):
+        h = (now_hour - 23 + i) % 24
+        buckets.append({"hour": h, "count": hour_map.get(h, 0)})
+    return {"buckets": buckets, "generated_at": now_utc.isoformat()}
+
+
 @app.get("/admin/logs", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def get_logs(lines: int = 50):
     log_file = os.path.join(os.getcwd(), 'logs', 'tqsync.log')
