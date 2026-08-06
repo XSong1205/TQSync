@@ -1,4 +1,5 @@
-from telegram import Bot
+from telegram import Bot, MessageEntity
+from telegram.constants import MessageEntityType
 import os
 import sys
 import uuid
@@ -635,12 +636,86 @@ class SyncEngine:
                 try: os.remove(ogg_path)
                 except: pass
 
-    async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str, reply_segment: list = None, tg_message_id: int = None):
+    async def _resolve_tg_mentions(self, text: str, entities: tuple) -> tuple:
+        """将 TG 消息中的 @mention / text_mention 转成 QQ 的 at CQ 码。
+
+        返回: (qq_message_segments: list, plain_text: str)
+        - qq_message_segments: 可直接用于 QQ 群消息的消息段数组
+        - plain_text: 无 at 的纯文本（用于日志/屏蔽词检测）
+        """
+        if not entities:
+            return f"[TG] {{display_name}}: {{text}}", text
+
+        # 收集所有 mention 的 (offset, length, qq_id_or_None)
+        mentions = []
+        for ent in entities:
+            if ent.type in (MessageEntityType.MENTION, MessageEntityType.TEXT_MENTION):
+                qq_id = None
+                if ent.type == MessageEntityType.MENTION:
+                    username = text[ent.offset + 1:ent.offset + ent.length]  # 去掉 @
+                    binding = await db.get_binding_by_tg_username(username)
+                    if binding:
+                        qq_id = binding[1]  # qq_user_id
+                elif ent.type == MessageEntityType.TEXT_MENTION and ent.user:
+                    binding = await db.get_binding_by_tg(ent.user.id)
+                    if binding:
+                        qq_id = binding[1]
+                if qq_id:
+                    mentions.append((ent.offset, ent.length, int(qq_id)))
+
+        if not mentions:
+            return f"[TG] {{display_name}}: {{text}}", text
+
+        # 按 offset 排序，从右往左替换避免索引错位
+        mentions.sort(key=lambda m: m[0], reverse=True)
+
+        # 构建 QQ 消息段
+        segments = []
+        plain_parts = []
+        cursor = 0
+        # 转为正序处理
+        mentions_asc = sorted(mentions, key=lambda m: m[0])
+
+        for offset, length, qq_id in mentions_asc:
+            # 前面的普通文本
+            if offset > cursor:
+                segments.append({"type": "text", "data": {"text": text[cursor:offset]}})
+                plain_parts.append(text[cursor:offset])
+            # @ 段
+            segments.append({"type": "at", "data": {"qq": str(qq_id)}})
+            segments.append({"type": "text", "data": {"text": " "}})
+            plain_parts.append("@" + str(qq_id) + " ")
+            cursor = offset + length
+
+        # 剩余文本
+        if cursor < len(text):
+            segments.append({"type": "text", "data": {"text": text[cursor:]}})
+            plain_parts.append(text[cursor:])
+
+        plain_text = "".join(plain_parts)
+        return segments, plain_text
+
+    async def forward_to_qq(self, tg_user_id: int, tg_username: str, text: str,
+                            reply_segment: list = None, tg_message_id: int = None,
+                            entities: tuple = None):
         display_name = await self.get_display_name(tg_user_id=tg_user_id, fallback_name=tg_username)
+
+        # 解析 @mention 为 QQ at 码
+        mention_segments, _ = await self._resolve_tg_mentions(text, entities)
+        is_segments = isinstance(mention_segments, list)
+
         if reply_segment:
-            message = reply_segment + [{"type": "text", "data": {"text": f"[TG] {display_name}: {text}"}}]
+            prefix = reply_segment + [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}]
+            if is_segments:
+                message = prefix + mention_segments
+            else:
+                message = prefix + [{"type": "text", "data": {"text": mention_segments.format(display_name=display_name, text=text)}}]
         else:
-            message = f"[TG] {display_name}: {text}"
+            if is_segments:
+                message = [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}] + mention_segments
+            else:
+                message = [{"type": "text", "data": {"text": f"[TG] {display_name}: {text}"}}]
+
         result = await onebot_client.send_group_msg(self.qq_group_id, message)
         if result and tg_message_id:
             qq_msg_id = self._extract_qq_message_id(result)

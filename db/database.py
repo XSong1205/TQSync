@@ -150,6 +150,17 @@ class Database:
                 if attempt < 2: await asyncio.sleep(0.5)
         return None
 
+    async def get_binding_by_tg_username(self, tg_username: str):
+        """根据 TG 用户名查找绑定（用于 @mention 解析）"""
+        if not tg_username:
+            return None
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                'SELECT * FROM bindings WHERE LOWER(tg_username) = LOWER(?)',
+                (tg_username,)
+            ) as cursor:
+                return await cursor.fetchone()
+
     async def add_binding(self, tg_user_id: int, qq_user_id: int, tg_username: str = None, qq_nickname: str = None):
         async with aiosqlite.connect(self.db_path) as db:
             # 检查是否已存在 UID，如果不存在则生成一个新的

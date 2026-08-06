@@ -53,6 +53,11 @@ def _copy_to_temp(file_url: str) -> str:
 
 async def handle_qq_webhook(request):
     try:
+        # 更新 QQ 健康时间戳（排除 notice 类型的纯撤回通知）
+        import main as main_module
+        if hasattr(main_module, '_health_last_qq_msg'):
+            main_module._health_last_qq_msg = time.time()
+
         data = await request.json()
         
         # 处理撤回通知 (Notice)
@@ -772,6 +777,71 @@ async def main():
     
     cleanup_codes_task = asyncio.create_task(cleanup_verification_codes())
     background_tasks.append(cleanup_codes_task)
+
+    async def health_monitor():
+        """每 5 分钟检查 TG 和 QQ 连接健康状态，异常时向另一端发送告警。
+
+        - QQ 侧：检测最近 10 分钟内是否收到过 webhook 消息
+        - TG 侧：检测 polling 是否正常（在最后收到的消息时间上检查）
+        """
+        # 启动后等 5 分钟再开始检测，避免刚启动就误报
+        await asyncio.sleep(300)
+
+        # 记录各端最近收到消息的时间戳
+        last_qq_msg = time.time()     # webhook 收到消息时更新
+        last_tg_msg = time.time()     # TG handler 收到消息时更新
+
+        # 注册到模块变量，供 webhook 和 tg_handler 更新
+        import main as main_module
+        main_module._health_last_qq_msg = last_qq_msg
+        main_module._health_last_tg_msg = last_tg_msg
+
+        alert_cooldown_qq = 0   # QQ 告警冷却计时
+        alert_cooldown_tg = 0   # TG 告警冷却计时
+        ALERT_INTERVAL = 1800   # 同类型告警最多每 30 分钟发一次
+
+        while True:
+            try:
+                now = time.time()
+                engine = SyncEngine.get_instance()
+
+                # 检查 QQ（最近 10 分钟无消息 + 不在冷却期）
+                qq_silence = now - main_module._health_last_qq_msg
+                if qq_silence > 600 and (now - alert_cooldown_qq) > ALERT_INTERVAL:
+                    alert_msg = (
+                        f"⚠️ [健康告警] QQ 端可能已离线\n"
+                        f"已有 {int(qq_silence // 60)} 分钟未收到 QQ webhook 消息\n"
+                        f"请检查 NapCat 是否正常运行"
+                    )
+                    try:
+                        await engine.bot.send_message(chat_id=engine.tg_group_id, text=alert_msg)
+                        logger.warning(f"健康告警: QQ 离线 {int(qq_silence // 60)} 分钟，已通知 TG")
+                        alert_cooldown_qq = now
+                    except Exception as e:
+                        logger.error(f"发送 QQ 健康告警到 TG 失败: {e}")
+
+                # 检查 TG（最近 10 分钟无消息）
+                tg_silence = now - main_module._health_last_tg_msg
+                if tg_silence > 600 and (now - alert_cooldown_tg) > ALERT_INTERVAL:
+                    alert_msg = (
+                        f"⚠️ [健康告警] TG 端可能已离线\n"
+                        f"已有 {int(tg_silence // 60)} 分钟未收到 TG 消息\n"
+                        f"请检查 Telegram Bot 连接状态"
+                    )
+                    try:
+                        await onebot_client.send_group_msg(engine.qq_group_id, alert_msg)
+                        logger.warning(f"健康告警: TG 离线 {int(tg_silence // 60)} 分钟，已通知 QQ")
+                        alert_cooldown_tg = now
+                    except Exception as e:
+                        logger.error(f"发送 TG 健康告警到 QQ 失败: {e}")
+
+            except Exception as e:
+                logger.error(f"健康监控异常: {e}")
+
+            await asyncio.sleep(300)
+
+    health_monitor_task = asyncio.create_task(health_monitor())
+    background_tasks.append(health_monitor_task)
 
     async def auto_check_update():
         """每小时自动检查 GitHub 更新 (容器环境下跳过，镜像更新由 compose 负责)"""
