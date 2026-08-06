@@ -7,7 +7,6 @@ from handlers.qq_handler import onebot_client
 from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic, handle_webui_command as handle_webui_command_logic
 from core.plugin_manager import PluginManager
 import uuid
-import time
 from utils.logger import logger
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -49,12 +48,6 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
         return
 
-    # 更新 TG 健康时间戳
-    import sys
-    main_module = sys.modules.get('main')
-    if main_module and hasattr(main_module, '_health_last_tg_msg'):
-        main_module._health_last_tg_msg = time.time()
-    
     user = update.effective_user
     # 忽略 Bot 自身的消息，防止同步循环
     if user.is_bot:
