@@ -168,13 +168,40 @@ async def handle_status_command(start_time: float = None):
         f"--------------------------"
     )
 
+async def _get_public_ip() -> str:
+    """通过第三方接口获取服务器公网 IP，失败返回空字符串"""
+    for url in (
+        'https://api.ipify.org',
+        'https://ipv4.icanhazip.com',
+        'https://ifconfig.me/ip',
+    ):
+        try:
+            import aiohttp
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        ip = (await resp.text()).strip()
+                        if ip:
+                            return ip
+        except Exception:
+            continue
+    return ''
+
+
 async def handle_webui_command():
-    """处理 /webui 指令，返回 WebUI 地址（优先取 server.webui_url，缺省用 host:port 构造）"""
+    """处理 /webui 指令，返回 WebUI 地址
+
+    优先级: server.webui_url 配置 > 公网 IP:端口 > 内网 host:端口
+    """
     configured = config_loader.get('server.webui_url')
     if configured:
         return configured
-    host = config_loader.get('server.host', '127.0.0.1')
     port = config_loader.get('server.admin_api_port', 8081)
+    ip = await _get_public_ip()
+    if ip:
+        return f"http://{ip}:{port}"
+    host = config_loader.get('server.host', '127.0.0.1')
     return f"http://{host}:{port}"
 
 
