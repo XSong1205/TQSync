@@ -153,6 +153,33 @@ async def handle_status_command(start_time: float = None):
     except Exception:
         plugin_info_lines = "\n已加载插件: 获取失败\n"
 
+    # 7. 双端连接状态 (基于健康监控的心跳时间戳, 阈值与健康告警一致: 10 分钟)
+    conn_lines = ""
+    try:
+        main_module = sys.modules.get('main')
+        now = time.time()
+
+        def _fmt_conn(ago):
+            if ago is None:
+                return "⏳ 检测中"
+            if ago <= 600:
+                return "✅ 正常"
+            return f"❌ 可能离线 (已 {ago // 60} 分钟无消息)"
+
+        tg_ago = qq_ago = None
+        if main_module:
+            if hasattr(main_module, '_health_last_tg_msg'):
+                tg_ago = max(0, int(now - main_module._health_last_tg_msg))
+            if hasattr(main_module, '_health_last_qq_msg'):
+                qq_ago = max(0, int(now - main_module._health_last_qq_msg))
+
+        conn_lines = (
+            f"- Telegram 连接: {_fmt_conn(tg_ago)}\n"
+            f"- QQ 连接: {_fmt_conn(qq_ago)}\n"
+        )
+    except Exception:
+        conn_lines = "- 双端连接: 获取失败\n"
+
     return (
         f"| TQSync Status\n"
         f"--------------------------\n"
@@ -163,6 +190,7 @@ async def handle_status_command(start_time: float = None):
         f"- 绑定用户数: {user_count} 人\n"
         f"- 目标 QQ 群: {qq_gid}\n"
         f"- 目标 TG 群: {tg_gid}\n"
+        f"{conn_lines}"
         f"--------------------------"
         f"{plugin_info_lines}"
         f"--------------------------"
