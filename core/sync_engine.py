@@ -722,7 +722,7 @@ class SyncEngine:
             if is_segments:
                 message = prefix + mention_segments
             else:
-                message = prefix + [{"type": "text", "data": {"text": mention_segments.format(display_name=display_name, text=text)}}]
+                message = prefix + [{"type": "text", "data": {"text": text}}]
         else:
             if is_segments:
                 message = [{"type": "text", "data": {"text": f"[TG] {display_name}: "}}] + mention_segments
