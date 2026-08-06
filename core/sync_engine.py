@@ -99,10 +99,23 @@ class SyncEngine:
                 logger.error(f"工作者 #{worker_id} 异常退出: {e}")
 
     def enqueue_sync_task(self, task_func, *args, **kwargs):
-        """将同步任务加入队列"""
+        """将同步任务加入队列（同步方向控制入口）"""
+        # 同步方向检查
+        direction = config_loader.get('sync.direction', 'both')
+        forward_to_qq_funcs = ('forward_to_qq', 'forward_media_to_qq', 'forward_voice_to_qq', 'forward_sticker_to_qq')
+        forward_to_tg_funcs = ('forward_to_tg', 'forward_media_to_tg', 'forward_voice_to_tg', 'forward_merged_to_tg')
+
+        func_name = task_func.__name__
+        if direction == 'tg_to_qq' and func_name in forward_to_tg_funcs:
+            logger.debug(f"[方向控制] 跳过 TG→QQ 以外的同步: {func_name}")
+            return
+        if direction == 'qq_to_tg' and func_name in forward_to_qq_funcs:
+            logger.debug(f"[方向控制] 跳过 QQ→TG 以外的同步: {func_name}")
+            return
+
         try:
             self.sync_queue.put_nowait((task_func, args, kwargs))
-            logger.debug(f"任务已加入同步队列: {task_func.__name__}, 当前队列大小: {self.sync_queue.qsize()}")
+            logger.debug(f"任务已加入同步队列: {func_name}, 当前队列大小: {self.sync_queue.qsize()}")
         except asyncio.QueueFull:
             logger.warning("同步队列已满，丢弃新任务")
 

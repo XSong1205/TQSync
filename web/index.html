@@ -965,6 +965,7 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
           <div class="sec-line"></div>
           <div class="sec-side">
             <el-button :type="configSubTab==='config'?'primary':'default'" size="small" @click="configSubTab='config'" round>配置文件</el-button>
+            <el-button :type="configSubTab==='syncDirection'?'primary':'default'" size="small" @click="configSubTab='syncDirection';fetchSyncDirection()" round>同步方向</el-button>
             <el-button :type="configSubTab==='blockedWords'?'primary':'default'" size="small" @click="configSubTab='blockedWords';fetchBlockedWords()" round>屏蔽词管理</el-button>
           </div>
         </div>
@@ -1051,6 +1052,37 @@ body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font
             暂无屏蔽词，输入关键词并点击添加
           </div>
         </div>
+
+        <!-- 同步方向设置 -->
+        <div v-if="configSubTab==='syncDirection'" class="page-in">
+          <div class="sec-hd" style="margin-bottom:12px">
+            <div class="sec-title">
+              <svg viewBox="0 0 11 11" fill="none"><path d="M2 5.5l2.5 2.5L9 3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              消息同步方向
+            </div>
+            <div class="sec-line"></div>
+          </div>
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px">
+            <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+              控制消息在 Telegram 和 QQ 之间的同步方向。修改后即时生效，已入队未处理的任务仍会完成。
+            </p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <div v-for="opt in syncDirectionOptions" :key="opt.value"
+                class="dir-card" :class="{active:syncDirection===opt.value}"
+                @click="setSyncDirection(opt.value)"
+                style="flex:1;min-width:200px;max-width:280px;background:var(--bg3);border:1px solid;border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .2s,transform .2s;border-color:var(--border)"
+                :style="syncDirection===opt.value?{borderColor:'var(--primary)',background:'var(--prim3)'}:{}">
+                <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">{{ opt.label }}</div>
+                <div style="font-size:11px;color:var(--muted)">{{ opt.desc }}</div>
+                <div v-if="syncDirection===opt.value" style="margin-top:8px;font-size:10px;font-family:var(--mono);color:var(--primary);display:flex;align-items:center;gap:4px">
+                  <div class="bdot"></div> 当前生效
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+
       </div>
 
       <!-- ═══════════ ADMINS ═══════════ -->
@@ -1137,6 +1169,8 @@ createApp({
     const configSubTab = ref('config');
     const blockedWords = ref([]);
     const newBlockedWord = ref('');
+    const syncDirection = ref('both');
+    const syncDirectionOptions = ref([]);
 
     /* ── 插件页 ── */
     const plugins        = ref([]);
@@ -1479,6 +1513,22 @@ createApp({
     };
     window.addEventListener('resize', checkScreen);
 
+    const fetchSyncDirection = async () => {
+      try {
+        const res = await api.get('/admin/sync/direction');
+        syncDirection.value = res.data.direction;
+        syncDirectionOptions.value = res.data.options || [];
+      } catch(e) { ElMessage.error('获取同步方向失败'); }
+    };
+
+    const setSyncDirection = async (dir) => {
+      try {
+        const res = await api.put('/admin/sync/direction', { direction: dir });
+        syncDirection.value = res.data.direction;
+        ElMessage.success(res.data.message);
+      } catch(e) { ElMessage.error(e.response?.data?.detail || '设置失败'); }
+    };
+
     const handleMenu = (idx) => {
       activeTab.value = idx; mobileOpen.value = false;
       if (idx === 'logs') fetchLogs();
@@ -1495,6 +1545,7 @@ createApp({
 
     const pageTitle = computed(() => {
       if (activeTab.value === 'config' && configSubTab.value === 'blockedWords') return '系统配置 / 屏蔽词管理';
+      if (activeTab.value === 'config' && configSubTab.value === 'syncDirection') return '系统配置 / 同步方向';
       return ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理',plugins:'插件管理',config:'系统配置',admins:'管理员管理'})[activeTab.value] || '';
     });
 
@@ -1523,6 +1574,7 @@ createApp({
       kvNewKey, kvNewVal, admins, newAdminId, loadedCount, enabledCount, isNewAdminValid,
       doLogin, doLogout, handleMenu, doRestart, unbind, getLogCls,
       fetchConfig, fetchBlockedWords, addBlockedWord, removeBlockedWord, startEdit, cancelEdit, saveConfig,
+      syncDirection, syncDirectionOptions, fetchSyncDirection, setSyncDirection,
       fetchPlugins, togglePlugin, reloadPlugin, deletePlugin, triggerUpload, onUpload,
       openDrawer, loadKvData, saveNewKv, startKvEdit, cancelKvEdit, saveKvEdit, deleteKv,
       fetchAdmins, addAdmin, toggleAdmin

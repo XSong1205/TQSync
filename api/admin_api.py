@@ -492,3 +492,33 @@ async def delete_plugin_data(plugin_name: str, key: str):
     """删除插件指定键的数据"""
     await db.delete_plugin_data(plugin_name, key)
     return {"status": "success", "message": f"Plugin {plugin_name} data '{key}' deleted"}
+
+
+# ── 同步方向控制 ──
+
+@app.get("/admin/sync/direction", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def get_sync_direction():
+    """获取当前同步方向"""
+    direction = config_loader.get('sync.direction', 'both')
+    return {
+        "direction": direction,
+        "options": [
+            {"value": "both", "label": "双向同步", "desc": "TG ↔ QQ 消息互通"},
+            {"value": "tg_to_qq", "label": "仅 TG → QQ", "desc": "TG 消息同步到 QQ，反之不转发"},
+            {"value": "qq_to_tg", "label": "仅 QQ → TG", "desc": "QQ 消息同步到 TG，反之不转发"},
+        ]
+    }
+
+
+class SyncDirectionUpdate(BaseModel):
+    direction: str
+
+
+@app.put("/admin/sync/direction", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+def update_sync_direction(update: SyncDirectionUpdate):
+    """修改同步方向"""
+    valid = {"both", "tg_to_qq", "qq_to_tg"}
+    if update.direction not in valid:
+        raise HTTPException(status_code=400, detail=f"无效的同步方向，可选值: {', '.join(valid)}")
+    config_loader.update_config('sync.direction', update.direction)
+    return {"status": "success", "message": f"同步方向已设为: {update.direction}", "direction": update.direction}

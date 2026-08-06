@@ -22,6 +22,9 @@ server:
 database:
   path: "db/tqsync.db"
 
+sync:
+  direction: "both"  # 同步方向: "both"(双向), "tg_to_qq"(仅TG→QQ), "qq_to_tg"(仅QQ→TG)
+
 # 调试配置（可选）
 debug:
   sticker_conversion_chat_id: null  # TGS 贴纸转换调试日志发送到的 Telegram Chat ID。启用后也会同步发送到配置的 QQ 群组。测试完成后请设为 null
