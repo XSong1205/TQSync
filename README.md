@@ -9,7 +9,7 @@ TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegra
 > 使用者需自行确保群组同步内容的合法性，项目作者不对用户生成或发送的内容承担任何法律责任。
 > Telegram 和 QQ 仅为即时通讯软件，与本项目无任何从属、合作或关联关系。项目均使用第三方库与软件通信，并未对软件本体进行Hook/反编译/修改操作，如有侵权请务必告知。
 
-## 重构版功能特性
+## 功能特性
 
 - **管理 API**：提供 FastAPI 接口，支持动态修改配置、管理绑定关系及服务重启。
 - **模块化设计**：每个功能都是模块化设计，后续可在WebUI中自由开关。
@@ -24,41 +24,12 @@ TQSync 是一个简单的基于 Python 的异步机器人，用于实现 Telegra
 - **Web Framework**: `FastAPI` + `Uvicorn` + `Vue`
 - **Database**: `SQLite`
 
-## 可选依赖
-
-### FFmpeg (推荐安装)
-FFmpeg 用于以下功能：
-- WebM 格式动态贴纸转换 (WebM -> GIF)
-- 语音消息转码 (OGG -> AMR)
-
-**自动下载（推荐）：**
-启动机器人时，如果检测到未安装 FFmpeg，机器人会在 QQ 和 Telegram 群内发送提示。您只需在任意一端回复 `/confirm`，机器人将自动下载并配置适合当前系统的 FFmpeg。
-如您不想安装且不想再被提示，请输入 `/cancel`，然后程序将记录此选择，下次不再提示，此后您可手动安装。
-
-**手动安装方法：**
-如果您希望手动安装或自动下载失败，请参考以下命令：
-- **Windows**: `winget install Gyan.FFmpeg`
-- **Linux**(Debian系): `sudo apt install ffmpeg`
-- **macOS**: `brew install ffmpeg`
-
-安装完成后，请重启 TQSync 以生效。
-
-### rlottie (推荐安装)
-
-`rlottie-python` 用于将 TGS 格式动态贴纸渲染为 GIF。安装 `requirements.txt` 中的依赖后即可使用，无需额外配置。
-
-**验证安装:**
-```bash
-python -c "from rlottie_python import LottieAnimation; print('rlottie 安装成功')"
-```
-
-**注意:** 如果未安装 `rlottie-python`，动态贴纸将无法转换为 GIF，但仍可正常同步静态贴纸。
 
 ## 安装
 
 ### 快速安装(Windows)
 
-执行前请确认您已安装Python 3.9+。
+执行前请确认您已安装Python 3.12+。
 
 **方式一 (推荐，自动创建虚拟环境):** 双击运行 `install.bat`
 
@@ -129,7 +100,7 @@ cp config.yaml.example config.yaml
 
 ## 配置 Napcat
 
-请前往项目目录/docs/napcat_config_guide获取详细信息
+请前往项目目录 `/docs/napcat_config_guide.md` 获取详细信息
 
 ## 运行机器人
 
@@ -138,7 +109,7 @@ venv\Scripts\python.exe main.py    # Windows
 # venv/bin/python main.py          # Linux / macOS (或使用 tqstart 后台运行)
 ```
 
-## Docker 部署
+## Docker 部署(没做好，，，)
 
 TQSync 提供官方 Docker 镜像 [`xsong1205/tqsync`](https://hub.docker.com/r/xsong1205/tqsync)，镜像内已内置 FFmpeg 与 Python 依赖。
 
