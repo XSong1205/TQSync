@@ -42,7 +42,7 @@ venv.bak/
 config.yaml
 *.log
 temp/
-.db
+*.db
 logs/.restart_marker
 logs/.reboot_info
 .tqsync_aliases
