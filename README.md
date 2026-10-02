@@ -5,8 +5,7 @@ TQSync 是一个简单的基于 Python 的机器人，用于实现 Telegram 与 
 
 > [!CAUTION]
 > 本项目为开源学习交流用途，仅供技术研究与个人学习。请勿将本项目用于任何违法违规场景。
-> 本程序不提供、也不包含任何代理、绕过审查等可能涉及法律风险的功能或实现。
-> 使用者需自行确保群组同步内容的合法性，项目作者不对用户生成或发送的内容承担任何法律责任。
+> 使用者需自行确保群组同步内容的合法性.
 
 ## 功能特性
 
@@ -105,10 +104,10 @@ cp config.yaml.example config.yaml
 
 ```Shell
 venv\Scripts\python.exe main.py    # Windows
-# venv/bin/python main.py          # Linux / macOS (或使用 tqstart 后台运行)
+# tqstart                          # Linux / macOS (或使用 venv/bin/python main.py 运行)
 ```
 
-## Docker 部署(没做好，，，)
+## Docker 部署(没做好)
 
 TQSync 提供官方 Docker 镜像 [`xsong1205/tqsync`](https://hub.docker.com/r/xsong1205/tqsync)，镜像内已内置 FFmpeg 与 Python 依赖。
 
