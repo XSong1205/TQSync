@@ -914,7 +914,7 @@ class SyncEngine:
             f"- 最后更新: {last_update}\n"
             f"- 目标 QQ 群: {qq_gid}\n"
             f"- 目标 TG 群: {tg_gid}\n"
-            f"- WebUI 地址: {webui_url}\n"
+            f"- WebUI: {webui_url}\n"
             f"--------------------------"
         )
         
@@ -922,14 +922,14 @@ class SyncEngine:
         # 发送到 Telegram
         try:
             await self.bot.send_message(chat_id=self.tg_group_id, text=message)
-            logger.info("向 TG 发送启动通知")
+            logger.info("向 TG 发送启动通知...")
         except Exception as e:
             logger.error(f"Failed to send startup notification to Telegram: {e}")
             
         # 发送到 QQ
         try:
             await onebot_client.send_group_msg(self.qq_group_id, message)
-            logger.info("向 QQ 发送启动通知")
+            logger.info("向 QQ 发送启动通知...")
         except Exception as e:
             logger.error(f"Failed to send startup notification to QQ: {e}")
 

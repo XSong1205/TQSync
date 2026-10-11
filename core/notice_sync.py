@@ -24,11 +24,16 @@ def normalize_notice_text(text: str) -> str:
     t = html.unescape(text)
     # 替换非标准空格 (不间断空格、全角空格等)
     t = t.replace('\xa0', ' ').replace('\u3000', ' ')
+    # 统一换行符 (\r\n / \r -> \n)
+    t = t.replace('\r\n', '\n').replace('\r', '\n')
     # 替换可能存在的 HTML <br> 换行标签
     t = re.sub(r'<br\s*/?>', '\n', t, flags=re.IGNORECASE)
+    # 逐行去除尾部空白并去除首尾空白
+    t = '\n'.join(line.rstrip() for line in t.splitlines()).strip()
     # 移除首部的公告标识前缀 (例如 📢 【QQ 群公告】 等)
     t = re.sub(r'^(📢\s*)?(【(QQ\s*)?群公告】\s*)?', '', t).strip()
     return t
+
 
 
 def get_notice_hash(text: str) -> str:
