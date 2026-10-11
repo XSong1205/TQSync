@@ -48,6 +48,7 @@ async def handle_bind_command(user_id: int, platform: str, args: list = None):
                 f"| TQSync Bind-User\n"
                 f"您的验证码是: {code} ，有效期: 5分钟。\n"
                 f"请在 Telegram 中使用 /bind {code} 完成绑定。"
+            )
             
             if result.get('retcode') == 0:
                 return f"验证码已通过私聊发送给您，请查收。\n如果未收到，请检查是否开启了临时会话权限。"
