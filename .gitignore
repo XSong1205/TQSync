@@ -1,8 +1,11 @@
-# Python
+# ==========================================
+# Python 编译缓存与构建打包
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyd
 .Python
 build/
 develop-eggs/
@@ -23,37 +26,95 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
+# 测试与静态检查缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# ==========================================
+# 虚拟环境 (Virtual Environments)
+# ==========================================
 venv/
+.venv/
 env/
 ENV/
 env.bak/
 venv.bak/
+*.venv/
 
-# IDE
-.lingma/
+# ==========================================
+# IDE / 编辑器配置
+# ==========================================
+.vscode/
 .idea/
+.lingma/
+.cursor/
 *.swp
 *.swo
 *~
-.DS_Store
+*.bak
 
-# Project Specific
+# ==========================================
+# 操作系统生成文件 (OS Files)
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ==========================================
+# 本地配置与密钥 (Configs & Secrets)
+# ==========================================
 config.yaml
+!config.yaml.example
+.env
+.env.*
+!.env.example
+docker-compose.yml
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml.example
+.commit
+
+# ==========================================
+# 运行时数据、日志与临时文件 (Runtime & Logs)
+# ==========================================
+logs/
 *.log
 temp/
-*.db
+*.tmp
 logs/.restart_marker
 logs/.reboot_info
 .tqsync_aliases
 
-# Claude Code
+# ==========================================
+# 数据库文件 (SQLite Databases)
+# ==========================================
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+plugins/db/
+
+# ==========================================
+# 下载的二进制组件 (FFmpeg 等)
+# ==========================================
+bin/
+
+# ==========================================
+# AI 助手与本地工具配置
+# ==========================================
 .claude/
 CLAUDE.md
 
 # autopusher 相关
 push.py
 utils/version_bumper.py
-
-# Plugins
-plugins/db/tqsync.db
