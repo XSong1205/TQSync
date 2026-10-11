@@ -368,11 +368,15 @@ async def handle_blockwords_command(update: Update, context: ContextTypes.DEFAUL
 
 async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """路由未被前置 CommandHandler 处理的 /command 到插件系统"""
-    user = update.effective_user
-    if user.is_bot:
+    msg = update.message
+    if not msg:
         return
 
-    text = update.message.text
+    user = update.effective_user
+    if not user or user.is_bot:
+        return
+
+    text = msg.text
     if not text:
         return
 
@@ -393,7 +397,7 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
         return
 
-    await update.message.reply_text('Unknown command. Type "/help" for help. ')
+    await msg.reply_text('Unknown command. Type "/help" for help. ')
 
 async def handle_tg_pinned_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息置顶事件，自动感知并同步发布到 QQ 群公告"""
@@ -470,7 +474,7 @@ async def handle_syncnotice_command(update: Update, context: ContextTypes.DEFAUL
 def get_tg_handlers():
     return [
         MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_tg_pinned_message),
-        MessageHandler(filters.ALL & ~filters.COMMAND & ~filters.StatusUpdate.ALL, handle_tg_message),
+        MessageHandler(filters.UpdateType.MESSAGE & ~filters.COMMAND & ~filters.StatusUpdate.ALL, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
         CommandHandler('setprefix', handle_setprefix_command),
         CommandHandler('help', handle_help_command),
@@ -487,5 +491,5 @@ def get_tg_handlers():
         CommandHandler('notice', handle_notice_command),
         CommandHandler('announce', handle_notice_command),
         CommandHandler('syncnotice', handle_syncnotice_command),
-        MessageHandler(filters.COMMAND, handle_unhandled_command),
+        MessageHandler(filters.UpdateType.MESSAGE & filters.COMMAND, handle_unhandled_command),
     ]

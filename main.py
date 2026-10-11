@@ -819,6 +819,12 @@ async def main():
             await handle_message_deleted(update, context)
 
     application.add_handler(DeletedMessageHandler())
+
+    # 注册全局错误处理器，避免控制台报 "No error handlers are registered, logging exception"
+    async def handle_telegram_error(update: object, context: ContextTypes.DEFAULT_TYPE):
+        logger.error(f"Telegram 更新处理异常: {context.error}", exc_info=context.error)
+
+    application.add_error_handler(handle_telegram_error)
     
     # 启动 TG Polling
     try:
