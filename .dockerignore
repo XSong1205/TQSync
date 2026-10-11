@@ -10,6 +10,11 @@ db/
 bin/
 config.yaml
 
+# Docker 与部署相关
+docker-compose*.yml
+docker-compose*.yaml
+Dockerfile*
+
 # Python
 __pycache__/
 *.py[cod]

@@ -3,27 +3,45 @@ services:
     image: xsong1205/tqsync:latest
     container_name: tqsync
     restart: unless-stopped
+
+    # 如需在本地从源码直接构建，可取消注释 build 段：
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+
     ports:
-      - "8080:8080"   # QQ Webhook
-      - "8081:8081"   # Admin API / Web 面板
+      - "8080:8080"   # QQ Webhook 接收端口
+      - "8081:8081"   # WebUI 管理面板及 Admin API 端口
+
+    # 网络互联提示:
+    # 1. 允许容器内通过 host.docker.internal 访问宿主机端口 (如宿主机运行的 NapCat: http://host.docker.internal:3000)
+    # 2. 若希望直接共享宿主机网络，可注释上面的 ports 并取消注释下面一行:
+    # network_mode: "host"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     volumes:
-      # 配置：首次使用请复制 config.yaml.example 为 config.yaml 并填入真实信息
+      # 配置文件挂载（重要：启动前请确保宿主机上已创建 config.yaml 文件，避免被 Docker 误建为目录）
       - ./config.yaml:/app/config.yaml:ro
+      # 持久化数据目录
       - ./db:/app/db
       - ./logs:/app/logs
       - ./plugins:/app/plugins
       - ./temp:/app/temp
-      - ./docs:/app/docs:ro
+
     environment:
-      # 标记容器环境: 禁用进程内 git 更新/重启，并跳过配置写盘
-      - TQSYNC_CONTAINER=1
       - TZ=Asia/Shanghai
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=3)"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8081/health"]
       interval: 30s
       timeout: 5s
-      start_period: 10s
+      start_period: 15s
       retries: 3
-    # 保持与 Dockerfile 中镜像 tag 一致
-    labels:
-      - "com.xsong1205.tqsync.version=latest"
+
+    # 容器日志轮转，防止长期运行占满磁盘
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

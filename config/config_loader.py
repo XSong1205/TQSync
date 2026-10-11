@@ -13,6 +13,13 @@ class ConfigLoader:
         self.load_config()
 
     def load_config(self):
+        if os.path.isdir(self.config_path):
+            raise IsADirectoryError(
+                f"配置文件路径 '{self.config_path}' 是一个目录！\n"
+                f"如果是使用 Docker 运行，这通常是因为宿主机未提前创建 config.yaml 文件，Docker 自动将挂载路径创建为了目录。\n"
+                f"请在宿主机执行: rm -rf config.yaml && cp config.yaml.example config.yaml 并填入真实配置后重新启动。"
+            )
+
         if not os.path.exists(self.config_path):
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
 

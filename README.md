@@ -107,40 +107,60 @@ venv\Scripts\python.exe main.py    # Windows
 # tqstart                          # Linux / macOS (或使用 venv/bin/python main.py 运行)
 ```
 
-## Docker 部署(没做好)
+## Docker 部署
 
-TQSync 提供官方 Docker 镜像 [`xsong1205/tqsync`](https://hub.docker.com/r/xsong1205/tqsync)，镜像内已内置 FFmpeg 与 Python 依赖。
+TQSync 提供官方 Docker 镜像 [`xsong1205/tqsync`](https://hub.docker.com/r/xsong1205/tqsync)，支持 `amd64` 与 `arm64` 架构，镜像内置 FFmpeg、证书套件与 Python 运行环境。
 
-### 1. 准备配置文件
+### 1. 准备配置
 
 ```bash
+# 复制配置文件模板（重要：必须在启动前创建此文件，避免被 Docker 误识别为目录）
 cp config.yaml.example config.yaml
 ```
 
-编辑 `config.yaml` 填入 Telegram Token、群组 ID、Napcat 地址与 QQ 群号。
+编辑 `config.yaml` 填入 Telegram Bot Token、目标群组 ID 等配置。
 
-### 2. 启动
+> **提示（NapCat 通信地址）**：
+> - 若 NapCat 部署在同一台宿主机上，可将 `config.yaml` 中的 `qq.napcat_api_url` 填写为 `http://host.docker.internal:3000`；
+> - NapCat 的 HTTP Webhook 地址请填写为 `http://<宿主机IP或局域网IP>:8080/webhook/qq`。
+
+### 2. 启动服务
 
 ```bash
+# 复制 compose 模板
 cp docker-compose.yml.example docker-compose.yml
+
+# 启动容器
 docker compose up -d
 ```
 
-### 3. 更新镜像
+### 3. 查看日志与状态
 
-容器内禁用进程内自动更新，更新请使用：
+```bash
+# 查看实时日志
+docker compose logs -f
+
+# 检查健康检查状态
+docker compose ps
+```
+
+### 4. 更新镜像
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-### Docker 注意事项
+### Docker 运行特性与说明
 
-- `config.yaml` 以只读方式挂载进容器，通过 WebUI 修改的配置仅在内存中生效，不会写回宿主机文件。
-- 容器内 FFmpeg 已预装，启动时不会触发 `/confirm` 下载提示。
-- 数据持久化目录：`./db`（数据库）、`./logs`（日志）、`./plugins`（插件）、`./temp`（临时文件）。
-- 自动更新检查与 `/checkupdate`、`/reboot` 在容器内被禁用，请改用 `docker compose` 管理。
+- **非 root 降权运行**：容器内置 `gosu` 权限管理，挂载目录会自动处理权限，杜绝 Linux 宿主机常见的 SQLite 数据库与日志写入 `Permission Denied` 异常。
+- **健康检查**：内置高效的轻量级 HTTP 健康探测，随时反映服务就绪状态。
+- **持久化目录**：
+  - `./db`：SQLite 数据库持久化存储；
+  - `./logs`：日志文件目录（Compose 已配置日志轮转，防止打满磁盘）；
+  - `./plugins`：自定义插件目录；
+  - `./temp`：临时转换媒体缓存。
+- **配置只读保护**：`config.yaml` 默认以只读挂载，防止容器进程意外覆盖宿主机配置文件。
 
 ## 使用说明
 
