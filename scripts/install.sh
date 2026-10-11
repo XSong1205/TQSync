@@ -143,8 +143,25 @@ ensure_exec() {
 }
 
 install_aliases() {
-    # 别名文件放在项目根目录，TQSYNC_HOME 通过文件自身位置推导，
-    # 项目移动后重新执行 install.sh 即可刷新，避免路径写死。
+    # 1. 尝试在 /usr/local/bin 或 ~/.local/bin 创建全局快捷脚本（无需 source，终端立即生效）
+    local bin_dirs=("/usr/local/bin" "$HOME/.local/bin")
+    for dir in "${bin_dirs[@]}"; do
+        if [ -w "$dir" ] 2>/dev/null || ([ "$(id -u)" -eq 0 ] && mkdir -p "$dir" 2>/dev/null); then
+            for cmd in start stop restart status attach logs; do
+                local alias_name="tq$cmd"
+                [ "$cmd" = "attach" ] && alias_name="tqlog"
+                cat > "$dir/$alias_name" <<EOF
+#!/usr/bin/env bash
+exec bash "$SCRIPT_DIR/tqsync.sh" $cmd "\$@"
+EOF
+                chmod +x "$dir/$alias_name"
+            done
+            info "已创建全局快捷命令至 $dir (tqstart/tqlog/tqstop 等立即生效)"
+            break
+        fi
+    done
+
+    # 2. 写入别名文件到项目根目录，作为用户级别名兜底
     local alias_file="$TQSYNC_DIR/.tqsync_aliases"
     cat > "$alias_file" <<'EOF'
 # ===== TQSync 快捷命令 (由 scripts/install.sh 生成，修改请谨慎) =====
@@ -164,10 +181,6 @@ alias tqstatus="bash \$TQSYNC_HOME/scripts/tqsync.sh status"
 alias tqlogs="tail -n 50 \$TQSYNC_HOME/logs/tqsync.log"
 EOF
 
-    unalias tqstart tqlog tqstop tqrestart tqstatus tqlogs 2>/dev/null || true
-    # shellcheck disable=SC1090
-    source "$alias_file"
-
     local rc
     case "${SHELL:-}" in
         *zsh) rc="$HOME/.zshrc" ;;
@@ -177,9 +190,6 @@ EOF
     if ! grep -qF ".tqsync_aliases" "$rc" 2>/dev/null; then
         printf '\n# TQSync 快捷命令 (tqstart/tqlog/tqstop 等)\ntest -f "%s" && source "%s"\n' "$alias_file" "$alias_file" >> "$rc"
         info "已写入快捷命令到 $rc"
-        info "当前终端已立即生效；新终端自动生效，若未生效可执行: source $rc"
-    else
-        info "快捷命令已配置过，跳过。"
     fi
 }
 
