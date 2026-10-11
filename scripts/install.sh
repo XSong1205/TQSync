@@ -52,39 +52,64 @@ install_system_deps() {
         esac
     fi
 
+    # Debian / Ubuntu 环境下检查 ensurepip 与 python3-venv
+    if [ "$pkgmgr" = "apt" ]; then
+        if ! "$PYTHON_BIN" -c 'import ensurepip' >/dev/null 2>&1; then
+            local py_ver
+            py_ver=$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "3")
+            pkgs+=(python3-venv "python${py_ver}-venv" python3-pip)
+        fi
+        if ! dpkg -s build-essential >/dev/null 2>&1; then
+            pkgs+=(build-essential)
+        fi
+    fi
+
     if [ ${#pkgs[@]} -eq 0 ]; then
-        info "ffmpeg / screen 已安装，跳过系统依赖安装。"
+        info "系统依赖已就绪，跳过系统依赖安装。"
         return 0
     fi
 
     if [ "$pkgmgr" = "unknown" ]; then
-        warn "未识别到包管理器，请手动安装: ffmpeg screen"
+        warn "未识别到包管理器，请手动安装: ffmpeg screen python3-venv"
         return 0
     fi
 
-    info "需要安装: ${pkgs[*]}"
+    info "需要安装系统依赖: ${pkgs[*]}"
+    local SUDO=""
     if [ "$(id -u)" -ne 0 ]; then
-        warn "将以 sudo 安装，请在弹出的提示中输入密码..."
+        if command -v sudo >/dev/null 2>&1; then
+            SUDO="sudo"
+            warn "将以 sudo 安装，请在弹出的提示中输入密码..."
+        else
+            error "当前非 root 用户且未安装 sudo，请切换到 root 或安装 sudo。"
+            return 1
+        fi
     fi
+
     case "$pkgmgr" in
         apt)
-            sudo apt-get update
-            sudo apt-get install -y "${pkgs[@]}"
+            $SUDO apt-get update
+            $SUDO apt-get install -y "${pkgs[@]}"
             ;;
         dnf)
-            sudo dnf install -y "${pkgs[@]}"
+            $SUDO dnf install -y "${pkgs[@]}"
             ;;
         yum)
-            sudo yum install -y "${pkgs[@]}"
+            $SUDO yum install -y "${pkgs[@]}"
             ;;
         pacman)
-            sudo pacman -Sy --noconfirm --needed "${pkgs[@]}"
+            $SUDO pacman -Sy --noconfirm --needed "${pkgs[@]}"
             ;;
     esac
 }
 
 setup_venv() {
-    if [ -x "$VENV_DIR/bin/python" ]; then
+    if [ -d "$VENV_DIR" ] && [ ! -x "$VENV_DIR/bin/pip" ]; then
+        warn "检测到损坏或未初始化的 venv，正在清理并重新创建..."
+        rm -rf "$VENV_DIR"
+    fi
+
+    if [ -x "$VENV_DIR/bin/python" ] && [ -x "$VENV_DIR/bin/pip" ]; then
         info "虚拟环境已存在，跳过创建。"
     else
         info "创建虚拟环境 venv ..."
