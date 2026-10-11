@@ -77,6 +77,15 @@ async def handle_qq_webhook(request):
                         logger.error(f"在 TG 端执行撤回失败: {e}")
             return web.json_response({})
 
+        # 处理群公告变更通知 (Notice)
+        if data.get('post_type') == 'notice' and (
+            data.get('notice_type') in ('group_notice', 'announcement') or
+            data.get('sub_type') in ('group_notice', 'announcement')
+        ):
+            from core.notice_sync import notice_sync_manager
+            asyncio.create_task(notice_sync_manager.check_and_sync_qq_notices())
+            return web.json_response({})
+
         # 仅处理群消息
         if data.get('message_type') == 'group':
             # [新增] 校验群组 ID，防止同步非目标群组的消息
@@ -278,6 +287,39 @@ async def handle_qq_webhook(request):
                     response = await handle_unblockword_command(args, qq_id, 'qq')
                 elif cmd == '/blockwords':
                     response = await handle_blockwords_command()
+                elif cmd in ('/notice', '/announce'):
+                    admin_ids = config_loader.get('server.admin_user_ids', [])
+                    if admin_ids and qq_id not in admin_ids:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以发布群公告，请联系管理员。")
+                        return web.json_response({})
+                    if not args:
+                        await onebot_client.send_group_msg(engine.qq_group_id, "使用方式: /notice <公告内容>")
+                        return web.json_response({})
+                    content = " ".join(args).strip()
+                    from core.notice_sync import notice_sync_manager
+                    res = await onebot_client.send_group_notice(engine.qq_group_id, content, pinned=1)
+                    if res.get('retcode') == 0:
+                        import hashlib
+                        h = hashlib.sha256(content.encode('utf-8')).hexdigest()
+                        notice_sync_manager.seen_content_hashes.add(h)
+                        import html
+                        escaped = html.escape(content)
+                        sent = await engine.bot.send_message(chat_id=engine.tg_group_id, text=f"📢 <b>【QQ 群公告】</b>\n\n{escaped}", parse_mode="HTML")
+                        try:
+                            await engine.bot.pin_chat_message(chat_id=engine.tg_group_id, message_id=sent.message_id)
+                        except Exception as e:
+                            logger.warning(f"TG 置顶失败: {e}")
+                        await db.record_synced_notice('qq', h, tg_message_id=sent.message_id)
+                        response = "✅ 公告已成功发布并在双端置顶同步！"
+                    else:
+                        response = f"⚠️ 发布 QQ 群公告失败: {res.get('message', res)}"
+                elif cmd == '/syncnotice':
+                    from core.notice_sync import notice_sync_manager
+                    count = await notice_sync_manager.check_and_sync_qq_notices(force=True)
+                    if count > 0:
+                        response = f"✅ 已成功同步 {count} 条公告至 Telegram 并置顶！"
+                    else:
+                        response = "当前 QQ 群无未同步的有效公告。"
                 else:
                     # 尝试插件路由（未知命令）
                     if combined_text.strip():
@@ -796,6 +838,14 @@ async def main():
     webhook_task = asyncio.create_task(start_qq_webhook())
     background_tasks.append(webhook_task)
     
+    # 启动群公告双向自动感知管理器
+    from core.notice_sync import notice_sync_manager
+    try:
+        await notice_sync_manager.initialize(application.bot)
+        notice_sync_manager.start_polling(interval=30)
+    except Exception as e:
+        logger.error(f"群公告同步管理器初始化失败: {e}")
+    
     # 启动 Admin API (使用 uvicorn 的 serve 方法在协程中运行)
     from fastapi.staticfiles import StaticFiles
     if os.path.exists("web"):
@@ -935,7 +985,7 @@ async def main():
             elapsed_ms = int(time.time() * 1000 - reboot_info['start_time'])
             platform = reboot_info.get('platform', 'qq')
             
-            reboot_msg = f"重启完成\n - 耗时: {elapsed_ms}ms"
+            reboot_msg = f"重启完成\n- 耗时: {elapsed_ms}ms"
             
             if platform == 'tg':
                 await engine.bot.send_message(engine.tg_group_id, reboot_msg)
@@ -968,6 +1018,13 @@ async def main():
         logger.error(f"主循环异常: {e}")
     finally:
         logger.info("TQSync 正在关闭...")
+        # 0. 停止群公告同步管理器
+        try:
+            from core.notice_sync import notice_sync_manager
+            await notice_sync_manager.stop()
+        except Exception as e:
+            logger.debug(f"NoticeSyncManager 停止异常: {e}")
+
         # 1. 停止同步引擎（等待剩余任务排空）
         try:
             await global_sync_engine.stop(timeout=3.0)

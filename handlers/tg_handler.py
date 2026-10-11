@@ -383,9 +383,70 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
 
     await update.message.reply_text('Unknown command. Type "/help" for help. ')
 
+async def handle_tg_pinned_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 Telegram 消息置顶事件，自动感知并同步发布到 QQ 群公告"""
+    if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
+        return
+
+    msg = update.message
+    if not msg or not msg.pinned_message:
+        return
+
+    from core.notice_sync import notice_sync_manager
+    pinned = msg.pinned_message
+    success = await notice_sync_manager.sync_tg_pinned_to_qq(pinned, update.effective_user)
+    if success:
+        logger.info(f"[TG->QQ] 置顶消息已成功同步为 QQ 群公告 (TG Msg ID: {pinned.message_id})")
+
+async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /notice <公告内容> 或 /announce <公告内容> 指令"""
+    user = update.effective_user
+    admin_ids = config_loader.get('server.admin_user_ids', [])
+    if admin_ids and user.id not in admin_ids:
+        await update.message.reply_text("您的权限不足以发布群公告")
+        return
+
+    if not context.args:
+        await update.message.reply_text("使用方式: /notice <公告内容>")
+        return
+
+    content = " ".join(context.args).strip()
+    from core.notice_sync import notice_sync_manager
+    import html
+    escaped_text = html.escape(content)
+    tg_text = f"📢 <b>【群公告】</b>\n\n{escaped_text}"
+    sent = await context.bot.send_message(chat_id=update.effective_chat.id, text=tg_text, parse_mode="HTML")
+    try:
+        await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=sent.message_id, disable_notification=False)
+    except Exception as e:
+        logger.warning(f"Telegram 置顶公告失败: {e}")
+
+    # 同时同步到 QQ 群公告
+    qq_gid = config_loader.get('qq.group_id')
+    res = await onebot_client.send_group_notice(group_id=qq_gid, content=content, pinned=1)
+    if res.get('retcode') == 0:
+        import hashlib
+        h = hashlib.sha256(content.encode('utf-8')).hexdigest()
+        notice_sync_manager.seen_content_hashes.add(h)
+        await db.record_synced_notice(source='tg', content_hash=h, tg_message_id=sent.message_id)
+        await update.message.reply_text("✅ 公告已成功在 Telegram 置顶并同步至 QQ 群公告！")
+    else:
+        await update.message.reply_text(f"⚠️ Telegram 公告已置顶，但 QQ 群公告发布失败: {res.get('message', res)}")
+
+async def handle_syncnotice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /syncnotice 指令，手动立即拉取并同步 QQ 群最新公告至 TG"""
+    from core.notice_sync import notice_sync_manager
+    msg = await update.message.reply_text("🔍 正在拉取 QQ 群最新公告...")
+    count = await notice_sync_manager.check_and_sync_qq_notices(force=True)
+    if count > 0:
+        await msg.edit_text(f"✅ 成功同步 {count} 条 QQ 群公告至 Telegram 并置顶！")
+    else:
+        await msg.edit_text("已拉取完毕，当前 QQ 群无未同步的有效公告。")
+
 def get_tg_handlers():
     return [
-        MessageHandler(filters.ALL & ~filters.COMMAND, handle_tg_message),
+        MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_tg_pinned_message),
+        MessageHandler(filters.ALL & ~filters.COMMAND & ~filters.StatusUpdate.ALL, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
         CommandHandler('setprefix', handle_setprefix_command),
         CommandHandler('help', handle_help_command),
@@ -399,5 +460,8 @@ def get_tg_handlers():
         CommandHandler('blockword', handle_blockword_command),
         CommandHandler('unblockword', handle_unblockword_command),
         CommandHandler('blockwords', handle_blockwords_command),
+        CommandHandler('notice', handle_notice_command),
+        CommandHandler('announce', handle_notice_command),
+        CommandHandler('syncnotice', handle_syncnotice_command),
         MessageHandler(filters.COMMAND, handle_unhandled_command),
     ]

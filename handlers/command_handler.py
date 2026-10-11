@@ -21,6 +21,8 @@ HELP_TEXT = (
     "/blockword <关键词> - 添加屏蔽词（仅限管理员）\n"
     "/unblockword <关键词> - 删除屏蔽词（仅限管理员）\n"
     "/blockwords - 查看当前屏蔽词列表\n"
+    "/notice <内容> - 发布群公告并双端置顶同步（仅限管理员）\n"
+    "/syncnotice - 手动拉取 QQ 群最新公告并同步至 TG 置顶\n"
     "/confirm - 确认自动下载 FFmpeg\n"
     "/cancel - 取消自动下载提示\n"
     "/help - 显示此帮助信息"

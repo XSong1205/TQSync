@@ -82,7 +82,22 @@ class Database:
                 )
             ''')
             
+            # 群公告同步映射表
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS notice_mapping (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source TEXT NOT NULL,
+                    notice_id TEXT,
+                    tg_message_id INTEGER,
+                    content_hash TEXT UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_notice_hash ON notice_mapping(content_hash)')
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_notice_id ON notice_mapping(notice_id)')
+            
             await db.commit()
+
 
     async def save_message_mapping(self, tg_message_id: int, qq_message_id: int, sender_tg_id: int = None, sender_qq_id: int = None):
         """保存双端消息 ID 映射关系"""
@@ -414,4 +429,49 @@ class Database:
                 rows = await cursor.fetchall()
                 return [r[0] for r in rows]
 
+    # --- Notice Mapping (群公告同步映射) ---
+    async def is_notice_synced(self, content_hash: str) -> bool:
+        """检查公告内容哈希是否已经同步过"""
+        if not content_hash:
+            return False
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT 1 FROM notice_mapping WHERE content_hash = ? LIMIT 1', (content_hash,)) as cursor:
+                return (await cursor.fetchone()) is not None
+
+    async def is_notice_id_synced(self, notice_id: str) -> bool:
+        """检查 QQ notice_id 是否已经同步过"""
+        if not notice_id:
+            return False
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT 1 FROM notice_mapping WHERE notice_id = ? LIMIT 1', (str(notice_id),)) as cursor:
+                return (await cursor.fetchone()) is not None
+
+    async def record_synced_notice(self, source: str, content_hash: str, notice_id: str = None, tg_message_id: int = None):
+        """记录已同步的公告"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute('''
+                INSERT OR REPLACE INTO notice_mapping (source, notice_id, tg_message_id, content_hash)
+                VALUES (?, ?, ?, ?)
+            ''', (source, str(notice_id) if notice_id else None, tg_message_id, content_hash))
+            await db.commit()
+
+    async def get_all_synced_notice_hashes(self) -> set:
+        """获取所有已同步的公告哈希"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT content_hash FROM notice_mapping WHERE content_hash IS NOT NULL') as cursor:
+                rows = await cursor.fetchall()
+                return {r[0] for r in rows if r[0]}
+
+    async def get_all_synced_notice_ids(self) -> set:
+        """获取所有已同步的 QQ notice_id"""
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT notice_id FROM notice_mapping WHERE notice_id IS NOT NULL') as cursor:
+                rows = await cursor.fetchall()
+                return {str(r[0]) for r in rows if r[0]}
+
+    async def close(self):
+        """关闭数据库资源（兼容接口）"""
+        pass
+
 db = Database()
+

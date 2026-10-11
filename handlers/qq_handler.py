@@ -117,5 +117,46 @@ class OneBotClient:
         payload = {"message_id": message_id}
         return await self._post_json("/delete_msg", payload)
 
+    async def send_group_notice(self, group_id: int, content: str, image: str = "", pinned: int = 1) -> dict:
+        """发送群公告 (需 Bot 拥有群主或管理员权限)"""
+        payload = {
+            "group_id": str(group_id),
+            "content": content,
+            "pinned": pinned,
+            "type": 1,
+            "confirm_required": 1,
+            "is_show_edit_card": 0,
+            "tip_window_type": 0
+        }
+        if image:
+            payload["image"] = image
+        try:
+            return await self._post_json("/_send_group_notice", payload)
+        except Exception as e:
+            logger.debug(f"/_send_group_notice 失败，尝试降级到 /send_group_notice: {e}")
+            return await self._post_json("/send_group_notice", payload)
+
+    async def get_group_notice(self, group_id: int) -> dict:
+        """获取群公告列表"""
+        payload = {"group_id": str(group_id)}
+        try:
+            return await self._post_json("/_get_group_notice", payload)
+        except Exception as e:
+            logger.debug(f"/_get_group_notice 失败，尝试降级到 /get_group_notice: {e}")
+            return await self._post_json("/get_group_notice", payload)
+
+    async def del_group_notice(self, group_id: int, notice_id: str) -> dict:
+        """删除群公告"""
+        payload = {
+            "group_id": str(group_id),
+            "notice_id": str(notice_id)
+        }
+        try:
+            return await self._post_json("/_del_group_notice", payload)
+        except Exception as e:
+            logger.debug(f"/_del_group_notice 失败，尝试降级到 /del_group_notice: {e}")
+            return await self._post_json("/del_group_notice", payload)
+
 # 全局实例
 onebot_client = OneBotClient()
+

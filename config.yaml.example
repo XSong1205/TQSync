@@ -24,6 +24,7 @@ database:
 
 sync:
   direction: "both"  # 同步方向: "both"(双向), "tg_to_qq"(仅TG→QQ), "qq_to_tg"(仅QQ→TG)
+  sync_notice: true  # 是否启用群公告双向自动感知同步 (默认: true)
 
 # 调试配置（可选）
 debug:
