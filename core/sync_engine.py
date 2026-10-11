@@ -872,6 +872,9 @@ class SyncEngine:
                 )
             return result
         except Exception as e:
+            err_str = str(e)
+            if "Parsing the server response" in err_str and ("html" in err_str.lower() or "doctype" in err_str.lower()):
+                logger.error("【代理/DNS 异常】Telegram API 返回了 HTML 网页而非 Telegram JSON 响应！这通常表明请求被代理错误分流或遭遇 DNS 污染（请求被发送到了 Facebook 等第三方服务器）。请检查代理分流规则是否将 api.telegram.org 设为了代理模式。")
             logger.error(f"转发文本至 Telegram 失败 (已重试3次): {e}")
             return None
 
