@@ -304,7 +304,7 @@ async def handle_qq_webhook(request):
                         if h:
                             notice_sync_manager.seen_content_hashes.add(h)
                         escaped = html.escape(clean_content)
-                        sent = await engine.bot.send_message(chat_id=engine.tg_group_id, text=f"📢 <b>【QQ 群公告】</b>\n\n{escaped}", parse_mode="HTML")
+                        sent = await engine.bot.send_message(chat_id=engine.tg_group_id, text=f"<b>[QQ]群公告</b>\n\n{escaped}", parse_mode="HTML")
                         if sent:
                             notice_sync_manager.bot_pinned_msg_ids.add(sent.message_id)
                             try:

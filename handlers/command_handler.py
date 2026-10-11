@@ -13,19 +13,14 @@ HELP_TEXT = (
     "| TQSync Help\n\n"
     "可用命令：\n"
     "/bind - 发起绑定流程（QQ端获取验证码，TG端输入验证码）\n"
-    "/setprefix <nickname> - 设置您在双端显示的统一昵称\n"
+    "/setprefix <昵称> - 设置您的统一昵称\n"
     "/status - 查看机器人运行状态\n"
     "/checkupdate - 从 GitHub 拉取最新源码并自动重启更新（仅限管理员）\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
     "/webui - 发送在config中配置的 WebUI 地址\n"
-    "/blockword <关键词> - 添加屏蔽词（仅限管理员）\n"
-    "/unblockword <关键词> - 删除屏蔽词（仅限管理员）\n"
     "/blockwords - 查看当前屏蔽词列表\n"
-    "/notice <内容> - 发布群公告并双端置顶同步（仅限管理员）\n"
-    "/syncnotice - 手动拉取 QQ 群最新公告并同步至 TG 置顶\n"
-    "/confirm - 确认自动下载 FFmpeg\n"
-    "/cancel - 取消自动下载提示\n"
     "/help - 显示此帮助信息"
+    "更多配置项(如屏蔽词管理等)，请查看 WebUI。"
 )
 
 async def handle_bind_command(user_id: int, platform: str, args: list = None):
@@ -50,11 +45,9 @@ async def handle_bind_command(user_id: int, platform: str, args: list = None):
         # 尝试发送私聊消息
         try:
             result = await onebot_client.send_private_msg(qq_user_id, 
-                f"【TQSync 绑定验证码】\n"
-                f"您的验证码是: {code}\n"
-                f"有效期: 5分钟\n"
-                f"请在 Telegram 中使用 /bind {code} 完成绑定"
-                f"请勿将验证码传递给他人")
+                f"| TQSync Bind-User\n"
+                f"您的验证码是: {code} ，有效期: 5分钟。\n"
+                f"请在 Telegram 中使用 /bind {code} 完成绑定。"
             
             if result.get('retcode') == 0:
                 return f"验证码已通过私聊发送给您，请查收。\n如果未收到，请检查是否开启了临时会话权限。"
@@ -75,7 +68,7 @@ async def handle_bind_command(user_id: int, platform: str, args: list = None):
 async def handle_setprefix_command(user_id: int, platform: str, args: list):
     """处理 /setprefix 指令"""
     if not args:
-        return "Usage: /setprefix <nickname>"
+        return "Usage: /setprefix <昵称>"
     
     new_prefix = " ".join(args)
     
