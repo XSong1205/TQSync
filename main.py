@@ -666,23 +666,37 @@ async def main():
     # 初始化 Telegram Bot
     token = config_loader.get('telegram.bot_token')
     proxy_url = config_loader.get('telegram.proxy_url')
-    if proxy_url and not proxy_url.startswith(('http://', 'https://', 'socks5://')):
+    if proxy_url and not proxy_url.startswith(('http://', 'https://', 'socks5://', 'socks5h://')):
         proxy_url = f"http://{proxy_url}"
     
     # 禁用 SSL 证书验证（系统代理/VPN 环境必需）
-    request = HTTPXRequest(connection_pool_size=8, read_timeout=30.0, connect_timeout=10.0)
+    req_kwargs = {
+        "connection_pool_size": 8,
+        "read_timeout": 30.0,
+        "connect_timeout": 15.0,
+    }
+    if proxy_url:
+        try:
+            request = HTTPXRequest(**req_kwargs, proxy=proxy_url)
+        except TypeError:
+            request = HTTPXRequest(**req_kwargs, proxy_url=proxy_url)
+    else:
+        request = HTTPXRequest(**req_kwargs)
+
     request._client_kwargs["verify"] = False      # httpx 关闭 SSL 验证
     request._client_kwargs["http2"] = False
-    # PTB v21 会立即创建 _client，需重建使 verify=False 生效
-    request._client = request._build_client()
     if proxy_url:
         request._client_kwargs["proxy"] = proxy_url
-    # 不手动替换 _client，让 PTB 自己懒加载创建
+    # 重建底层 httpx 客户端使 verify=False 与 proxy 彻底生效
+    request._client = request._build_client()
     
     builder = Application.builder().token(token).request(request)
     if proxy_url:
         logger.info(f"已启用 Telegram 代理: {proxy_url}")
-        builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
+        try:
+            builder.get_updates_proxy_url(proxy_url)
+        except (AttributeError, TypeError):
+            pass
     else:
         logger.warning("未配置 Telegram 代理（若在受限网络环境下连接超时，建议在 config.yaml 中配置 telegram.proxy_url）")
     
@@ -762,7 +776,18 @@ async def main():
     application.add_handler(DeletedMessageHandler())
     
     # 启动 TG Polling
-    await application.initialize()
+    try:
+        await application.initialize()
+    except Exception as e:
+        err_name = type(e).__name__
+        err_str = str(e)
+        if "TimedOut" in err_name or "Timeout" in err_name or "Connect" in err_str:
+            logger.error(f"连接 Telegram 服务器超时 ({err_name}: {e})")
+            if not proxy_url:
+                logger.error("【重要排查提示】当前未配置 Telegram 代理 (telegram.proxy_url)。国内或受限网络环境无法直接连接 api.telegram.org，请在 config.yaml 中配置代理（例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）！")
+            else:
+                logger.error(f"【重要排查提示】当前已配置代理: {proxy_url}，但仍然连接超时。请检查：1. 代理服务是否已在运行；2. 代理端口和 IP 是否正确；3. 代理是否能正常访问外网。")
+        raise
     await application.start()
     updater_task = asyncio.create_task(application.updater.start_polling(drop_pending_updates=True))
     background_tasks.append(updater_task)
