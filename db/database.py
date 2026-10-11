@@ -469,6 +469,15 @@ class Database:
                 rows = await cursor.fetchall()
                 return {str(r[0]) for r in rows if r[0]}
 
+    async def is_tg_msg_id_synced_notice(self, tg_message_id: int) -> bool:
+        """检查指定 TG 消息 ID 是否为已同步的公告消息"""
+        if not tg_message_id:
+            return False
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute('SELECT 1 FROM notice_mapping WHERE tg_message_id = ? LIMIT 1', (tg_message_id,)) as cursor:
+                return (await cursor.fetchone()) is not None
+
+
     async def close(self):
         """关闭数据库资源（兼容接口）"""
         pass

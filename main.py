@@ -296,23 +296,26 @@ async def handle_qq_webhook(request):
                         await onebot_client.send_group_msg(engine.qq_group_id, "使用方式: /notice <公告内容>")
                         return web.json_response({})
                     content = " ".join(args).strip()
-                    from core.notice_sync import notice_sync_manager
-                    res = await onebot_client.send_group_notice(engine.qq_group_id, content, pinned=1)
+                    from core.notice_sync import notice_sync_manager, normalize_notice_text, get_notice_hash
+                    clean_content = normalize_notice_text(content)
+                    res = await onebot_client.send_group_notice(engine.qq_group_id, clean_content, pinned=1)
                     if res.get('retcode') == 0:
-                        import hashlib
-                        h = hashlib.sha256(content.encode('utf-8')).hexdigest()
-                        notice_sync_manager.seen_content_hashes.add(h)
-                        import html
-                        escaped = html.escape(content)
+                        h = get_notice_hash(clean_content)
+                        if h:
+                            notice_sync_manager.seen_content_hashes.add(h)
+                        escaped = html.escape(clean_content)
                         sent = await engine.bot.send_message(chat_id=engine.tg_group_id, text=f"📢 <b>【QQ 群公告】</b>\n\n{escaped}", parse_mode="HTML")
-                        try:
-                            await engine.bot.pin_chat_message(chat_id=engine.tg_group_id, message_id=sent.message_id)
-                        except Exception as e:
-                            logger.warning(f"TG 置顶失败: {e}")
-                        await db.record_synced_notice('qq', h, tg_message_id=sent.message_id)
+                        if sent:
+                            notice_sync_manager.bot_pinned_msg_ids.add(sent.message_id)
+                            try:
+                                await engine.bot.pin_chat_message(chat_id=engine.tg_group_id, message_id=sent.message_id)
+                            except Exception as e:
+                                logger.warning(f"TG 置顶失败: {e}")
+                            await db.record_synced_notice('qq', h, tg_message_id=sent.message_id)
                         response = "✅ 公告已成功发布并在双端置顶同步！"
                     else:
                         response = f"⚠️ 发布 QQ 群公告失败: {res.get('message', res)}"
+
                 elif cmd == '/syncnotice':
                     from core.notice_sync import notice_sync_manager
                     count = await notice_sync_manager.check_and_sync_qq_notices(force=True)

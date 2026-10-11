@@ -48,13 +48,27 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or update.effective_chat.id != config_loader.get('telegram.group_id'):
         return
 
+    msg = update.message
+    if not msg:
+        return
+
     user = update.effective_user
     # 忽略 Bot 自身的消息，防止同步循环
-    if user.is_bot:
+    if user and user.is_bot:
+        return
+
+    if user:
+        user_id = user.id
+        username = user.username or str(user.id)
+        sender_name = user.username or f"{user.first_name or ''} {user.last_name or ''}".strip() or str(user.id)
+    elif msg.sender_chat:
+        user_id = msg.sender_chat.id
+        username = msg.sender_chat.username or msg.sender_chat.title or str(msg.sender_chat.id)
+        sender_name = msg.sender_chat.title or str(msg.sender_chat.id)
+    else:
         return
     
     engine = SyncEngine.get_instance()
-    msg = update.message
     
     # 诊断日志：打印媒体类型
     logger.debug(f"收到 TG 消息 - 图片: {bool(msg.photo)}, 视频: {bool(msg.video)}, 文件: {bool(msg.document)}")
@@ -68,8 +82,6 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_segment.append({"type": "reply", "data": {"id": str(original_qq_id)}})
             logger.info(f"[TG] 映射回复消息至 {original_qq_id}")
 
-    sender_name = user.username or f"{user.first_name or ''} {user.last_name or ''}".strip() or str(user.id)
-
     # 处理图片消息
     if msg.photo:
         file_id = msg.photo[-1].file_id
@@ -77,12 +89,12 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if caption:
             blocked_word = await db.check_blocked_word_in_text(caption.strip())
             if blocked_word:
-                logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+                logger.info(f"[屏蔽] TG用户 {user_id}(@{username}) 的消息被拦截 (关键词: {blocked_word})")
                 return
         caption_hint = f" ({caption[:30]})" if caption else ""
         logger.info(f"[TG] {sender_name}: [图片]{caption_hint}")
-        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
-            user.username or str(user.id), file_id,
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user_id,
+            username, file_id,
             caption=caption,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
@@ -95,12 +107,12 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if caption:
             blocked_word = await db.check_blocked_word_in_text(caption.strip())
             if blocked_word:
-                logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+                logger.info(f"[屏蔽] TG用户 {user_id}(@{username}) 的消息被拦截 (关键词: {blocked_word})")
                 return
         caption_hint = f" ({caption[:30]})" if caption else ""
         logger.info(f"[TG] {sender_name}: [视频: {file_name}]{caption_hint}")
-        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
-            user.username or str(user.id), file_id,
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user_id,
+            username, file_id,
             file_name=file_name, file_size=msg.video.file_size or 0,
             caption=caption,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
@@ -114,12 +126,12 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if caption:
             blocked_word = await db.check_blocked_word_in_text(caption.strip())
             if blocked_word:
-                logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+                logger.info(f"[屏蔽] TG用户 {user_id}(@{username}) 的消息被拦截 (关键词: {blocked_word})")
                 return
         caption_hint = f" ({caption[:30]})" if caption else ""
         logger.info(f"[TG] {sender_name}: [文件: {filename}]{caption_hint}")
-        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
-            user.username or str(user.id), file_id,
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user_id,
+            username, file_id,
             file_name=filename, file_size=msg.document.file_size or 0,
             caption=caption,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
@@ -130,14 +142,14 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.sticker.file_id
         is_animated = msg.sticker.is_animated or msg.sticker.is_video
         logger.info(f"[TG] {sender_name}: [贴纸{'(动态)' if is_animated else ''}]")
-        engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated, reply_segment=reply_segment, tg_message_id=msg.message_id)
+        engine.enqueue_sync_task(engine.forward_sticker_to_qq, user_id, username, file_id, is_animated, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理语音消息 (Voice) - 仅限 Telegram 的语音消息
     if msg.voice:
         file_id = msg.voice.file_id
         logger.info(f"[TG] {sender_name}: [语音消息]")
-        engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id, reply_segment=reply_segment, tg_message_id=msg.message_id)
+        engine.enqueue_sync_task(engine.forward_voice_to_qq, user_id, username, file_id, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
     
     # 处理音频文件 (Audio) - 如 .flac, .mp3, .wav 等，作为通用文件发送
@@ -145,28 +157,28 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_id = msg.audio.file_id
         filename = msg.audio.file_name or f"audio_{msg.audio.file_unique_id}.mp3"
         logger.info(f"[TG] {sender_name}: [音频: {filename}]")
-        engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
-            user.username or str(user.id), file_id,
+        engine.enqueue_sync_task(engine.forward_media_to_qq, user_id,
+            username, file_id,
             file_name=filename, file_size=msg.audio.file_size or 0,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理文本消息
-    text = update.message.text
+    text = msg.text
     if text:
         blocked_word = await db.check_blocked_word_in_text(text.strip())
         if blocked_word:
-            logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+            logger.info(f"[屏蔽] TG用户 {user_id}(@{username}) 的消息被拦截 (关键词: {blocked_word})")
             return
 
         pm = PluginManager.get_instance()
-        if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
+        if await pm.route_message('tg', user_id, engine.tg_group_id, text.strip()):
             return
 
         text_preview = (text[:60] + '...') if len(text) > 60 else text
         text_preview = text_preview.replace('\n', ' ')
         logger.info(f"[TG] {sender_name}: {text_preview}")
-        engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text,
+        engine.enqueue_sync_task(engine.forward_to_qq, user_id, username, text,
             reply_segment=reply_segment, tg_message_id=msg.message_id,
             entities=msg.entities)
         return
@@ -394,9 +406,16 @@ async def handle_tg_pinned_message(update: Update, context: ContextTypes.DEFAULT
 
     from core.notice_sync import notice_sync_manager
     pinned = msg.pinned_message
+
+    # 优先拦截 Bot 自身发布的公告置顶事件，杜绝回环
+    if pinned.message_id in notice_sync_manager.bot_pinned_msg_ids or await db.is_tg_msg_id_synced_notice(pinned.message_id):
+        logger.debug(f"[TG] 忽略由 Bot 自身同步发布的公告置顶事件 (Msg ID: {pinned.message_id})，防止回环")
+        return
+
     success = await notice_sync_manager.sync_tg_pinned_to_qq(pinned, update.effective_user)
     if success:
         logger.info(f"[TG->QQ] 置顶消息已成功同步为 QQ 群公告 (TG Msg ID: {pinned.message_id})")
+
 
 async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /notice <公告内容> 或 /announce <公告内容> 指令"""
@@ -411,27 +430,32 @@ async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     content = " ".join(context.args).strip()
-    from core.notice_sync import notice_sync_manager
+    from core.notice_sync import notice_sync_manager, normalize_notice_text, get_notice_hash
+    clean_content = normalize_notice_text(content)
     import html
-    escaped_text = html.escape(content)
+    escaped_text = html.escape(clean_content)
     tg_text = f"📢 <b>【群公告】</b>\n\n{escaped_text}"
     sent = await context.bot.send_message(chat_id=update.effective_chat.id, text=tg_text, parse_mode="HTML")
-    try:
-        await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=sent.message_id, disable_notification=False)
-    except Exception as e:
-        logger.warning(f"Telegram 置顶公告失败: {e}")
+    if sent:
+        notice_sync_manager.bot_pinned_msg_ids.add(sent.message_id)
+        try:
+            await context.bot.pin_chat_message(chat_id=update.effective_chat.id, message_id=sent.message_id, disable_notification=False)
+        except Exception as e:
+            logger.warning(f"Telegram 置顶公告失败: {e}")
 
     # 同时同步到 QQ 群公告
     qq_gid = config_loader.get('qq.group_id')
-    res = await onebot_client.send_group_notice(group_id=qq_gid, content=content, pinned=1)
+    res = await onebot_client.send_group_notice(group_id=qq_gid, content=clean_content, pinned=1)
     if res.get('retcode') == 0:
-        import hashlib
-        h = hashlib.sha256(content.encode('utf-8')).hexdigest()
-        notice_sync_manager.seen_content_hashes.add(h)
-        await db.record_synced_notice(source='tg', content_hash=h, tg_message_id=sent.message_id)
+        h = get_notice_hash(clean_content)
+        if h:
+            notice_sync_manager.seen_content_hashes.add(h)
+        if sent:
+            await db.record_synced_notice(source='tg', content_hash=h, tg_message_id=sent.message_id)
         await update.message.reply_text("✅ 公告已成功在 Telegram 置顶并同步至 QQ 群公告！")
     else:
         await update.message.reply_text(f"⚠️ Telegram 公告已置顶，但 QQ 群公告发布失败: {res.get('message', res)}")
+
 
 async def handle_syncnotice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /syncnotice 指令，手动立即拉取并同步 QQ 群最新公告至 TG"""
