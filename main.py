@@ -26,7 +26,7 @@ from db.database import db
 from core.sync_engine import SyncEngine
 from core.file_transfer import FileSource
 from handlers.tg_handler import get_tg_handlers
-from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command, handle_checkupdate_command, handle_reboot_command, handle_blockword_command, handle_unblockword_command, handle_blockwords_command, handle_webui_command
+from handlers.command_handler import handle_bind_command, handle_setprefix_command, handle_help_command, handle_status_command, handle_update_command, handle_checkupdate_command, check_for_updates, handle_reboot_command, handle_blockword_command, handle_unblockword_command, handle_blockwords_command, handle_webui_command
 from handlers.qq_handler import onebot_client
 from api.admin_api import app as admin_app
 from core.plugin_manager import PluginManager
@@ -230,9 +230,9 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
                     asyncio.create_task(graceful_restart('qq'))
                     return web.json_response({})
-                elif cmd == '/checkupdate' or cmd == '/cu':
+                elif cmd in ('/update', '/checkupdate', '/cu'):
                     if IS_CONTAINER:
-                        response = "容器环境下自动更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。"
+                        response = "容器环境下更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。"
                         await onebot_client.send_group_msg(engine.qq_group_id, response)
                         return web.json_response({})
 
@@ -241,10 +241,9 @@ async def handle_qq_webhook(request):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
 
-                    from handlers.command_handler import handle_checkupdate_command
-                    info = await handle_checkupdate_command()
+                    info = await handle_update_command()
 
-                    nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 检查更新"}}]}}]
+                    nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 系统更新"}}]}}]
                     if info.get("update_found") and info.get("update_notice"):
                         nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["update_notice"]}}]}})
                     nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["result"]}}]}})
@@ -453,14 +452,14 @@ async def handle_qq_webhook(request):
             response = ""
             
             # 仅处理管理命令
-            if cmd == '/checkupdate' or cmd == '/cu':
+            if cmd in ('/update', '/checkupdate', '/cu'):
                 if IS_CONTAINER:
-                    await onebot_client.send_private_msg(qq_id, "容器环境下自动更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。")
+                    await onebot_client.send_private_msg(qq_id, "容器环境下更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。")
                     return web.json_response({})
 
-                info = await handle_checkupdate_command()
+                info = await handle_update_command()
 
-                nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 检查更新"}}]}}]
+                nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 系统更新"}}]}}]
                 if info.get("update_found") and info.get("update_notice"):
                     nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["update_notice"]}}]}})
                 nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["result"]}}]}})
@@ -931,49 +930,54 @@ async def main():
     background_tasks.append(health_monitor_task)
 
     async def auto_check_update():
-        """每小时自动检查 GitHub 更新 (容器环境下跳过，镜像更新由 compose 负责)"""
+        """每小时自动检查 GitHub 更新并发送提醒（仅作提醒，不自动升级，保证稳定性）"""
         if IS_CONTAINER:
             logger.info("容器环境下跳过自动更新检查")
             return
 
-        from handlers.command_handler import handle_checkupdate_command
+        from handlers.command_handler import check_for_updates
 
         await asyncio.sleep(120)  # 启动2分钟后开始首次检查
+        last_notified_commit = None
 
         while True:
             try:
-                logger.debug("自动检查更新...")
-                info = await handle_checkupdate_command()
+                logger.debug("后台检查更新...")
+                info = await check_for_updates()
 
-                if info.get("update_found") and info.get("need_restart"):
-                    version = info.get("version", "")
-                    commit = info.get("remote_commit", "")
-                    if version and commit:
-                        display = f"v{version}({commit})"
-                    elif commit:
-                        display = f"({commit})"
-                    else:
-                        from utils.version_utils import get_full_version_string
-                        display = get_full_version_string()
+                if info.get("update_found"):
+                    remote_commit = info.get("remote_commit", "")
+                    if remote_commit and remote_commit != last_notified_commit:
+                        last_notified_commit = remote_commit
+                        local_commit = info.get("local_commit", "")
+                        branch = info.get("current_branch", "")
+                        changelog = info.get("changelog", "")
 
-                    msg = f"TQSync 已自动更新到 {display}，即将重新启动以完成更新..."
-                    logger.info(f"自动更新: {msg}")
+                        changelog_str = f"\n更新日志:\n{changelog}\n" if changelog else ""
+                        msg = (
+                            f"📢 【更新提醒】检测到 TQSync 有新版本可用！\n"
+                            f"- 当前本地: {local_commit}\n"
+                            f"- 远程最新: {remote_commit} ({branch})\n"
+                            f"{changelog_str}\n"
+                            f"💡 为保证系统稳定性，本次仅作提醒，未自动更新。\n"
+                            f"如需升级，请由管理员发送指令 /update 执行升级。"
+                        )
+                        logger.info(f"后台检测到新版本 {remote_commit}，已发送更新提醒")
 
-                    engine = SyncEngine.get_instance()
-                    try:
-                        await engine.bot.send_message(chat_id=engine.tg_group_id, text=msg)
-                    except Exception as e:
-                        logger.error(f"自动更新通知发送到 TG 失败: {e}")
-                    try:
-                        await onebot_client.send_group_msg(engine.qq_group_id, msg)
-                    except Exception as e:
-                        logger.error(f"自动更新通知发送到 QQ 失败: {e}")
+                        engine = SyncEngine.get_instance()
+                        try:
+                            await engine.bot.send_message(chat_id=engine.tg_group_id, text=msg)
+                        except Exception as e:
+                            logger.error(f"更新提醒发送到 TG 失败: {e}")
+                        try:
+                            await onebot_client.send_group_msg(engine.qq_group_id, msg)
+                        except Exception as e:
+                            logger.error(f"更新提醒发送到 QQ 失败: {e}")
+                else:
+                    last_notified_commit = None
 
-                    await asyncio.sleep(2)
-                    asyncio.create_task(graceful_restart('auto'))
-                    return
             except Exception as e:
-                logger.error(f"自动更新检查异常: {e}")
+                logger.error(f"后台更新检查异常: {e}")
 
             await asyncio.sleep(3600)
 

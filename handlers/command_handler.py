@@ -15,8 +15,10 @@ HELP_TEXT = (
     "/bind - 发起绑定流程（QQ端获取验证码，TG端输入验证码）\n"
     "/setprefix <昵称> - 设置您的统一昵称\n"
     "/status - 查看机器人运行状态\n"
-    "/checkupdate - 从 GitHub 拉取最新源码并自动重启更新（仅限管理员）\n"
+    "/update - 检查并从 GitHub 拉取最新源码升级重启（仅限管理员）\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
+    "/notice <内容> - 发布群公告并双端置顶同步（仅限管理员）\n"
+    "/syncnotice - 手动拉取 QQ 群最新公告并同步至 TG 置顶\n"
     "/webui - 发送在config中配置的 WebUI 地址\n"
     "/blockwords - 查看当前屏蔽词列表\n"
     "/help - 显示此帮助信息"
@@ -229,19 +231,29 @@ async def handle_help_command():
     return base
 
 
-async def handle_checkupdate_command() -> dict:
-    """处理 /checkupdate 指令
+async def check_for_updates() -> dict:
+    """仅检查 GitHub 远程是否有更新（纯只读检查，不执行 pull，不修改本地文件）
 
     Returns:
         dict 包含:
-        - ok: bool, 是否成功
-        - update_found: bool, 是否检测到更新
-        - update_notice: str|None, 检测到更新时的通知消息 (含版本/commit)
-        - result: str, 执行结果文本
-        - need_restart: bool, 是否需要重启
+        - ok: bool
+        - update_found: bool
+        - current_branch: str
+        - local_commit: str
+        - remote_commit: str
+        - changelog: str
+        - result: str
     """
-    logger.info("执行 /checkupdate 更新检查")
-    r = {"ok": False, "update_found": False, "update_notice": None, "result": "", "need_restart": False}
+    logger.debug("执行只读更新检查 (git fetch)")
+    r = {
+        "ok": False,
+        "update_found": False,
+        "current_branch": "main",
+        "local_commit": "",
+        "remote_commit": "",
+        "changelog": "",
+        "result": ""
+    }
 
     # 1. Fetch 远程更新
     try:
@@ -250,28 +262,26 @@ async def handle_checkupdate_command() -> dict:
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
-            r["result"] = f"更新失败：git fetch \n{result.stderr.strip()[:500]}"
+            r["result"] = f"检查更新失败：git fetch 错误\n{result.stderr.strip()[:500]}"
             return r
-        logger.info("git fetch 完成")
     except subprocess.TimeoutExpired:
-        r["result"] = "更新失败：git fetch 超时，请检查网络"
+        r["result"] = "检查更新失败：git fetch 超时，请检查网络"
         return r
     except FileNotFoundError:
-        r["result"] = "更新失败：未找到 git 命令，请确认已安装 Git"
+        r["result"] = "检查更新失败：未找到 git 命令"
         return r
     except Exception as e:
-        r["result"] = f"更新失败：git fetch 异常\n{e}"
+        r["result"] = f"检查更新失败：git fetch 异常\n{e}"
         return r
 
-    # 2. 获取当前分支和远程对比
+    # 2. 获取当前分支和提交对比
     try:
         branch_result = subprocess.run(
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
             capture_output=True, text=True, timeout=10
         )
-        current_branch = branch_result.stdout.strip()
-        if not current_branch:
-            current_branch = 'main'
+        current_branch = branch_result.stdout.strip() or 'main'
+        r["current_branch"] = current_branch
 
         local_result = subprocess.run(
             ['git', 'rev-parse', 'HEAD'],
@@ -279,50 +289,97 @@ async def handle_checkupdate_command() -> dict:
         )
         local_commit = local_result.stdout.strip()[:7]
         local_full = local_result.stdout.strip()
+        r["local_commit"] = local_commit
 
         remote_result = subprocess.run(
             ['git', 'rev-parse', f'origin/{current_branch}'],
             capture_output=True, text=True, timeout=10
         )
         if remote_result.returncode != 0:
-            r["result"] = f"更新失败：无法获取远程分支 origin/{current_branch}\n请确认远程仓库配置正确"
+            r["result"] = f"检查更新失败：无法获取远程分支 origin/{current_branch}"
             return r
 
         remote_commit = remote_result.stdout.strip()[:7]
         remote_full = remote_result.stdout.strip()
-
-        parts = [f"当前分支: {current_branch}", f"本地: {local_commit}  =>  远程: {remote_commit}"]
+        r["remote_commit"] = remote_commit
 
         if local_full == remote_full:
-            parts.append("已是最新版本，无需更新")
             r["ok"] = True
-            r["result"] = "\n".join(parts)
+            r["update_found"] = False
+            r["result"] = f"当前已是最新版本 (分支: {current_branch}, Commit: {local_commit})，无需更新。"
             return r
 
-        # 有更新
+        # 3. 存在更新，提取更新日志
+        r["ok"] = True
         r["update_found"] = True
-        r["update_notice"] = (
-            f"检测到更新：\n"
-            f"TQSync [Commit hash: {remote_commit}]\n"
-            f"即将开始更新"
-        )
 
-    except Exception as e:
-        r["result"] = f"更新失败：版本对比异常\n{e}"
-        return r
-
-    # 3. 获取更新日志
-    try:
         log_result = subprocess.run(
             ['git', 'log', '--oneline', f'{local_commit}..{remote_commit}', '-n', '10'],
             capture_output=True, text=True, timeout=10
         )
-        if log_result.stdout.strip():
-            parts.append(f"\n更新日志:\n{log_result.stdout.strip()}")
-    except Exception:
-        pass
+        changelog = log_result.stdout.strip()
+        r["changelog"] = changelog
 
-    # 4. 执行 pull（先 stash 本地修改避免冲突）
+        r["result"] = (
+            f"检测到新版本可用！\n"
+            f"分支: {current_branch}\n"
+            f"当前版本: {local_commit} => 远程最新: {remote_commit}\n"
+        )
+        if changelog:
+            r["result"] += f"\n更新日志:\n{changelog}\n"
+        return r
+
+    except Exception as e:
+        r["result"] = f"检查更新异常：{e}"
+        return r
+
+
+async def handle_update_command() -> dict:
+    """处理 /update 指令：检查并执行拉取升级与重启
+
+    Returns:
+        dict 包含:
+        - ok: bool, 是否成功
+        - update_found: bool, 是否检测到更新
+        - update_notice: str|None, 检测到更新时的通知消息
+        - result: str, 执行结果文本
+        - need_restart: bool, 是否需要重启
+    """
+    logger.info("执行 /update 手动更新指令")
+    r = {"ok": False, "update_found": False, "update_notice": None, "result": "", "need_restart": False}
+
+    # 1. 先进行只读检查
+    check_info = await check_for_updates()
+    if not check_info.get("ok"):
+        r["result"] = check_info.get("result", "更新检查失败")
+        return r
+
+    current_branch = check_info.get("current_branch", "main")
+    local_commit = check_info.get("local_commit", "")
+    remote_commit = check_info.get("remote_commit", "")
+    changelog = check_info.get("changelog", "")
+
+    if not check_info.get("update_found"):
+        r["ok"] = True
+        r["result"] = check_info.get("result", "已是最新版本，无需更新")
+        return r
+
+    # 发现更新，准备拉取
+    r["update_found"] = True
+    r["update_notice"] = (
+        f"检测到更新：\n"
+        f"TQSync [Commit: {local_commit} => {remote_commit}]\n"
+        f"即将开始更新..."
+    )
+
+    parts = [
+        f"当前分支: {current_branch}",
+        f"版本变动: {local_commit} => {remote_commit}"
+    ]
+    if changelog:
+        parts.append(f"\n更新日志:\n{changelog}")
+
+    # 2. 执行 pull（先 stash 本地修改避免冲突）
     try:
         stash_result = subprocess.run(
             ['git', 'stash', 'push', '-m', 'auto-stash before update'],
@@ -357,7 +414,7 @@ async def handle_checkupdate_command() -> dict:
         r["result"] = f"更新失败：git pull 异常\n{e}"
         return r
 
-    # 5. 安装依赖
+    # 3. 安装依赖
     try:
         pip_result = subprocess.run(
             [sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt', '--quiet'],
@@ -384,6 +441,11 @@ async def handle_checkupdate_command() -> dict:
     r["need_restart"] = True
     r["result"] = "\n".join(parts)
     return r
+
+
+# 兼容旧接口命名
+handle_checkupdate_command = handle_update_command
+
 
 
 async def handle_reboot_command(platform: str = 'qq') -> str:

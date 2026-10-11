@@ -4,7 +4,7 @@ from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
-from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic, handle_webui_command as handle_webui_command_logic
+from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_update_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic, handle_webui_command as handle_webui_command_logic
 from core.plugin_manager import PluginManager
 import uuid
 from utils.logger import logger
@@ -217,7 +217,7 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
     asyncio.create_task(graceful_restart('tg'))
 
 
-async def handle_checkupdate_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_update_command_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import asyncio
     from main import graceful_restart
     from config.config_loader import config_loader
@@ -229,8 +229,8 @@ async def handle_checkupdate_command_tg(update: Update, context: ContextTypes.DE
         await update.message.reply_text("您的权限不足以执行此操作")
         return
 
-    status_msg = await update.message.reply_text("🔍 正在检查更新...")
-    info = await handle_checkupdate_command()
+    status_msg = await update.message.reply_text("🔍 正在检查并更新...")
+    info = await handle_update_command()
 
     if info.get("update_found") and info.get("update_notice"):
         await update.message.reply_text(info["update_notice"])
@@ -244,6 +244,9 @@ async def handle_checkupdate_command_tg(update: Update, context: ContextTypes.DE
     if info.get("need_restart"):
         await asyncio.sleep(2)
         asyncio.create_task(graceful_restart('tg'))
+
+handle_checkupdate_command_tg = handle_update_command_tg
+
 
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = await handle_help_command_logic()
@@ -481,8 +484,9 @@ def get_tg_handlers():
         CommandHandler('webui', handle_webui_command),
         CommandHandler('status', handle_status_command_tg),
         CommandHandler('reboot', handle_reboot_command_tg),
-        CommandHandler('checkupdate', handle_checkupdate_command_tg),
-        CommandHandler('cu', handle_checkupdate_command_tg),
+        CommandHandler('update', handle_update_command_tg),
+        CommandHandler('checkupdate', handle_update_command_tg),
+        CommandHandler('cu', handle_update_command_tg),
         CommandHandler('confirm', handle_confirm_ffmpeg),
         CommandHandler('cancel', handle_cancel_ffmpeg),
         CommandHandler('blockword', handle_blockword_command),
