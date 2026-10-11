@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,1128 +7,1603 @@
 <title>TQSync 控制台</title>
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="//unpkg.com/element-plus/dist/index.css" />
 <style>
-/* ══════════════════ THEME ══════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   MATERIAL DESIGN 3 (M3) DESIGN TOKENS & SYSTEM VARIABLES
+   ══════════════════════════════════════════════════════════════ */
+:root, :root[data-theme="dark"] {
+  /* Surface Containers (Tonal Elevation) */
+  --md-sys-color-surface: #10131b;
+  --md-sys-color-surface-dim: #0b0e14;
+  --md-sys-color-surface-bright: #363942;
+  --md-sys-color-surface-container-lowest: #080a10;
+  --md-sys-color-surface-container-low: #151821;
+  --md-sys-color-surface-container: #1b1e27;
+  --md-sys-color-surface-container-high: #252832;
+  --md-sys-color-surface-container-highest: #30333e;
+
+  /* On Surface (Text & Icons) */
+  --md-sys-color-on-surface: #e2e2ea;
+  --md-sys-color-on-surface-variant: #c3c6cf;
+  --md-sys-color-outline: #8d9199;
+  --md-sys-color-outline-variant: #43474f;
+
+  /* Primary (Accent) */
+  --md-sys-color-primary: #a8c7fa;
+  --md-sys-color-on-primary: #04325c;
+  --md-sys-color-primary-container: #00497d;
+  --md-sys-color-on-primary-container: #c2e7ff;
+
+  /* Secondary */
+  --md-sys-color-secondary: #bec6dc;
+  --md-sys-color-on-secondary: #283141;
+  --md-sys-color-secondary-container: #3e4759;
+  --md-sys-color-on-secondary-container: #dae2f9;
+
+  /* Tertiary (Teal/Emerald Accent) */
+  --md-sys-color-tertiary: #7cd5b4;
+  --md-sys-color-on-tertiary: #003825;
+  --md-sys-color-tertiary-container: #005137;
+  --md-sys-color-on-tertiary-container: #98f2cf;
+
+  /* Error */
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffdad6;
+
+  /* Status Colors */
+  --md-sys-color-success: #4cd995;
+  --md-sys-color-success-container: #005232;
+  --md-sys-color-on-success-container: #a2f5c7;
+
+  --md-sys-color-warning: #ffb865;
+  --md-sys-color-warning-container: #633b00;
+  --md-sys-color-on-warning-container: #ffddb6;
+
+  --md-sys-color-info: #7da0fa;
+  --md-sys-color-info-container: #1b3d8f;
+  --md-sys-color-on-info-container: #d9e2ff;
+
+  /* Shadows */
+  --md-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.3), 0 1px 2px 0 rgba(0,0,0,0.4);
+  --md-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.3), 0 1px 2px 0 rgba(0,0,0,0.4);
+  --md-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.3), 0 1px 3px 0 rgba(0,0,0,0.4);
+
+  /* Element Plus Theme Overrides */
+  --el-color-primary: var(--md-sys-color-primary);
+  --el-bg-color: var(--md-sys-color-surface-container);
+  --el-bg-color-page: var(--md-sys-color-surface);
+  --el-bg-color-overlay: var(--md-sys-color-surface-container-high);
+  --el-text-color-primary: var(--md-sys-color-on-surface);
+  --el-text-color-regular: var(--md-sys-color-on-surface-variant);
+  --el-text-color-secondary: var(--md-sys-color-outline);
+  --el-border-color: var(--md-sys-color-outline-variant);
+  --el-border-color-light: rgba(255,255,255,0.06);
+  --el-border-color-lighter: rgba(255,255,255,0.04);
+  --el-fill-color: var(--md-sys-color-surface-container-high);
+  --el-fill-color-light: var(--md-sys-color-surface-container);
+  --el-mask-color: rgba(0,0,0,0.65);
+}
+
+:root[data-theme="light"] {
+  /* Surface Containers (Light Mode) */
+  --md-sys-color-surface: #f8f9ff;
+  --md-sys-color-surface-dim: #d9dae2;
+  --md-sys-color-surface-bright: #ffffff;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f2f3fa;
+  --md-sys-color-surface-container: #eceef6;
+  --md-sys-color-surface-container-high: #e6e8f0;
+  --md-sys-color-surface-container-highest: #e0e2eb;
+
+  /* On Surface */
+  --md-sys-color-on-surface: #191c21;
+  --md-sys-color-on-surface-variant: #43474f;
+  --md-sys-color-outline: #737780;
+  --md-sys-color-outline-variant: #c3c6cf;
+
+  /* Primary */
+  --md-sys-color-primary: #0b57d0;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #d3e3fd;
+  --md-sys-color-on-primary-container: #041e49;
+
+  /* Secondary */
+  --md-sys-color-secondary: #565e71;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #dae2f9;
+  --md-sys-color-on-secondary-container: #131c2b;
+
+  /* Tertiary */
+  --md-sys-color-tertiary: #006c4c;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #98f2cf;
+  --md-sys-color-on-tertiary-container: #002114;
+
+  /* Error */
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+
+  /* Status Colors */
+  --md-sys-color-success: #12874f;
+  --md-sys-color-success-container: #b4f3d1;
+  --md-sys-color-on-success-container: #003921;
+
+  --md-sys-color-warning: #b06200;
+  --md-sys-color-warning-container: #ffdcc0;
+  --md-sys-color-on-warning-container: #381c00;
+
+  --md-sys-color-info: #1b5edb;
+  --md-sys-color-info-container: #d9e2ff;
+  --md-sys-color-on-info-container: #001944;
+
+  /* Shadows */
+  --md-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.08), 0 1px 2px 0 rgba(0,0,0,0.12);
+  --md-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.08), 0 1px 2px 0 rgba(0,0,0,0.12);
+  --md-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.10), 0 1px 3px 0 rgba(0,0,0,0.12);
+
+  /* Element Plus Theme Overrides */
+  --el-color-primary: var(--md-sys-color-primary);
+  --el-bg-color: var(--md-sys-color-surface-container);
+  --el-bg-color-page: var(--md-sys-color-surface);
+  --el-bg-color-overlay: var(--md-sys-color-surface-container-high);
+  --el-text-color-primary: var(--md-sys-color-on-surface);
+  --el-text-color-regular: var(--md-sys-color-on-surface-variant);
+  --el-text-color-secondary: var(--md-sys-color-outline);
+  --el-border-color: var(--md-sys-color-outline-variant);
+  --el-border-color-light: rgba(0,0,0,0.08);
+  --el-border-color-lighter: rgba(0,0,0,0.04);
+  --el-fill-color: var(--md-sys-color-surface-container-high);
+  --el-fill-color-light: var(--md-sys-color-surface-container);
+  --el-mask-color: rgba(0,0,0,0.45);
+}
+
 :root {
-  --bg:      #080C12;
-  --bg1:     #0D1219;
-  --bg2:     #111820;
-  --bg3:     #161E28;
-  --border:  rgba(255,255,255,0.06);
-  --border2: rgba(255,255,255,0.10);
-  --text:    #DDE6F0;
-  --muted:   #6B7A8D;
-  --dim:     #3A4454;
-  --primary: #41E0A3;
-  --prim2:   rgba(65,224,163,0.15);
-  --prim3:   rgba(65,224,163,0.06);
-  --blue:    #60A5FA;
-  --orange:  #FB923C;
-  --purple:  #A78BFA;
-  --red:     #F87171;
-  --yellow:  #FBBF24;
-  --sans:    'Outfit', sans-serif;
-  --mono:    'JetBrains Mono', monospace;
-  --sw:      248px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
-body{background:var(--bg);font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased}
-::-webkit-scrollbar{width:3px;height:3px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
-::-webkit-scrollbar-thumb:hover{background:rgba(65,224,163,.4)}
+  --md-shape-corner-none: 0px;
+  --md-shape-corner-xs: 4px;
+  --md-shape-corner-sm: 8px;
+  --md-shape-corner-md: 12px;
+  --md-shape-corner-lg: 16px;
+  --md-shape-corner-xl: 28px;
+  --md-shape-corner-full: 9999px;
 
-/* ══════════════════ LOGIN ══════════════════ */
-.login-screen{
-  position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  z-index:9999;background:var(--bg);
-  transition:opacity .4s ease,transform .4s ease;
-}
-.login-screen.fade-out{opacity:0;transform:scale(1.03);pointer-events:none}
-.login-grid{
-  position:absolute;inset:0;
-  background-image:linear-gradient(rgba(65,224,163,.035) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(65,224,163,.035) 1px,transparent 1px);
-  background-size:52px 52px;
-  mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 20%,transparent 100%);
-}
-.orb{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none;animation:ofloat 10s ease-in-out infinite}
-.orb1{width:380px;height:380px;background:rgba(65,224,163,.06);top:-120px;left:-100px;animation-delay:0s}
-.orb2{width:450px;height:450px;background:rgba(96,165,250,.045);bottom:-120px;right:-80px;animation-delay:-4s}
-.orb3{width:240px;height:240px;background:rgba(167,139,250,.05);top:38%;right:22%;animation-delay:-7s}
-@keyframes ofloat{0%,100%{transform:translate(0,0)}40%{transform:translate(18px,-22px)}70%{transform:translate(-14px,16px)}}
-
-.login-card{
-  position:relative;width:400px;
-  background:var(--bg2);border:1px solid var(--border2);
-  border-radius:20px;padding:40px;
-  animation:linIn .55s cubic-bezier(.2,0,.1,1) both;
-}
-@keyframes linIn{from{opacity:0;transform:translateY(28px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-.login-card::before{
-  content:'';position:absolute;inset:0;border-radius:20px;
-  border:1px solid transparent;pointer-events:none;
-  background:linear-gradient(135deg,rgba(65,224,163,.18),transparent 55%) border-box;
-  -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
-  -webkit-mask-composite:destination-out;mask-composite:exclude;
-}
-.l-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
-.l-mark{
-  width:40px;height:40px;border-radius:10px;background:var(--primary);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.l-mark svg{width:20px;height:20px}
-.l-brand{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.01em}
-.l-brand em{color:var(--primary);font-style:normal}
-.l-sub{font-size:12px;color:var(--muted);margin-bottom:26px;line-height:1.6}
-.l-label{
-  display:block;font-size:10px;font-weight:500;text-transform:uppercase;
-  letter-spacing:.09em;color:var(--muted);margin-bottom:7px;font-family:var(--mono);
-}
-.l-field{margin-bottom:14px}
-.l-input-w{position:relative;display:flex;align-items:center}
-.l-icon{
-  position:absolute;left:13px;z-index:1;pointer-events:none;
-  width:14px;height:14px;stroke:var(--dim);transition:stroke .2s;
-}
-.l-input{
-  width:100%;height:44px;background:var(--bg3);
-  border:1px solid var(--border2);border-radius:10px;
-  color:var(--text);font-family:var(--mono);font-size:13px;
-  padding:0 42px 0 38px;outline:none;letter-spacing:.04em;
-  transition:border-color .2s,box-shadow .2s;
-}
-.l-input::placeholder{color:var(--dim)}
-.l-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(65,224,163,.1)}
-.l-input:focus ~ .l-icon{stroke:var(--primary)}
-.l-eye{
-  position:absolute;right:12px;background:none;border:none;cursor:pointer;
-  color:var(--dim);padding:4px;transition:color .15s;
-  display:flex;align-items:center;
-}
-.l-eye:hover{color:var(--muted)}
-.l-eye svg{width:14px;height:14px}
-.l-err{
-  display:flex;align-items:center;gap:6px;
-  font-size:11px;color:var(--red);margin-top:7px;
-  font-family:var(--mono);animation:shake .28s ease;
-}
-.l-err svg{width:12px;height:12px;flex-shrink:0}
-@keyframes shake{0%,100%{transform:translateX(0)}30%{transform:translateX(-6px)}70%{transform:translateX(6px)}}
-.l-btn{
-  width:100%;height:44px;background:var(--primary);
-  border:none;border-radius:10px;color:#041a0f;
-  font-family:var(--sans);font-size:14px;font-weight:600;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
-  margin-top:8px;overflow:hidden;position:relative;
-  transition:opacity .2s,transform .15s;
-}
-.l-btn::after{
-  content:'';position:absolute;inset:0;
-  background:rgba(255,255,255,.15);
-  transform:translateX(-100%);transition:transform .35s;
-}
-.l-btn:hover::after{transform:translateX(100%)}
-.l-btn:hover{opacity:.92}
-.l-btn:active{transform:scale(.98)}
-.l-btn:disabled{opacity:.45;cursor:not-allowed}
-.l-spinner{width:15px;height:15px;border-radius:50%;border:2px solid rgba(4,26,15,.25);border-top-color:#041a0f;animation:spin .55s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.l-footer{
-  margin-top:22px;padding-top:18px;border-top:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-}
-.l-ftext{font-size:10px;color:var(--dim);font-family:var(--mono)}
-.l-badge{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-family:var(--mono)}
-.bdot{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:blink 2s ease-in-out infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-
-/* ══════════════════ APP SHELL ══════════════════ */
-.app-wrapper{display:flex;height:100vh;overflow:hidden}
-
-.sidebar{
-  width:var(--sw);background:var(--bg1);
-  border-right:1px solid var(--border);
-  display:flex;flex-direction:column;
-  z-index:1000;flex-shrink:0;
-  transition:transform .25s cubic-bezier(.4,0,.2,1);
-}
-.s-logo{
-  height:64px;display:flex;align-items:center;
-  padding:0 18px;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;
-}
-.s-mark{
-  width:30px;height:30px;border-radius:8px;background:var(--primary);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.s-mark svg{width:16px;height:16px}
-.s-texts{line-height:1}
-.s-name{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.01em}
-.s-ver{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px}
-.s-nav{padding:10px 10px 0;flex:1;overflow-y:auto}
-.s-nlabel{
-  font-size:9px;font-weight:500;text-transform:uppercase;
-  letter-spacing:.1em;color:var(--dim);
-  padding:0 10px;margin:14px 0 4px;font-family:var(--mono);
-}
-.sidebar .el-menu{border-right:none !important;background:transparent !important;padding:0}
-.sidebar .el-menu-item{
-  height:38px !important;line-height:38px !important;
-  border-radius:8px !important;margin-bottom:1px !important;
-  padding:0 10px !important;font-size:13px !important;
-  font-family:var(--sans) !important;color:var(--muted) !important;
-  background:transparent !important;transition:all .14s !important;
-}
-.sidebar .el-menu-item:hover{background:rgba(255,255,255,.04) !important;color:var(--text) !important}
-.sidebar .el-menu-item.is-active{background:var(--prim3) !important;color:var(--primary) !important}
-.sidebar .el-menu-item .el-icon{font-size:14px !important;margin-right:8px !important;opacity:.75}
-.sidebar .el-menu-item.is-active .el-icon{opacity:1}
-.s-bottom{padding:14px;border-top:1px solid var(--border);flex-shrink:0}
-.user-panel{
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:10px;padding:10px 12px;
-  display:flex;align-items:center;justify-content:space-between;
-}
-.u-info{display:flex;align-items:center;gap:8px}
-.u-avatar{
-  width:28px;height:28px;border-radius:7px;
-  background:var(--prim2);
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:600;color:var(--primary);
-}
-.u-name{font-size:12px;font-weight:500;color:var(--text)}
-.u-role{font-size:10px;color:var(--dim);margin-top:2px;font-family:var(--mono)}
-.u-logout{
-  background:none;border:none;cursor:pointer;color:var(--dim);
-  padding:4px;border-radius:5px;transition:color .15s,background .15s;
-  display:flex;align-items:center;
-}
-.u-logout:hover{color:var(--red);background:rgba(248,113,113,.1)}
-.u-logout svg{width:14px;height:14px}
-
-.main-container{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.topbar{
-  height:56px;background:var(--bg1);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 24px;
-  justify-content:space-between;flex-shrink:0;
-}
-.tb-left{display:flex;align-items:center;gap:10px}
-.ham{
-  background:none;border:none;cursor:pointer;padding:6px;
-  border-radius:6px;color:var(--muted);
-  transition:color .15s,background .15s;display:none;
-}
-.ham:hover{background:rgba(255,255,255,.05);color:var(--text)}
-.ham svg{width:17px;height:17px;stroke:currentColor}
-.breadcrumb{font-size:11px;color:var(--dim);font-family:var(--mono)}
-.page-title{font-size:14px;font-weight:500;color:var(--text)}
-.tb-right{display:flex;align-items:center;gap:8px}
-.uptime-badge{
-  display:flex;align-items:center;gap:7px;
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:20px;padding:4px 12px 4px 8px;
-  font-family:var(--mono);font-size:11px;color:var(--muted);
-}
-.up-dot{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:blink 2s ease-in-out infinite}
-.restart-btn{
-  background:rgba(248,113,113,.08) !important;
-  border:1px solid rgba(248,113,113,.22) !important;
-  color:var(--red) !important;
-  font-family:var(--sans) !important;font-size:12px !important;
-  border-radius:8px !important;height:32px !important;padding:0 14px !important;
-  transition:all .15s !important;
-}
-.restart-btn:hover{background:rgba(248,113,113,.16) !important;border-color:rgba(248,113,113,.4) !important}
-
-.content{flex:1;padding:24px;overflow-y:auto;overflow-x:hidden}
-
-/* section header */
-.sec-hd{display:flex;align-items:center;margin-bottom:16px;gap:0}
-.sec-title{
-  font-size:10px;font-weight:500;text-transform:uppercase;
-  letter-spacing:.1em;color:var(--muted);font-family:var(--mono);
-  display:flex;align-items:center;gap:7px;white-space:nowrap;
-}
-.sec-title svg{width:11px;height:11px;stroke:var(--primary);opacity:.8}
-.sec-line{flex:1;height:1px;background:var(--border);margin-left:12px}
-.sec-side{display:flex;gap:8px;margin-left:12px;align-items:center;flex-shrink:0}
-
-/* stat grid */
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:18px}
-.stat-card{
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:14px;padding:18px 20px;
-  position:relative;overflow:hidden;cursor:default;
-  transition:border-color .22s,transform .22s;
-}
-.stat-card:hover{transform:translateY(-2px);border-color:var(--border2)}
-.stat-card::after{
-  content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
-  background:var(--cc,transparent);opacity:.4;transition:opacity .2s;
-}
-.stat-card:hover::after{opacity:.9}
-.stat-card.cg{--cc:var(--primary)}
-.stat-card.cb{--cc:var(--blue)}
-.stat-card.co{--cc:var(--orange)}
-.stat-card.cp{--cc:var(--purple)}
-.s-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.s-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.05)}
-.s-icon svg{width:15px;height:15px}
-.cg .s-icon{background:rgba(65,224,163,.12)}.cg .s-icon svg{stroke:var(--primary)}
-.cb .s-icon{background:rgba(96,165,250,.12)}.cb .s-icon svg{stroke:var(--blue)}
-.co .s-icon{background:rgba(251,146,60,.12)}.co .s-icon svg{stroke:var(--orange)}
-.cp .s-icon{background:rgba(167,139,250,.12)}.cp .s-icon svg{stroke:var(--purple)}
-.s-badge{
-  font-size:10px;font-family:var(--mono);
-  padding:2px 7px;border-radius:4px;
-  background:rgba(65,224,163,.1);color:var(--primary);
-}
-.s-lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
-.s-val{font-size:22px;font-weight:600;color:var(--text);font-family:var(--mono);letter-spacing:-.02em;line-height:1}
-
-/* sparkline (real data) */
-.spark-card{
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:14px;padding:18px 20px;margin-bottom:18px;
-}
-.spark-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px}
-.spark-meta{font-size:11px;color:var(--muted);font-family:var(--mono);padding-top:2px}
-.spark-lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
-.spark-num{font-size:20px;font-weight:600;color:var(--primary);font-family:var(--mono)}
-.bars{display:flex;align-items:flex-end;gap:3px;height:44px}
-.bar{
-  flex:1;min-width:5px;border-radius:2px 2px 0 0;
-  background:rgba(65,224,163,.15);
-  transition:height .5s cubic-bezier(.4,0,.2,1),background .2s;
-  cursor:default;
-}
-.bar:hover{background:rgba(65,224,163,.45)}
-.bar.peak{background:rgba(65,224,163,.3)}
-.bar.b-zero{background:rgba(255,255,255,.04)}
-.bar-tick{display:flex;justify-content:space-between;margin-top:8px}
-.tick-lbl{font-size:9px;color:var(--dim);font-family:var(--mono)}
-.spark-empty{padding:24px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
-
-/* info cards */
-.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:18px}
-.info-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
-.ic-hd{
-  padding:11px 18px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:8px;
-}
-.ic-hd svg{width:12px;height:12px;stroke:var(--primary);opacity:.75;flex-shrink:0}
-.ic-title{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-family:var(--mono)}
-.ic-row{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:9px 18px;transition:background .12s;
-}
-.ic-row:hover{background:rgba(255,255,255,.02)}
-.ic-key{font-size:12px;color:var(--muted)}
-.ic-val{
-  font-size:11px;font-family:var(--mono);color:var(--text);
-  background:var(--bg3);border:1px solid var(--border);
-  padding:2px 9px;border-radius:5px;max-width:150px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  --font-sans: 'Roboto', 'Google Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --sidebar-w: 260px;
 }
 
-/* log box */
-.log-wrap{
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:14px;overflow:hidden;
-  height:calc(100vh - 185px);display:flex;flex-direction:column;
-}
-.log-tb{
-  padding:10px 16px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:10px;flex-shrink:0;
-}
-.traffic{display:flex;gap:6px;margin-right:4px}
-.td{width:10px;height:10px;border-radius:50%}
-.td.r{background:#FF5F57}.td.y{background:#FEBC2E}.td.g{background:#28C840}
-.log-filter{
-  flex:1;height:27px;background:var(--bg3);
-  border:1px solid var(--border);border-radius:6px;
-  color:var(--text);font-family:var(--mono);font-size:11px;
-  padding:0 10px;outline:none;transition:border-color .2s;
-}
-.log-filter:focus{border-color:var(--primary)}
-.log-filter::placeholder{color:var(--dim)}
-.l-cnt{
-  font-size:10px;font-family:var(--mono);
-  background:var(--prim2);color:var(--primary);
-  padding:2px 8px;border-radius:10px;white-space:nowrap;
-}
-.log-body{flex:1;overflow-y:auto;padding:6px 0}
-.log-line{
-  display:flex;gap:12px;padding:3px 16px;
-  font-family:var(--mono);font-size:11.5px;line-height:1.8;
-  transition:background .1s;
-}
-.log-line:hover{background:rgba(255,255,255,.02)}
-.log-i{color:var(--dim);min-width:28px;text-align:right;flex-shrink:0;user-select:none}
-.log-t{color:#8BA0B5;word-break:break-all}
-.ll-err .log-t{color:#F87171}
-.ll-warn .log-t{color:#FBBF24}
-.ll-ok .log-t{color:#6EE7B7}
-.ll-info .log-t{color:#93C5FD}
-.log-empty{padding:36px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
-
-/* bindings + tables */
-.tbl-wrap .el-table{
-  background:transparent !important;
-  --el-table-bg-color:var(--bg2) !important;
-  --el-table-tr-bg-color:var(--bg2) !important;
-  --el-table-header-bg-color:var(--bg3) !important;
-  --el-table-row-hover-bg-color:rgba(255,255,255,.03) !important;
-  --el-table-border-color:var(--border) !important;
-  --el-table-text-color:var(--text) !important;
-  --el-table-header-text-color:var(--muted) !important;
-  font-family:var(--mono) !important;font-size:12px !important;
-  border:1px solid var(--border) !important;border-radius:14px !important;overflow:hidden !important;
-}
-.tbl-wrap .el-table th{font-size:10px !important;text-transform:uppercase !important;letter-spacing:.08em !important;font-weight:500 !important}
-.tbl-wrap .el-button--danger{background:rgba(248,113,113,.1) !important;border-color:rgba(248,113,113,.3) !important;color:var(--red) !important}
-.btag{
-  font-size:10px;font-family:var(--mono);font-weight:500;
-  padding:2px 8px;border-radius:4px;white-space:nowrap;
-}
-.btag.bgood{background:rgba(65,224,163,.12);color:var(--primary);border:1px solid rgba(65,224,163,.25)}
-.btag.bgray{background:rgba(255,255,255,.04);color:var(--dim);border:1px solid var(--border)}
-.btag.bred{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.25)}
-.btag.bblue{background:rgba(96,165,250,.12);color:var(--blue);border:1px solid rgba(96,165,250,.25)}
-.tbl-empty{padding:44px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
-.tbl-ei{
-  width:36px;height:36px;border:1px dashed var(--border2);
-  border-radius:9px;display:flex;align-items:center;
-  justify-content:center;margin:0 auto 10px;
-}
-.tbl-ei svg{width:17px;height:17px;stroke:var(--dim)}
-.cell-err{color:var(--red);font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
-.cell-sub{color:var(--dim);font-size:10px;margin-left:4px;font-family:var(--mono)}
-.mono-id{font-family:var(--mono);font-size:12px}
-
-/* plugin drawer */
-.drawer-dark{
-  --el-drawer-bg-color:var(--bg1) !important;
-  --el-drawer-border-color:var(--border) !important;
-  color:var(--text);
-}
-.drawer-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.drawer-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--text)}
-.drawer-title .d-name{font-family:var(--mono);color:var(--primary)}
-.drawer-count{font-size:10px;font-family:var(--mono);background:var(--prim2);color:var(--primary);padding:2px 8px;border-radius:10px}
-.kv-add{display:flex;gap:8px;margin-bottom:16px}
-.kv-add .el-input__wrapper{background:var(--bg3) !important;box-shadow:0 0 0 1px var(--border2) inset !important}
-.kv-add .el-input__inner{color:var(--text) !important;font-family:var(--mono) !important;font-size:12px !important}
-.kv-row{
-  display:flex;align-items:center;gap:10px;
-  padding:9px 12px;border:1px solid var(--border);border-radius:10px;
-  margin-bottom:8px;background:var(--bg2);transition:border-color .15s;
-}
-.kv-row:hover{border-color:var(--border2)}
-.kv-key{
-  font-family:var(--mono);font-size:11px;color:var(--blue);
-  min-width:120px;max-width:200px;flex-shrink:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.kv-val{
-  flex:1;font-family:var(--mono);font-size:11px;color:var(--muted);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
-}
-.kv-val.editable{color:var(--text)}
-.kv-actions{display:flex;gap:4px;flex-shrink:0}
-.kv-edit-input{flex:1;min-width:0}
-.kv-edit-input .el-input__wrapper{background:var(--bg3) !important;box-shadow:0 0 0 1px var(--primary) inset !important}
-.kv-edit-input .el-input__inner{color:var(--text) !important;font-family:var(--mono) !important;font-size:11px !important}
-.drawer-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-.kv-icon-btn{border-radius:6px}
-
-/* config page */
-.cfg-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
-.cfg-sect-hd{
-  padding:10px 18px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:8px;
-  background:var(--bg3);
-}
-.cfg-sect-hd svg{width:12px;height:12px;stroke:var(--primary);opacity:.75;flex-shrink:0}
-.cfg-sect-title{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.09em;color:var(--primary);font-family:var(--mono)}
-.cfg-row{
-  display:flex;align-items:center;padding:9px 18px;
-  border-bottom:1px solid var(--border);
-  transition:background .12s;
-}
-.cfg-row:last-child{border-bottom:none}
-.cfg-row:hover{background:rgba(255,255,255,.02)}
-.cfg-key{
-  font-size:11px;font-family:var(--mono);color:var(--muted);
-  width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.cfg-key-sub{
-  font-size:9px;color:var(--dim);display:block;margin-top:1px;
-}
-.cfg-val-wrap{flex:1;display:flex;align-items:center;gap:10px;min-width:0}
-.cfg-val{
-  font-size:12px;font-family:var(--mono);color:var(--text);
-  background:var(--bg3);border:1px solid var(--border2);
-  padding:4px 10px;border-radius:6px;flex:1;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  min-width:0;line-height:1.6;
-}
-.cfg-val.masked{color:var(--dim);letter-spacing:.15em}
-.cfg-input{
-  flex:1;height:30px;background:var(--bg3);
-  border:1px solid var(--primary);border-radius:6px;
-  color:var(--text);font-family:var(--mono);font-size:11px;
-  padding:0 10px;outline:none;
-}
-.cfg-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.cfg-btn{
-  width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:all .15s;background:transparent;
-}
-.cfg-btn-edit{color:var(--muted)}
-.cfg-btn-edit:hover{background:rgba(96,165,250,.12);color:var(--blue)}
-.cfg-btn-eye{color:var(--dim)}
-.cfg-btn-eye:hover{background:rgba(167,139,250,.12);color:var(--purple)}
-.cfg-btn-save{color:var(--primary);background:var(--prim2)}
-.cfg-btn-save:hover{background:var(--prim2);opacity:.8}
-.cfg-btn-cancel{color:var(--muted)}
-.cfg-btn-cancel:hover{background:rgba(248,113,113,.1);color:var(--red)}
-.cfg-btn svg{width:12px;height:12px}
-.cfg-empty{padding:44px 0;text-align:center;font-size:12px;color:var(--dim);font-family:var(--mono)}
-.cfg-empty svg{width:32px;height:32px;stroke:var(--dim);margin-bottom:10px;display:block;margin-left:auto;margin-right:auto}
-
-/* tool buttons row (admin page) */
-.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.tool-input{
-  flex:1;max-width:320px;height:30px;background:var(--bg3);
-  border:1px solid var(--border);border-radius:6px;
-  color:var(--text);font-family:var(--mono);font-size:12px;
-  padding:0 10px;outline:none;transition:border-color .2s;
-}
-.tool-input:focus{border-color:var(--primary)}
-.tool-input::placeholder{color:var(--dim)}
-.cnt-pill{font-size:10px;font-family:var(--mono);color:var(--muted);white-space:nowrap}
-.cnt-pill b{color:var(--primary);font-weight:500}
-
-/* mobile */
-.mask{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:999;display:none}
-.mask.show{display:block}
-@media(max-width:768px){
-  .sidebar{position:fixed;height:100%;transform:translateX(-100%)}
-  .sidebar.open{transform:translateX(0)}
-  .ham{display:flex !important}
-  .content{padding:16px}
-  .uptime-badge{display:none}
+/* ══════════════════════════════════════════════════════════════
+   GLOBAL BASE STYLES & SCROLLBAR
+   ══════════════════════════════════════════════════════════════ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--md-sys-color-surface);
+  font-family: var(--font-sans);
+  color: var(--md-sys-color-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* page anim */
-.page-in{animation:pin .28s ease both}
-@keyframes pin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--md-sys-color-outline-variant); border-radius: var(--md-shape-corner-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--md-sys-color-outline); }
+
+.m-icon {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   M3 LOGIN SCREEN
+   ══════════════════════════════════════════════════════════════ */
+.login-screen {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; background: var(--md-sys-color-surface);
+  transition: opacity 0.35s cubic-bezier(0.2, 0, 0, 1), transform 0.35s cubic-bezier(0.2, 0, 0, 1);
+}
+.login-screen.fade-out { opacity: 0; transform: scale(1.02); pointer-events: none; }
+.login-bg-decor {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+}
+.login-bg-grid {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(var(--md-sys-color-outline-variant) 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.25;
+}
+.login-orb {
+  position: absolute; border-radius: 50%; filter: blur(100px); pointer-events: none;
+  animation: orbFloat 14s ease-in-out infinite alternate;
+}
+.login-orb-1 {
+  width: 480px; height: 480px; background: var(--md-sys-color-primary-container);
+  opacity: 0.35; top: -140px; left: -140px;
+}
+.login-orb-2 {
+  width: 420px; height: 420px; background: var(--md-sys-color-tertiary-container);
+  opacity: 0.3; bottom: -120px; right: -120px; animation-delay: -7s;
+}
+@keyframes orbFloat {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(40px, 40px) scale(1.08); }
+}
+
+.m3-login-card {
+  position: relative; width: 420px; max-width: 90vw;
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: var(--md-shape-corner-xl);
+  padding: 40px; box-shadow: var(--md-elevation-3);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  animation: m3DialogIn 0.4s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+@keyframes m3DialogIn {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.m3-login-header {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+}
+.m3-logo-badge {
+  width: 48px; height: 48px; border-radius: var(--md-shape-corner-lg);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  display: flex; align-items: center; justify-content: center;
+}
+.m3-logo-badge .m-icon { font-size: 28px; }
+.m3-login-title {
+  font-size: 24px; font-weight: 700; color: var(--md-sys-color-on-surface);
+  letter-spacing: -0.01em; line-height: 1.2;
+}
+.m3-login-title span { color: var(--md-sys-color-primary); }
+.m3-login-subtitle {
+  font-size: 13px; color: var(--md-sys-color-on-surface-variant);
+  margin-top: 4px; line-height: 1.5;
+}
+
+.m3-field-label {
+  display: block; font-size: 12px; font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-bottom: 8px; letter-spacing: 0.02em;
+}
+.m3-input-wrapper {
+  position: relative; display: flex; align-items: center; margin-bottom: 8px;
+}
+.m3-input-wrapper .m-icon.leading {
+  position: absolute; left: 14px; pointer-events: none;
+  color: var(--md-sys-color-on-surface-variant); font-size: 20px;
+}
+.m3-text-field {
+  width: 100%; height: 52px;
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-md);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--font-mono); font-size: 14px;
+  padding: 0 46px 0 44px; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.m3-text-field:focus {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-surface-container-highest);
+  box-shadow: 0 0 0 2px var(--md-sys-color-primary);
+}
+.m3-text-field::placeholder { color: var(--md-sys-color-outline); }
+.m3-eye-btn {
+  position: absolute; right: 12px; background: none; border: none;
+  color: var(--md-sys-color-on-surface-variant); cursor: pointer;
+  padding: 8px; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--md-shape-corner-full);
+}
+.m3-eye-btn:hover { background: rgba(255,255,255,0.08); color: var(--md-sys-color-on-surface); }
+
+.m3-err-banner {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--md-sys-color-error);
+  margin-top: 8px; margin-bottom: 8px;
+  background: rgba(255, 180, 171, 0.08);
+  padding: 8px 12px; border-radius: var(--md-shape-corner-sm);
+}
+
+.m3-filled-btn {
+  width: 100%; height: 48px;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border: none; border-radius: var(--md-shape-corner-full);
+  font-family: var(--font-sans); font-size: 14px; font-weight: 500;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 16px; box-shadow: var(--md-elevation-1);
+  transition: opacity 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+.m3-filled-btn:hover { opacity: 0.94; box-shadow: var(--md-elevation-2); }
+.m3-filled-btn:active { transform: scale(0.98); }
+.m3-filled-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.m3-login-footer {
+  margin-top: 24px; padding-top: 16px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.m3-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--md-shape-corner-sm);
+  font-size: 11px; font-family: var(--font-mono); font-weight: 500;
+}
+.m3-chip-tonal {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+}
+.m3-pulse-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--md-sys-color-success);
+  box-shadow: 0 0 6px var(--md-sys-color-success);
+  animation: m3Pulse 2s infinite ease-in-out;
+}
+@keyframes m3Pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+
+/* ══════════════════════════════════════════════════════════════
+   M3 APP SHELL: SIDEBAR & MAIN CONTAINER
+   ══════════════════════════════════════════════════════════════ */
+.app-shell { display: flex; height: 100vh; overflow: hidden; background: var(--md-sys-color-surface); }
+
+/* M3 Navigation Drawer */
+.m3-drawer {
+  width: var(--sidebar-w); height: 100%;
+  background: var(--md-sys-color-surface-container-low);
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+  display: flex; flex-direction: column; flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+  z-index: 100;
+}
+.m3-drawer-header {
+  padding: 24px 20px 16px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.m3-drawer-logo {
+  width: 40px; height: 40px; border-radius: var(--md-shape-corner-md);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  display: flex; align-items: center; justify-content: center;
+}
+.m3-drawer-logo .m-icon { font-size: 24px; }
+.m3-drawer-brand { font-size: 18px; font-weight: 700; color: var(--md-sys-color-on-surface); line-height: 1.2; }
+.m3-drawer-ver {
+  display: inline-block; font-size: 10px; font-family: var(--font-mono);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+  padding: 2px 6px; border-radius: var(--md-shape-corner-xs); margin-top: 2px;
+}
+
+.m3-nav-group {
+  flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;
+}
+.m3-nav-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  color: var(--md-sys-color-outline); padding: 12px 16px 6px 16px;
+  letter-spacing: 0.08em;
+}
+
+/* Iconic M3 Pill Navigation Item */
+.m3-nav-item {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  height: 48px; padding: 0 16px; border-radius: var(--md-shape-corner-full);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px; font-weight: 500; cursor: pointer; user-select: none;
+  transition: background 0.2s, color 0.2s;
+}
+.m3-nav-item:hover {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+.m3-nav-item.active {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 600;
+}
+.m3-nav-item .m-icon { font-size: 22px; transition: transform 0.2s; }
+.m3-nav-item.active .m-icon {
+  font-variation-settings: 'FILL' 1;
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-drawer-footer {
+  padding: 16px; border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-user-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-lg); padding: 10px 14px;
+}
+.m3-user-info { display: flex; align-items: center; gap: 10px; }
+.m3-user-avatar {
+  width: 34px; height: 34px; border-radius: var(--md-shape-corner-full);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  font-weight: 600; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.m3-user-name { font-size: 13px; font-weight: 500; color: var(--md-sys-color-on-surface); }
+.m3-user-role { font-size: 11px; color: var(--md-sys-color-on-surface-variant); }
+.m3-icon-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--md-sys-color-on-surface-variant);
+  width: 36px; height: 36px; border-radius: var(--md-shape-corner-full);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.m3-icon-btn:hover {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* Main Container */
+.main-wrapper {
+  flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden;
+  background: var(--md-sys-color-surface);
+}
+
+/* M3 Top App Bar */
+.m3-top-app-bar {
+  height: 64px; flex-shrink: 0; padding: 0 24px;
+  background: var(--md-sys-color-surface-container-low);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.m3-app-bar-left { display: flex; align-items: center; gap: 12px; }
+.m3-breadcrumb {
+  font-size: 13px; color: var(--md-sys-color-outline); font-family: var(--font-mono);
+}
+.m3-page-title {
+  font-size: 18px; font-weight: 600; color: var(--md-sys-color-on-surface);
+  letter-spacing: -0.01em;
+}
+
+.m3-app-bar-right { display: flex; align-items: center; gap: 10px; }
+.m3-uptime-chip {
+  display: flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 12px; border-radius: var(--md-shape-corner-full);
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  font-size: 12px; font-family: var(--font-mono); font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+}
+.m3-outlined-btn {
+  height: 36px; padding: 0 16px; border-radius: var(--md-shape-corner-full);
+  background: transparent; border: 1px solid var(--md-sys-color-outline);
+  color: var(--md-sys-color-primary); font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.m3-outlined-btn:hover {
+  background: rgba(168, 199, 250, 0.08); border-color: var(--md-sys-color-primary);
+}
+
+.content-scroll {
+  flex: 1; overflow-y: auto; padding: 24px 28px 40px 28px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   M3 CARDS & COMMON COMPONENTS
+   ══════════════════════════════════════════════════════════════ */
+.m3-card {
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  padding: 24px; transition: box-shadow 0.2s, border-color 0.2s;
+}
+.m3-card:hover {
+  border-color: var(--md-sys-color-outline);
+  box-shadow: var(--md-elevation-1);
+}
+
+.m3-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.m3-section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 16px; font-weight: 600; color: var(--md-sys-color-on-surface);
+}
+.m3-section-title .m-icon { color: var(--md-sys-color-primary); font-size: 22px; }
+
+/* Stat Cards Grid */
+.stat-grid-m3 {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px; margin-bottom: 20px;
+}
+.stat-card-m3 {
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  padding: 20px; display: flex; flex-direction: column; justify-content: space-between;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card-m3:hover {
+  transform: translateY(-2px); box-shadow: var(--md-elevation-1);
+}
+.stat-card-top {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+}
+.stat-icon-circle {
+  width: 44px; height: 44px; border-radius: var(--md-shape-corner-full);
+  display: flex; align-items: center; justify-content: center;
+}
+.stat-icon-circle .m-icon { font-size: 24px; }
+.c-primary { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.c-secondary { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.c-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+.c-warning { background: var(--md-sys-color-warning-container); color: var(--md-sys-color-on-warning-container); }
+
+.stat-label { font-size: 12px; font-weight: 500; color: var(--md-sys-color-on-surface-variant); }
+.stat-value {
+  font-size: 24px; font-weight: 700; color: var(--md-sys-color-on-surface);
+  margin-top: 4px; font-family: var(--font-mono); letter-spacing: -0.02em;
+}
+
+/* Activity Histogram Card */
+.activity-card-m3 { margin-bottom: 20px; }
+.activity-header {
+  display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px;
+}
+.activity-title { font-size: 15px; font-weight: 600; color: var(--md-sys-color-on-surface); }
+.activity-stat { font-size: 22px; font-weight: 700; color: var(--md-sys-color-primary); font-family: var(--font-mono); margin-top: 2px; }
+.activity-subtitle { font-size: 12px; color: var(--md-sys-color-on-surface-variant); }
+
+.bars-container {
+  display: flex; align-items: flex-end; gap: 6px; height: 110px;
+  padding: 10px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.bar-col {
+  flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center;
+}
+.m3-bar {
+  width: 100%; max-width: 18px; background: var(--md-sys-color-surface-container-highest);
+  border-radius: 4px 4px 0 0; min-height: 4px;
+  transition: height 0.3s cubic-bezier(0.2, 0, 0, 1), background 0.2s;
+  cursor: pointer; position: relative;
+}
+.m3-bar:hover { background: var(--md-sys-color-primary); }
+.m3-bar.peak { background: var(--md-sys-color-primary); }
+.bar-ticks {
+  display: flex; justify-content: space-between; margin-top: 8px;
+  font-size: 10px; font-family: var(--font-mono); color: var(--md-sys-color-outline);
+}
+
+/* Info Grid */
+.info-grid-m3 {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;
+}
+.info-card-m3 {
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  padding: 20px;
+}
+.info-card-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--md-sys-color-on-surface);
+  margin-bottom: 16px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.info-card-title .m-icon { font-size: 18px; color: var(--md-sys-color-primary); }
+.info-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; font-size: 13px;
+}
+.info-row:not(:last-child) { border-bottom: 1px dashed rgba(255,255,255,0.05); }
+:root[data-theme="light"] .info-row:not(:last-child) { border-bottom: 1px dashed rgba(0,0,0,0.06); }
+.info-k { color: var(--md-sys-color-on-surface-variant); }
+.info-v { font-family: var(--font-mono); font-weight: 500; color: var(--md-sys-color-on-surface); }
+
+/* ══════════════════════════════════════════════════════════════
+   LOGS VIEW STYLES
+   ══════════════════════════════════════════════════════════════ */
+.logs-card-m3 {
+  background: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  display: flex; flex-direction: column; height: calc(100vh - 150px);
+  overflow: hidden;
+}
+.logs-toolbar {
+  padding: 12px 16px; background: var(--md-sys-color-surface-container);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.logs-search-wrapper {
+  position: relative; flex: 1; max-width: 400px; display: flex; align-items: center;
+}
+.logs-search-wrapper .m-icon {
+  position: absolute; left: 12px; pointer-events: none;
+  color: var(--md-sys-color-outline); font-size: 18px;
+}
+.logs-search-input {
+  width: 100%; height: 36px; padding: 0 12px 0 38px;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-full);
+  color: var(--md-sys-color-on-surface); font-size: 13px; font-family: var(--font-mono);
+  outline: none; transition: border-color 0.2s;
+}
+.logs-search-input:focus { border-color: var(--md-sys-color-primary); }
+
+.logs-body {
+  flex: 1; overflow-y: auto; padding: 14px;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+  background: var(--md-sys-color-surface-container-lowest);
+}
+.log-row {
+  display: flex; gap: 12px; padding: 3px 6px; border-radius: var(--md-shape-corner-xs);
+  transition: background 0.15s;
+}
+.log-row:hover { background: rgba(255,255,255,0.04); }
+:root[data-theme="light"] .log-row:hover { background: rgba(0,0,0,0.04); }
+.log-num { color: var(--md-sys-color-outline); min-width: 38px; text-align: right; user-select: none; }
+.log-text { word-break: break-all; color: var(--md-sys-color-on-surface); }
+.log-err { color: var(--md-sys-color-error); }
+.log-warn { color: var(--md-sys-color-warning); }
+.log-ok { color: var(--md-sys-color-success); }
+.log-info { color: var(--md-sys-color-info); }
+
+/* ══════════════════════════════════════════════════════════════
+   TABLE & DATA MANAGEMENT STYLES
+   ══════════════════════════════════════════════════════════════ */
+.m3-table-card {
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  overflow: hidden; padding: 20px;
+}
+.m3-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.m3-btn-small {
+  height: 36px; padding: 0 16px; border-radius: var(--md-shape-corner-full);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; border: none;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+.m3-btn-primary {
+  background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);
+}
+.m3-btn-tonal {
+  background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);
+}
+.m3-btn-tonal:hover { opacity: 0.9; }
+
+/* Segmented Buttons / Chips for Config Sub-tabs */
+.m3-segmented-group {
+  display: inline-flex; background: var(--md-sys-color-surface-container-high);
+  padding: 4px; border-radius: var(--md-shape-corner-full); gap: 4px;
+}
+.m3-segment-btn {
+  height: 32px; padding: 0 16px; border-radius: var(--md-shape-corner-full);
+  border: none; background: transparent; font-size: 13px; font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant); cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.m3-segment-btn:hover { color: var(--md-sys-color-on-surface); }
+.m3-segment-btn.active {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-weight: 600;
+}
+
+/* Config Item Rows */
+.m3-cfg-section {
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-shape-corner-lg);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  margin-bottom: 16px; overflow: hidden;
+}
+.m3-cfg-header {
+  padding: 14px 20px; background: var(--md-sys-color-surface-container-high);
+  font-size: 13px; font-weight: 600; letter-spacing: 0.05em;
+  color: var(--md-sys-color-primary); display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-cfg-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; gap: 16px; border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+.m3-cfg-row:last-child { border-bottom: none; }
+.m3-cfg-key {
+  font-family: var(--font-mono); font-size: 13px; color: var(--md-sys-color-on-surface);
+  min-width: 200px;
+}
+.m3-cfg-val-box {
+  flex: 1; font-family: var(--font-mono); font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant); word-break: break-all;
+}
+.m3-cfg-input {
+  width: 100%; height: 36px; padding: 0 12px;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-primary);
+  border-radius: var(--md-shape-corner-sm);
+  color: var(--md-sys-color-on-surface); font-family: var(--font-mono); font-size: 13px;
+  outline: none;
+}
+
+/* Sync Direction Cards */
+.sync-dir-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px; margin-top: 16px;
+}
+.sync-dir-card {
+  background: var(--md-sys-color-surface-container-high);
+  border: 2px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-shape-corner-lg);
+  padding: 20px; cursor: pointer; transition: all 0.2s;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.sync-dir-card:hover {
+  border-color: var(--md-sys-color-outline); transform: translateY(-2px);
+}
+.sync-dir-card.active {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+.sync-dir-card.active .sync-dir-title { color: var(--md-sys-color-on-primary-container); }
+.sync-dir-card.active .sync-dir-desc { color: var(--md-sys-color-on-primary-container); opacity: 0.85; }
+.sync-dir-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--md-sys-color-on-surface); }
+.sync-dir-desc { font-size: 12px; color: var(--md-sys-color-on-surface-variant); line-height: 1.5; }
+
+/* ══════════════════════════════════════════════════════════════
+   ELEMENT PLUS M3 OVERRIDES
+   ══════════════════════════════════════════════════════════════ */
+.el-table {
+  --el-table-bg-color: transparent !important;
+  --el-table-tr-bg-color: transparent !important;
+  --el-table-header-bg-color: var(--md-sys-color-surface-container-high) !important;
+  --el-table-row-hover-bg-color: rgba(255,255,255,0.04) !important;
+  --el-table-border-color: var(--md-sys-color-outline-variant) !important;
+  font-family: var(--font-sans) !important;
+  border-radius: var(--md-shape-corner-md);
+  overflow: hidden;
+}
+:root[data-theme="light"] .el-table {
+  --el-table-row-hover-bg-color: rgba(0,0,0,0.04) !important;
+}
+.el-table th.el-table__cell {
+  color: var(--md-sys-color-on-surface) !important;
+  font-weight: 600 !important; font-size: 13px !important;
+}
+.el-table td.el-table__cell {
+  color: var(--md-sys-color-on-surface-variant) !important;
+  font-size: 13px !important;
+}
+
+.mono-cell {
+  font-family: var(--font-mono); font-size: 12px; color: var(--md-sys-color-on-surface);
+}
+
+.el-drawer {
+  background: var(--md-sys-color-surface-container-high) !important;
+  color: var(--md-sys-color-on-surface) !important;
+  border-radius: var(--md-shape-corner-xl) 0 0 var(--md-shape-corner-xl) !important;
+}
+.el-drawer__body { padding: 24px !important; }
+
+/* Mobile Overlay */
+.drawer-scrim {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 95; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.drawer-scrim.open { opacity: 1; pointer-events: auto; }
+
+@media (max-width: 768px) {
+  .m3-drawer {
+    position: fixed; top: 0; bottom: 0; left: 0;
+    transform: translateX(-100%);
+    box-shadow: var(--md-elevation-3);
+  }
+  .m3-drawer.open { transform: translateX(0); }
+  .content-scroll { padding: 16px; }
+  .m3-top-app-bar { padding: 0 16px; }
+}
+
+/* ── M3 Modal Dialog & Security Alert ── */
+.m3-dialog-scrim {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 20px; animation: fadeIn 0.2s ease;
+}
+.m3-dialog-card {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--md-shape-corner-xl);
+  padding: 28px; width: 100%; max-width: 440px;
+  box-shadow: var(--md-elevation-3);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  position: relative; animation: slideUp 0.25s ease;
+}
+.m3-dialog-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 16px;
+}
+.m3-dialog-icon .m-icon { font-size: 28px; }
+.m3-dialog-headline {
+  font-size: 20px; font-weight: 700; margin-bottom: 8px;
+  color: var(--md-sys-color-on-surface);
+}
+.m3-dialog-supporting-text {
+  font-size: 14px; color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.5; margin-bottom: 20px;
+}
+.m3-dialog-actions {
+  display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;
+}
+.m3-security-banner {
+  background: rgba(255, 180, 0, 0.12);
+  border: 1px solid rgba(255, 180, 0, 0.35);
+  color: #ffb400;
+  border-radius: var(--md-shape-corner-md);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.m3-security-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 </style>
 </head>
 <body>
 <div id="app">
 
-<!-- ═══════════ LOGIN ═══════════ -->
-<div class="login-screen" v-if="!isLoggedIn" :class="{'fade-out':loggingIn}">
-  <div class="login-grid"></div>
-  <div class="orb orb1"></div>
-  <div class="orb orb2"></div>
-  <div class="orb orb3"></div>
-  <div class="login-card">
-    <div class="l-logo">
-      <div class="l-mark">
-        <svg viewBox="0 0 20 20" fill="none">
-          <path d="M4 10h12M10 4v12M4 6.5l3-2.5M13 4l3 2.5M4 13.5l3 2.5M13 16l3-2.5" stroke="#0D1117" stroke-width="1.7" stroke-linecap="round"/>
-        </svg>
+<!-- ══════════════════════════════════════════════════════════════
+     M3 LOGIN SCREEN
+     ══════════════════════════════════════════════════════════════ -->
+<div class="login-screen" :class="{'fade-out': isLoggedIn}" v-if="!isLoggedIn || loggingIn">
+  <div class="login-bg-decor">
+    <div class="login-bg-grid"></div>
+    <div class="login-orb login-orb-1"></div>
+    <div class="login-orb login-orb-2"></div>
+  </div>
+
+  <div class="m3-login-card">
+    <div class="m3-login-header">
+      <div class="m3-logo-badge">
+        <span class="m-icon">sync_alt</span>
       </div>
-      <div class="l-brand">TQ<em>Sync</em></div>
+      <div>
+        <div class="m3-login-title">TQ<span>Sync</span></div>
+        <div class="m3-login-subtitle">Telegram 与 QQ 跨群组双向消息同步</div>
+      </div>
     </div>
-    <p class="l-sub">输入管理员 API Token 以访问控制台面板</p>
-    <div class="l-field">
-      <label class="l-label">API Token</label>
-      <div class="l-input-w">
-        <svg class="l-icon" viewBox="0 0 14 14" fill="none">
-          <rect x="1.5" y="6.5" width="11" height="6" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M4.5 6.5V4.5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.2"/>
-        </svg>
+
+    <form @submit.prevent="doLogin">
+      <label class="m3-field-label">API 访问令牌 (TOKEN)</label>
+      <div class="m3-input-wrapper">
+        <span class="m-icon leading">key</span>
         <input
-          class="l-input"
-          :type="showPw?'text':'password'"
+          class="m3-text-field"
+          :type="showPw ? 'text' : 'password'"
           v-model="inputKey"
-          placeholder="tqs_xxxxxxxxxxxx"
-          @keyup.enter="doLogin"
+          placeholder="请输入管理面板 API Key"
           autocomplete="current-password"
-          spellcheck="false"
+          required
         />
-        <button class="l-eye" type="button" @click="showPw=!showPw" tabindex="-1">
-          <svg v-if="!showPw" viewBox="0 0 14 14" fill="none">
-            <path d="M1 7S3.3 3 7 3s6 4 6 4-2.3 4-6 4-6-4-6-4z" stroke="currentColor" stroke-width="1.2"/>
-            <circle cx="7" cy="7" r="1.6" stroke="currentColor" stroke-width="1.2"/>
-          </svg>
-          <svg v-else viewBox="0 0 14 14" fill="none">
-            <path d="M2 2l10 10M6 6.3A1.6 1.6 0 008.8 9M3.5 4.5C2.3 5.4 1.4 6.6 1.4 7c.4 1 2 3.6 5.6 3.9M8 10.8c2-.7 3.6-2.5 4-3.8-.4-1-1-1.9-2-2.7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
+        <button type="button" class="m3-eye-btn" @click="showPw=!showPw" :title="showPw?'隐藏':'显示'">
+          <span class="m-icon">{{ showPw ? 'visibility_off' : 'visibility' }}</span>
         </button>
       </div>
-      <div class="l-err" v-if="loginErr">
-        <svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v3M6 8.5v.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        {{ loginErr }}
+
+      <div class="m3-err-banner" v-if="loginErr">
+        <span class="m-icon">error</span>
+        <span>{{ loginErr }}</span>
       </div>
-    </div>
-    <button class="l-btn" @click="doLogin" :disabled="loginLoading">
-      <div class="l-spinner" v-if="loginLoading"></div>
-      <template v-else>
-        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5h9M8 3l3.5 3.5L8 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        进入控制台
-      </template>
-    </button>
-    <div class="l-footer">
-      <span class="l-ftext">TQSync Admin Console</span>
-      <div class="l-badge"><div class="bdot"></div><span>服务在线</span></div>
+
+      <button type="submit" class="m3-filled-btn" :disabled="loginLoading">
+        <span class="m-icon" v-if="!loginLoading">login</span>
+        <span class="m-icon" style="animation: spin 0.8s linear infinite" v-else>progress_activity</span>
+        <span>{{ loginLoading ? '正在验证身份…' : '进入控制台' }}</span>
+      </button>
+    </form>
+
+    <div class="m3-login-footer">
+      <div class="m3-chip m3-chip-tonal">
+        <span class="m3-pulse-dot"></span>
+        <span>服务已就绪</span>
+      </div>
+      <div class="m3-chip m3-chip-tonal">
+        <span>Material 3</span>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════ APP ═══════════ -->
-<div class="app-wrapper" v-if="isLoggedIn">
-  <div class="mask" :class="{show:mobileOpen}" @click="mobileOpen=false"></div>
+<!-- ══════════════════════════════════════════════════════════════
+     M3 APP SHELL
+     ══════════════════════════════════════════════════════════════ -->
+<div class="app-shell" v-if="isLoggedIn">
 
-  <div class="sidebar" :class="{open:mobileOpen}">
-    <div class="s-logo">
-      <div class="s-mark">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3v10M3 5l2-2M11 5l2-2M3 11l2 2M11 11l2 2" stroke="#0D1117" stroke-width="1.5" stroke-linecap="round"/></svg>
+  <!-- Mobile Scrim -->
+  <div class="drawer-scrim" :class="{open: mobileOpen}" @click="mobileOpen=false"></div>
+
+  <!-- M3 Navigation Drawer -->
+  <div class="m3-drawer" :class="{open: mobileOpen}">
+    <div class="m3-drawer-header">
+      <div class="m3-drawer-logo">
+        <span class="m-icon">sync_alt</span>
       </div>
-      <div class="s-texts">
-        <div class="s-name">TQSync</div>
-        <div class="s-ver">版本 {{ status.version || '—' }}</div>
+      <div>
+        <div class="m3-drawer-brand">TQSync</div>
+        <div class="m3-drawer-ver">{{ status.version ? 'v' + status.version : '控制台' }}</div>
       </div>
     </div>
-    <div class="s-nav">
-      <div class="s-nlabel">控制台</div>
-      <el-menu :default-active="activeTab" @select="handleMenu">
-        <el-menu-item index="dash"><el-icon><Odometer/></el-icon><span>仪表盘</span></el-menu-item>
-        <el-menu-item index="logs"><el-icon><Document/></el-icon><span>运行日志</span></el-menu-item>
-        <el-menu-item index="binds"><el-icon><User/></el-icon><span>用户绑定</span></el-menu-item>
-        <el-menu-item index="plugins"><el-icon><Grid/></el-icon><span>插件管理</span></el-menu-item>
-        <el-menu-item index="config"><el-icon><Setting/></el-icon><span>配置管理</span></el-menu-item>
-        <el-menu-item index="admins"><el-icon><Key/></el-icon><span>管理员管理</span></el-menu-item>
-      </el-menu>
+
+    <div class="m3-nav-group">
+      <div class="m3-nav-label">控制中心</div>
+      <div class="m3-nav-item" :class="{active: activeTab==='dash'}" @click="handleMenu('dash')">
+        <span class="m-icon">dashboard</span>
+        <span>系统概览</span>
+      </div>
+      <div class="m3-nav-item" :class="{active: activeTab==='logs'}" @click="handleMenu('logs')">
+        <span class="m-icon">terminal</span>
+        <span>实时日志</span>
+      </div>
+      <div class="m3-nav-item" :class="{active: activeTab==='binds'}" @click="handleMenu('binds')">
+        <span class="m-icon">group</span>
+        <span>用户绑定</span>
+      </div>
+      <div class="m3-nav-item" :class="{active: activeTab==='plugins'}" @click="handleMenu('plugins')">
+        <span class="m-icon">extension</span>
+        <span>插件管理</span>
+      </div>
+      <div class="m3-nav-item" :class="{active: activeTab==='config'}" @click="handleMenu('config')">
+        <span class="m-icon">tune</span>
+        <span>系统配置</span>
+      </div>
+      <div class="m3-nav-item" :class="{active: activeTab==='admins'}" @click="handleMenu('admins')">
+        <span class="m-icon">admin_panel_settings</span>
+        <span>管理员列表</span>
+      </div>
     </div>
-    <div class="s-bottom">
-      <div class="user-panel">
-        <div class="u-info">
-          <div class="u-avatar">A</div>
+
+    <div class="m3-drawer-footer">
+      <div class="m3-user-card">
+        <div class="m3-user-info">
+          <div class="m3-user-avatar">A</div>
           <div>
-            <div class="u-name">Admin</div>
-            <div class="u-role">管理员</div>
+            <div class="m3-user-name">Admin</div>
+            <div class="m3-user-role">系统管理员</div>
           </div>
         </div>
-        <button class="u-logout" @click="doLogout" title="退出登录">
-          <svg viewBox="0 0 14 14" fill="none"><path d="M9 10l3-3-3-3M12 7H5M5 3H3a1 1 0 00-1 1v6a1 1 0 001 1h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <button class="m3-icon-btn" @click="doLogout" title="退出登录">
+          <span class="m-icon">logout</span>
         </button>
       </div>
     </div>
   </div>
 
-  <div class="main-container">
-    <div class="topbar">
-      <div class="tb-left">
-        <button class="ham" @click="mobileOpen=!mobileOpen" id="menu-btn" style="display:none">
-          <svg viewBox="0 0 17 17" fill="none"><line x1="2" y1="4.5" x2="15" y2="4.5" stroke-width="1.4" stroke-linecap="round"/><line x1="2" y1="8.5" x2="15" y2="8.5" stroke-width="1.4" stroke-linecap="round"/><line x1="2" y1="12.5" x2="15" y2="12.5" stroke-width="1.4" stroke-linecap="round"/></svg>
+  <!-- Main Container -->
+  <div class="main-wrapper">
+    <!-- Top App Bar -->
+    <div class="m3-top-app-bar">
+      <div class="m3-app-bar-left">
+        <button class="m3-icon-btn" @click="mobileOpen=!mobileOpen" id="menu-btn" style="display:none">
+          <span class="m-icon">menu</span>
         </button>
-        <span class="breadcrumb">tqsync /</span>
-        <span class="page-title">{{ pageTitle }}</span>
+        <span class="m3-breadcrumb">TQSync /</span>
+        <span class="m3-page-title">{{ pageTitle }}</span>
       </div>
-      <div class="tb-right">
-        <div class="uptime-badge">
-          <div class="up-dot"></div>
-          <span>{{ status.uptime || '—' }}</span>
+      <div class="m3-app-bar-right">
+        <div class="m3-uptime-chip">
+          <span class="m3-pulse-dot"></span>
+          <span>{{ status.uptime || '运行中' }}</span>
         </div>
-        <el-button class="restart-btn" size="small" plain @click="doRestart">↺ 重启</el-button>
+        <button class="m3-icon-btn" @click="openChangePasswordDialog" title="修改管理密码">
+          <span class="m-icon">password</span>
+        </button>
+        <button class="m3-icon-btn" @click="toggleTheme" :title="theme==='dark'?'切换至亮色模式':'切换至深色模式'">
+          <span class="m-icon">{{ theme==='dark' ? 'light_mode' : 'dark_mode' }}</span>
+        </button>
+        <button class="m3-outlined-btn" @click="doRestart">
+          <span class="m-icon">restart_alt</span>
+          <span>重启服务</span>
+        </button>
       </div>
     </div>
 
-    <div class="content">
+    <!-- Scrollable Content Area -->
+    <div class="content-scroll">
+
+      <!-- 初始密码安全警示条 -->
+      <div class="m3-security-banner" v-if="status.is_initial_token">
+        <div class="m3-security-banner-text">
+          <span class="m-icon">warning</span>
+          <span>当前正使用系统生成的初始密码登录，存在安全隐患，请尽快修改。</span>
+        </div>
+        <button class="m3-btn-small m3-btn-primary" @click="openChangePasswordDialog">立即修改</button>
+      </div>
 
       <!-- ═══════════ DASHBOARD ═══════════ -->
-      <div v-if="activeTab==='dash'" class="page-in">
-        <div class="sec-hd">
-          <div class="sec-title">
-            <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="2" fill="currentColor"/><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width=".9"/></svg>
-            系统概览
-          </div>
-          <div class="sec-line"></div>
-        </div>
-        <div class="stat-grid">
-          <div class="stat-card cg">
-            <div class="s-top">
-              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 5v2.8l1.8 1.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></div>
-              <span class="s-badge">在线</span>
+      <div v-if="activeTab==='dash'">
+        <!-- 4 Stat Metric Cards -->
+        <div class="stat-grid-m3">
+          <div class="stat-card-m3">
+            <div class="stat-card-top">
+              <div class="stat-icon-circle c-primary">
+                <span class="m-icon">schedule</span>
+              </div>
+              <span class="m3-chip m3-chip-tonal">运行状态</span>
             </div>
-            <div class="s-lbl">运行时长</div>
-            <div class="s-val">{{ status.uptime || '—' }}</div>
+            <div class="stat-label">连续运行时间</div>
+            <div class="stat-value">{{ status.uptime || '—' }}</div>
           </div>
-          <div class="stat-card cb">
-            <div class="s-top">
-              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><rect x="1.5" y="3" width="12" height="9" rx="1.8" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 7.5h6M4.5 5.5h3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+
+          <div class="stat-card-m3">
+            <div class="stat-card-top">
+              <div class="stat-icon-circle c-secondary">
+                <span class="m-icon">memory</span>
+              </div>
+              <span class="m3-chip m3-chip-tonal">CPU 占用</span>
             </div>
-            <div class="s-lbl">CPU 负载</div>
-            <div class="s-val">{{ status.cpu_usage || '0%' }}</div>
+            <div class="stat-label">处理器负载</div>
+            <div class="stat-value">{{ status.cpu_usage || '0%' }}</div>
           </div>
-          <div class="stat-card co">
-            <div class="s-top">
-              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><ellipse cx="7.5" cy="7.5" rx="5.5" ry="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 4.5v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="7.5" cy="10" r=".8" fill="currentColor"/></svg></div>
+
+          <div class="stat-card-m3">
+            <div class="stat-card-top">
+              <div class="stat-icon-circle c-warning">
+                <span class="m-icon">analytics</span>
+              </div>
+              <span class="m3-chip m3-chip-tonal">RAM 内存</span>
             </div>
-            <div class="s-lbl">内存占用</div>
-            <div class="s-val">{{ status.memory_usage || '—' }}</div>
+            <div class="stat-label">内存占用率</div>
+            <div class="stat-value">{{ status.memory_usage || '—' }}</div>
           </div>
-          <div class="stat-card cp">
-            <div class="s-top">
-              <div class="s-icon"><svg viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5h2.5l2-4 2 8 2-4h1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+          <div class="stat-card-m3">
+            <div class="stat-card-top">
+              <div class="stat-icon-circle c-tertiary">
+                <span class="m-icon">swap_calls</span>
+              </div>
+              <span class="m3-chip m3-chip-tonal">消息总计</span>
             </div>
-            <div class="s-lbl">已同步消息</div>
-            <div class="s-val">{{ status.sync_count || 0 }}</div>
+            <div class="stat-label">双向同步条数</div>
+            <div class="stat-value">{{ status.sync_count || 0 }}</div>
           </div>
         </div>
 
-        <div class="spark-card">
-          <div class="spark-hd">
+        <!-- 24-Hour Activity Histogram Card -->
+        <div class="m3-card activity-card-m3">
+          <div class="activity-header">
             <div>
-              <div class="spark-lbl">消息同步活动</div>
-              <div class="spark-num">{{ totalToday }} 条 / 24h</div>
+              <div class="activity-title">同步动态 (最近 24 小时)</div>
+              <div class="activity-stat">{{ totalToday }} 条消息</div>
             </div>
-            <div class="spark-meta">最近 24 小时整点分布</div>
+            <div class="activity-subtitle">整点数据分布直方图</div>
           </div>
-          <div class="bars">
-            <div class="bar" v-for="(h,i) in syncHistory" :key="i"
-              :class="{'peak':h.count===maxSync,'b-zero':h.count===0}"
-              :style="{height:barHeight(h.count)+'%'}"
-              :title="h.label+'  '+(h.count)+' 条'"></div>
+          <div class="bars-container">
+            <div class="bar-col" v-for="(h,i) in syncHistory" :key="i">
+              <div
+                class="m3-bar"
+                :class="{'peak': h.count === maxSync && h.count > 0}"
+                :style="{height: barHeight(h.count)+'%'}"
+                :title="h.label + ': ' + h.count + ' 条'"
+              ></div>
+            </div>
           </div>
-          <div class="bar-tick">
-            <span class="tick-lbl">{{ firstTick }}</span>
-            <span class="tick-lbl">{{ midTick }}</span>
-            <span class="tick-lbl">{{ lastTick }}</span>
+          <div class="bar-ticks">
+            <span>{{ firstTick }}</span>
+            <span>{{ midTick }}</span>
+            <span>{{ lastTick }}</span>
           </div>
-          <div class="spark-empty" v-if="syncHistory.length===0">暂无统计数据</div>
         </div>
 
-        <div class="info-grid">
-          <div class="info-card">
-            <div class="ic-hd">
-              <svg viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M3.5 6h5M3.5 4h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-              <span class="ic-title">基础信息</span>
+        <!-- 3 Info Detail Cards -->
+        <div class="info-grid-m3">
+          <div class="info-card-m3">
+            <div class="info-card-title">
+              <span class="m-icon">info</span>
+              <span>系统运行信息</span>
             </div>
-            <div class="ic-row"><span class="ic-key">版本</span><span class="ic-val">{{ status.version||'—' }}</span></div>
-            <div class="ic-row"><span class="ic-key">绑定用户数</span><span class="ic-val">{{ status.bound_users??'—' }}</span></div>
-            <div class="ic-row"><span class="ic-key">QQ 群 ID</span><span class="ic-val">{{ status.qq_group_id||'—' }}</span></div>
-            <div class="ic-row"><span class="ic-key">Telegram 群</span><span class="ic-val">{{ status.tg_group_id||'—' }}</span></div>
+            <div class="info-row"><span class="info-k">程序版本</span><span class="info-v">{{ status.version || '—' }}</span></div>
+            <div class="info-row"><span class="info-k">绑定用户数</span><span class="info-v">{{ status.bound_users ?? '—' }}</span></div>
+            <div class="info-row"><span class="info-k">目标 QQ 群</span><span class="info-v">{{ status.qq_group_id || '—' }}</span></div>
+            <div class="info-row"><span class="info-k">目标 TG 群</span><span class="info-v">{{ status.tg_group_id || '—' }}</span></div>
           </div>
-          <div class="info-card">
-            <div class="ic-hd">
-              <svg viewBox="0 0 12 12" fill="none"><ellipse cx="6" cy="8" rx="4.5" ry="2.8" stroke="currentColor" stroke-width="1.1"/><ellipse cx="6" cy="5.5" rx="4.5" ry="2.8" stroke="currentColor" stroke-width="1.1"/></svg>
-              <span class="ic-title">存储监控</span>
+
+          <div class="info-card-m3">
+            <div class="info-card-title">
+              <span class="m-icon">database</span>
+              <span>数据存储状态</span>
             </div>
-            <div class="ic-row"><span class="ic-key">数据库大小</span><span class="ic-val">{{ status.db_size||'—' }}</span></div>
-            <div class="ic-row"><span class="ic-key">磁盘使用率</span><span class="ic-val">{{ status.disk_usage||'—' }}</span></div>
+            <div class="info-row"><span class="info-k">SQLite 数据库大小</span><span class="info-v">{{ status.db_size || '—' }}</span></div>
+            <div class="info-row"><span class="info-k">宿主机磁盘使用</span><span class="info-v">{{ status.disk_usage || '—' }}</span></div>
           </div>
-          <div class="info-card">
-            <div class="ic-hd">
-              <svg viewBox="0 0 12 12" fill="none"><path d="M3.5 6.5l2 2 3-3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/></svg>
-              <span class="ic-title">插件状态</span>
+
+          <div class="info-card-m3">
+            <div class="info-card-title">
+              <span class="m-icon">extension</span>
+              <span>扩展插件统计</span>
             </div>
-            <div class="ic-row"><span class="ic-key">插件总数</span><span class="ic-val">{{ pluginStats.total }}</span></div>
-            <div class="ic-row"><span class="ic-key">已加载</span><span class="ic-val">{{ pluginStats.loaded }}</span></div>
-            <div class="ic-row"><span class="ic-key">已启用</span><span class="ic-val">{{ pluginStats.enabled }}</span></div>
+            <div class="info-row"><span class="info-k">安装插件总数</span><span class="info-v">{{ pluginStats.total }}</span></div>
+            <div class="info-row"><span class="info-k">已就绪加载</span><span class="info-v">{{ pluginStats.loaded }}</span></div>
+            <div class="info-row"><span class="info-k">生效启用中</span><span class="info-v" style="color:var(--md-sys-color-success)">{{ pluginStats.enabled }}</span></div>
           </div>
         </div>
       </div>
 
-      <!-- ═══════════ LOGS ═══════════ -->
-      <div v-if="activeTab==='logs'" class="page-in">
-        <div class="log-wrap">
-          <div class="log-tb">
-            <div class="traffic"><div class="td r"></div><div class="td y"></div><div class="td g"></div></div>
-            <input class="log-filter" v-model="logFilter" placeholder="过滤日志…" spellcheck="false"/>
-            <span class="l-cnt">{{ filteredLogs.length }} 条</span>
-          </div>
-          <div class="log-body" ref="logBodyRef">
-            <div v-for="(l,i) in filteredLogs" :key="i" class="log-line" :class="getLogCls(l)">
-              <span class="log-i">{{ i+1 }}</span>
-              <span class="log-t">{{ l }}</span>
+      <!-- ═══════════ LOGS VIEW ═══════════ -->
+      <div v-if="activeTab==='logs'">
+        <div class="logs-card-m3">
+          <div class="logs-toolbar">
+            <div class="logs-search-wrapper">
+              <span class="m-icon">search</span>
+              <input class="logs-search-input" v-model="logFilter" placeholder="搜索过滤日志内容…" spellcheck="false"/>
             </div>
-            <div class="log-empty" v-if="filteredLogs.length===0">
-              {{ logFilter ? '没有匹配的日志' : '暂无日志数据' }}
+            <div class="m3-chip m3-chip-tonal">
+              <span>共计 {{ filteredLogs.length }} 行日志</span>
+            </div>
+          </div>
+          <div class="logs-body" ref="logBodyRef">
+            <div v-for="(l,i) in filteredLogs" :key="i" class="log-row">
+              <span class="log-num">{{ i+1 }}</span>
+              <span class="log-text" :class="getLogCls(l)">{{ l }}</span>
+            </div>
+            <div v-if="filteredLogs.length===0" style="text-align:center;padding:40px;color:var(--md-sys-color-outline)">
+              {{ logFilter ? '未找到符合条件的日志记录' : '暂无日志输出' }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ═══════════ BINDINGS ═══════════ -->
-      <div v-if="activeTab==='binds'" class="page-in tbl-wrap">
-        <div class="sec-hd">
-          <div class="sec-title">
-            <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="3.5" r="2.2" stroke="currentColor" stroke-width=".9"/><path d="M1 10c0-2.2 2-3.8 4.5-3.8S10 7.8 10 10" stroke="currentColor" stroke-width=".9" stroke-linecap="round"/></svg>
-            用户列表
+      <!-- ═══════════ BINDINGS VIEW ═══════════ -->
+      <div v-if="activeTab==='binds'">
+        <div class="m3-table-card">
+          <div class="m3-section-header">
+            <div class="m3-section-title">
+              <span class="m-icon">group</span>
+              <span>账号绑定列表</span>
+            </div>
+            <div class="m3-chip m3-chip-tonal">
+              <span>已绑定 {{ bindings.filter(b=>b.status==='已绑定').length }} / 共 {{ bindings.length }} 人</span>
+            </div>
           </div>
-          <div class="sec-line"></div>
-          <span class="cnt-pill" style="margin-left:12px">{{ bindings.length }} 条记录 &middot; 已绑定 {{ bindings.filter(b=>b.status==='已绑定').length }} 人</span>
-        </div>
-        <el-table :data="bindings" style="width:100%">
-          <el-table-column label="状态" width="90" align="center">
-            <template #default="scope">
-              <span class="btag" :class="scope.row.status==='已绑定'?'bgood':'bgray'">{{ scope.row.status }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="tg_user_id" label="Telegram ID">
-            <template #default="scope">
-              <span class="mono-id" v-if="scope.row.tg_user_id">{{ scope.row.tg_user_id }}</span>
-              <span style="color:var(--dim);font-size:11px" v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="TG 用户名">
-            <template #default="scope">
-              <span class="mono-id" v-if="scope.row.tg_username">@{{ scope.row.tg_username }}</span>
-              <span style="color:var(--dim);font-size:11px" v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="QQ 号码">
-            <template #default="scope">
-              <span class="mono-id">{{ scope.row.qq_user_id }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="QQ 昵称">
-            <template #default="scope">
-              <span class="mono-id" v-if="scope.row.qq_nickname">{{ scope.row.qq_nickname }}</span>
-              <span style="color:var(--dim);font-size:11px" v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" align="center">
-            <template #default="scope">
-              <el-popconfirm v-if="scope.row.status==='已绑定'" title="确认解除此绑定？" @confirm="unbind(scope.row.tg_user_id)">
-                <template #reference>
-                  <el-button size="small" type="danger" icon="Delete" circle></el-button>
-                </template>
-              </el-popconfirm>
-              <span v-else style="color:var(--dim);font-size:11px">—</span>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="tbl-empty" v-if="bindings.length===0">
-          <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><circle cx="8.5" cy="5.5" r="3" stroke="currentColor" stroke-width="1.1"/><path d="M2 15.5c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></div>
-          暂无用户数据
-        </div>
-      </div>
 
-      <!-- ═══════════ PLUGINS ═══════════ -->
-      <div v-if="activeTab==='plugins'" class="page-in tbl-wrap">
-        <div class="sec-hd">
-          <div class="sec-title">
-            <svg viewBox="0 0 11 11" fill="none"><rect x="1.5" y="4.5" width="8" height="5" rx="1.3" stroke="currentColor" stroke-width=".9"/><path d="M4 4.5v-1.2a1.5 1.5 0 013 0v1.2M4 6.5h.1M6.5 6.5h.1M4 8.2h.1M6.5 8.2h.1" stroke="currentColor" stroke-width=".9" stroke-linecap="round"/></svg>
-            插件管理
-          </div>
-          <div class="sec-line"></div>
-          <div class="sec-side">
-            <span class="cnt-pill">共 {{ plugins.length }} 个 &middot; 已加载 {{ loadedCount }} &middot; 已启用 {{ enabledCount }}</span>
-            <el-button size="small" type="primary" @click="triggerUpload">上传插件</el-button>
-            <input ref="uploadInputRef" type="file" accept=".py" style="display:none" @change="onUpload"/>
-          </div>
-        </div>
-        <el-table :data="plugins" style="width:100%" v-loading="pluginsLoading">
-          <el-table-column label="插件名" min-width="130">
-            <template #default="scope">
-              <span class="mono-id" style="color:var(--text)">{{ scope.row.name }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="version" label="版本" width="80">
-            <template #default="scope">
-              <span class="mono-id" v-if="scope.row.version">{{ scope.row.version }}</span>
-              <span style="color:var(--dim)" v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="150">
-            <template #default="scope">
-              <span v-if="scope.row.description" style="color:var(--muted);font-size:12px">{{ scope.row.description }}</span>
-              <span v-else style="color:var(--dim);font-size:11px">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="author" label="作者" width="100">
-            <template #default="scope">
-              <span v-if="scope.row.author" style="color:var(--muted);font-size:12px">{{ scope.row.author }}</span>
-              <span v-else style="color:var(--dim);font-size:11px">—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="启用状态" width="90" align="center">
-            <template #default="scope">
-              <span class="btag" :class="scope.row.enabled?'bgood':'bgray'">{{ scope.row.enabled?'已启用':'已禁用' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="加载" width="80" align="center">
-            <template #default="scope">
-              <span class="btag" :class="scope.row.loaded?'bblue':'bgray'">{{ scope.row.loaded?'已加载':'未加载' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="加载耗时" width="90">
-            <template #default="scope">
-              <span class="mono-id" v-if="scope.row.load_time_ms!=null">{{ scope.row.load_time_ms }} ms</span>
-              <span style="color:var(--dim);font-size:11px" v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="错误" min-width="110">
-            <template #default="scope">
-              <span class="cell-err" v-if="scope.row.error" :title="scope.row.error">{{ scope.row.error }}</span>
-              <span style="color:var(--dim);font-size:11px" v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="230" align="center">
-            <template #default="scope">
-              <div style="display:flex;gap:4px;justify-content:center">
-                <el-button size="small" :type="scope.row.enabled?'warning':'success'" @click="togglePlugin(scope.row)" :loading="busyName===scope.row.name" :disabled="busyName!=='' && busyName!==scope.row.name">
-                  {{ scope.row.enabled?'禁用':'启用' }}
-                </el-button>
-                <el-button size="small" @click="reloadPlugin(scope.row)" :disabled="busyName!==''">重载</el-button>
-                <el-button size="small" @click="openDrawer(scope.row)">数据</el-button>
-                <el-popconfirm title="确认删除此插件？" @confirm="deletePlugin(scope.row)">
+          <el-table :data="bindings" style="width:100%">
+            <el-table-column label="状态" width="110" align="center">
+              <template #default="scope">
+                <span class="m3-chip" :style="scope.row.status==='已绑定'?{background:'var(--md-sys-color-success-container)',color:'var(--md-sys-color-on-success-container)'}:{background:'var(--md-sys-color-surface-container-highest)',color:'var(--md-sys-color-outline)'}">
+                  {{ scope.row.status }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="tg_user_id" label="Telegram ID">
+              <template #default="scope">
+                <span class="mono-cell">{{ scope.row.tg_user_id || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="TG 用户名">
+              <template #default="scope">
+                <span class="mono-cell" v-if="scope.row.tg_username">@{{ scope.row.tg_username }}</span>
+                <span style="color:var(--md-sys-color-outline)" v-else>—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="QQ 号码">
+              <template #default="scope">
+                <span class="mono-cell">{{ scope.row.qq_user_id || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="QQ 昵称">
+              <template #default="scope">
+                <span class="mono-cell">{{ scope.row.qq_nickname || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="100" align="center">
+              <template #default="scope">
+                <el-popconfirm v-if="scope.row.status==='已绑定'" title="确认解除此账号绑定关系？" @confirm="unbind(scope.row.tg_user_id)">
                   <template #reference>
-                    <el-button size="small" type="danger" icon="Delete" circle></el-button>
+                    <button class="m3-icon-btn" style="color:var(--md-sys-color-error)" title="解除绑定">
+                      <span class="m-icon">link_off</span>
+                    </button>
                   </template>
                 </el-popconfirm>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="tbl-empty" v-if="!pluginsLoading && plugins.length===0">
-          <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><rect x="1.5" y="1.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.1"/><rect x="9.5" y="9.5" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.1"/><path d="M8 4.5h3v3M4.5 8v3h3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          暂无插件，点击右上角「上传插件」添加
+                <span v-else style="color:var(--md-sys-color-outline)">—</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+
+      <!-- ═══════════ PLUGINS VIEW ═══════════ -->
+      <div v-if="activeTab==='plugins'">
+        <div class="m3-table-card">
+          <div class="m3-toolbar">
+            <div class="m3-section-title">
+              <span class="m-icon">extension</span>
+              <span>插件管理中心</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="m3-chip m3-chip-tonal">已启用 {{ enabledCount }} / 共有 {{ plugins.length }} 个</span>
+              <button class="m3-btn-small m3-btn-primary" @click="triggerUpload">
+                <span class="m-icon">upload_file</span>
+                <span>上传 Python 插件</span>
+              </button>
+              <input ref="uploadInputRef" type="file" accept=".py" style="display:none" @change="onUpload"/>
+            </div>
+          </div>
+
+          <el-table :data="plugins" style="width:100%" v-loading="pluginsLoading">
+            <el-table-column label="插件名称" min-width="140">
+              <template #default="scope">
+                <span class="mono-cell" style="font-weight:600">{{ scope.row.name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="version" label="版本" width="90">
+              <template #default="scope">
+                <span class="mono-cell">{{ scope.row.version || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="description" label="说明描述" min-width="180">
+              <template #default="scope">
+                <span>{{ scope.row.description || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="运行状态" width="100" align="center">
+              <template #default="scope">
+                <span class="m3-chip" :style="scope.row.enabled?{background:'var(--md-sys-color-primary-container)',color:'var(--md-sys-color-on-primary-container)'}:{background:'var(--md-sys-color-surface-container-highest)',color:'var(--md-sys-color-outline)'}">
+                  {{ scope.row.enabled ? '已启用' : '已禁用' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="加载耗时" width="100">
+              <template #default="scope">
+                <span class="mono-cell" v-if="scope.row.load_time_ms!=null">{{ scope.row.load_time_ms }}ms</span>
+                <span v-else>—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="220" align="center">
+              <template #default="scope">
+                <div style="display:flex;gap:6px;justify-content:center">
+                  <button
+                    class="m3-btn-small"
+                    :class="scope.row.enabled?'m3-btn-tonal':'m3-btn-primary'"
+                    style="height:30px;padding:0 12px;font-size:12px"
+                    @click="togglePlugin(scope.row)"
+                    :disabled="busyName!==''"
+                  >
+                    {{ scope.row.enabled ? '禁用' : '启用' }}
+                  </button>
+                  <button class="m3-btn-small m3-btn-tonal" style="height:30px;padding:0 10px;font-size:12px" @click="reloadPlugin(scope.row)">
+                    重载
+                  </button>
+                  <button class="m3-btn-small m3-btn-tonal" style="height:30px;padding:0 10px;font-size:12px" @click="openDrawer(scope.row)">
+                    数据
+                  </button>
+                  <el-popconfirm title="确认删除此插件文件？" @confirm="deletePlugin(scope.row)">
+                    <template #reference>
+                      <button class="m3-icon-btn" style="width:30px;height:30px;color:var(--md-sys-color-error)" title="删除插件">
+                        <span class="m-icon" style="font-size:18px">delete</span>
+                      </button>
+                    </template>
+                  </el-popconfirm>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
 
-        <!-- 插件数据 KV 抽屉 -->
-        <el-drawer v-model="drawerOpen" size="440px" :with-header="false" class="drawer-dark">
-          <div class="drawer-hd">
-            <div class="drawer-title">
-              插件数据
-              <span class="d-name">{{ drawerPlugin }}</span>
+        <!-- M3 Plugin KV Data Drawer -->
+        <el-drawer v-model="drawerOpen" size="460px" :with-header="false">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--md-sys-color-outline-variant)">
+            <div>
+              <div style="font-size:18px;font-weight:600;color:var(--md-sys-color-on-surface)">插件数据仓库</div>
+              <div style="font-size:12px;font-family:var(--font-mono);color:var(--md-sys-color-primary)">{{ drawerPlugin }}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="drawer-count">{{ drawerKvCount }} 项</span>
-              <el-button size="small" icon="Refresh" @click="loadKvData" circle></el-button>
+            <button class="m3-icon-btn" @click="loadKvData" title="刷新数据">
+              <span class="m-icon">refresh</span>
+            </button>
+          </div>
+
+          <!-- Add KV -->
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <input class="m3-cfg-input" v-model="kvNewKey" placeholder="key (键)" style="flex:1"/>
+            <input class="m3-cfg-input" v-model="kvNewVal" placeholder="value (值)" style="flex:1" @keyup.enter="saveNewKv"/>
+            <button class="m3-btn-small m3-btn-primary" @click="saveNewKv" :disabled="!kvNewKey.trim()">保存</button>
+          </div>
+
+          <!-- KV List -->
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div v-for="(kv,i) in drawerKvList" :key="i" style="background:var(--md-sys-color-surface-container);border:1px solid var(--md-sys-color-outline-variant);border-radius:var(--md-shape-corner-md);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <template v-if="kv.editing">
+                <input class="m3-cfg-input" v-model="kv.editVal" style="flex:1" @keyup.enter="saveKvEdit(kv)"/>
+                <div style="display:flex;gap:4px">
+                  <button class="m3-icon-btn" @click="saveKvEdit(kv)"><span class="m-icon">check</span></button>
+                  <button class="m3-icon-btn" @click="cancelKvEdit(kv)"><span class="m-icon">close</span></button>
+                </div>
+              </template>
+              <template v-else>
+                <div style="overflow:hidden">
+                  <div style="font-size:12px;font-family:var(--font-mono);font-weight:600;color:var(--md-sys-color-primary)">{{ kv.key }}</div>
+                  <div style="font-size:12px;font-family:var(--font-mono);color:var(--md-sys-color-on-surface-variant);word-break:break-all">{{ kv.value !== '' ? kv.value : '(空)' }}</div>
+                </div>
+                <div style="display:flex;gap:4px">
+                  <button class="m3-icon-btn" @click="startKvEdit(kv)" title="编辑"><span class="m-icon" style="font-size:18px">edit</span></button>
+                  <el-popconfirm title="确认删除此项？" @confirm="deleteKv(kv.key)">
+                    <template #reference>
+                      <button class="m3-icon-btn" style="color:var(--md-sys-color-error)"><span class="m-icon" style="font-size:18px">delete</span></button>
+                    </template>
+                  </el-popconfirm>
+                </div>
+              </template>
             </div>
-          </div>
-          <div class="kv-add">
-            <el-input v-model="kvNewKey" placeholder="key" clearable></el-input>
-            <el-input v-model="kvNewVal" placeholder="value" clearable @keyup.enter="saveNewKv"></el-input>
-            <el-button type="primary" size="default" @click="saveNewKv" :disabled="!kvNewKey.trim()">保存</el-button>
-          </div>
-          <div v-for="(kv,i) in drawerKvList" :key="i" class="kv-row">
-            <template v-if="kv.editing">
-              <el-input class="kv-edit-input" v-model="kv.editVal" @keyup.enter="saveKvEdit(kv)"></el-input>
-              <div class="kv-actions">
-                <el-button size="small" type="primary" icon="Check" circle @click="saveKvEdit(kv)"></el-button>
-                <el-button size="small" icon="Close" circle @click="cancelKvEdit(kv)"></el-button>
-              </div>
-            </template>
-            <template v-else>
-              <span class="kv-key" :title="kv.key">{{ kv.key }}</span>
-              <span class="kv-val" :class="{editable:kv.value}" :title="kv.value">{{ kv.value!==''?kv.value:'(空)' }}</span>
-              <div class="kv-actions">
-                <el-button size="small" icon="Edit" circle class="kv-icon-btn" @click="startKvEdit(kv)"></el-button>
-                <el-popconfirm title="确认删除此键？" @confirm="deleteKv(kv.key)">
-                  <template #reference>
-                    <el-button size="small" type="danger" icon="Delete" circle></el-button>
-                  </template>
-                </el-popconfirm>
-              </div>
-            </template>
-          </div>
-          <div class="tbl-empty" v-if="drawerKvList.length===0">
-            <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><rect x="2" y="2.5" width="13" height="12" rx="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M5.5 6.5h6M5.5 9.5h6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></div>
-            暂无数据，可添加键值对
-          </div>
-          <div class="drawer-foot">
-            <el-button size="small" @click="drawerOpen=false">关闭</el-button>
+            <div v-if="drawerKvList.length===0" style="text-align:center;padding:30px;color:var(--md-sys-color-outline);font-size:13px">
+              暂无存储数据
+            </div>
           </div>
         </el-drawer>
       </div>
 
-      <!-- ═══════════ CONFIG ═══════════ -->
-      <div v-if="activeTab==='config'" class="page-in">
-        <div class="sec-hd">
-          <div class="sec-title">
-            <svg viewBox="0 0 11 11" fill="none"><circle cx="5.5" cy="5.5" r="1.3" fill="currentColor"/><circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" stroke-width=".9"/></svg>
-            配置管理
+      <!-- ═══════════ CONFIG VIEW ═══════════ -->
+      <div v-if="activeTab==='config'">
+        <div class="m3-toolbar">
+          <div class="m3-section-title">
+            <span class="m-icon">tune</span>
+            <span>系统设置与控制</span>
           </div>
-          <div class="sec-line"></div>
-          <div class="sec-side">
-            <el-button :type="configSubTab==='config'?'primary':'default'" size="small" @click="configSubTab='config'" round>配置文件</el-button>
-            <el-button :type="configSubTab==='syncDirection'?'primary':'default'" size="small" @click="configSubTab='syncDirection';fetchSyncDirection()" round>同步方向</el-button>
-            <el-button :type="configSubTab==='blockedWords'?'primary':'default'" size="small" @click="configSubTab='blockedWords';fetchBlockedWords()" round>屏蔽词管理</el-button>
+          <div class="m3-segmented-group">
+            <button class="m3-segment-btn" :class="{active: configSubTab==='config'}" @click="configSubTab='config'">配置文件</button>
+            <button class="m3-segment-btn" :class="{active: configSubTab==='syncDirection'}" @click="configSubTab='syncDirection';fetchSyncDirection()">同步方向</button>
+            <button class="m3-segment-btn" :class="{active: configSubTab==='blockedWords'}" @click="configSubTab='blockedWords';fetchBlockedWords()">屏蔽词库</button>
           </div>
         </div>
 
-        <!-- 配置文件 -->
+        <!-- 1. Config Key-Value Editor -->
         <div v-if="configSubTab==='config'">
-        <div class="cfg-wrap" v-for="(items, section) in configSections" :key="section" style="margin-bottom:14px">
-          <div class="cfg-sect-hd">
-            <svg viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M4 6h4M4 4h1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
-            <span class="cfg-sect-title">{{ section.toUpperCase() }}</span>
-          </div>
-          <div class="cfg-row" v-for="item in items" :key="item.key">
-            <div class="cfg-key">{{ item.key }}</div>
-            <div class="cfg-val-wrap">
-              <div class="cfg-val" :class="{masked:item.masked && !item.revealed}" v-if="!item.editing">
-                {{ item.masked && !item.revealed ? '••••••••••••••••' : (item.value || '(空)') }}
+          <div class="m3-cfg-section" v-for="(items, section) in configSections" :key="section">
+            <div class="m3-cfg-header">
+              <span class="m-icon">folder_open</span>
+              <span>{{ section.toUpperCase() }} 配置段</span>
+            </div>
+            <div class="m3-cfg-row" v-for="item in items" :key="item.key">
+              <div class="m3-cfg-key">{{ item.key }}</div>
+              <div class="m3-cfg-val-box">
+                <template v-if="!item.editing">
+                  <span>{{ item.masked && !item.revealed ? '••••••••••••••••' : (item.value || '(未设置)') }}</span>
+                </template>
+                <input
+                  v-else
+                  class="m3-cfg-input"
+                  v-model="item.editValue"
+                  @keyup.enter="saveConfig(item)"
+                  @keyup.escape="cancelEdit(item)"
+                />
               </div>
-              <input
-                class="cfg-input"
-                v-else
-                v-model="item.editValue"
-                @keyup.enter="saveConfig(item)"
-                @keyup.escape="cancelEdit(item)"
-              />
-            </div>
-            <div class="cfg-actions">
-              <button v-if="item.masked && !item.editing" class="cfg-btn cfg-btn-eye" @click="item.revealed=!item.revealed" :title="item.revealed ? '隐藏' : '显示'">
-                <svg v-if="!item.revealed" viewBox="0 0 14 14" fill="none">
-                  <path d="M1 7S3.3 3 7 3s6 4 6 4-2.3 4-6 4-6-4-6-4z" stroke="currentColor" stroke-width="1.2"/>
-                  <circle cx="7" cy="7" r="1.6" stroke="currentColor" stroke-width="1.2"/>
-                </svg>
-                <svg v-else viewBox="0 0 14 14" fill="none">
-                  <path d="M2 2l10 10M6 6.3A1.6 1.6 0 008.8 9M3.5 4.5C2.3 5.4 1.4 6.6 1.4 7c.4 1 2 3.6 5.6 3.9M8 10.8c2-.7 3.6-2.5 4-3.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                </svg>
-              </button>
-              <button v-if="!item.editing" class="cfg-btn cfg-btn-edit" @click="startEdit(item)" title="编辑">
-                <svg viewBox="0 0 14 14" fill="none"><path d="M10.5 2.5l1 1-7.5 7.5-1.5.5.5-1.5 7.5-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <template v-if="item.editing">
-                <button class="cfg-btn cfg-btn-save" @click="saveConfig(item)" title="保存">
-                  <svg viewBox="0 0 14 14" fill="none"><path d="M2 7.5l3.5 3.5 6.5-6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div style="display:flex;gap:6px">
+                <button v-if="item.masked && !item.editing" class="m3-icon-btn" @click="item.revealed=!item.revealed" :title="item.revealed?'隐藏':'显示'">
+                  <span class="m-icon">{{ item.revealed ? 'visibility_off' : 'visibility' }}</span>
                 </button>
-                <button class="cfg-btn cfg-btn-cancel" @click="cancelEdit(item)" title="取消">
-                  <svg viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                <button v-if="!item.editing" class="m3-icon-btn" @click="startEdit(item)" title="编辑">
+                  <span class="m-icon">edit</span>
                 </button>
-              </template>
+                <template v-if="item.editing">
+                  <button class="m3-icon-btn" style="color:var(--md-sys-color-success)" @click="saveConfig(item)" title="保存">
+                    <span class="m-icon">check</span>
+                  </button>
+                  <button class="m3-icon-btn" @click="cancelEdit(item)" title="取消">
+                    <span class="m-icon">close</span>
+                  </button>
+                </template>
+              </div>
             </div>
-          </div>
-        </div>
-        <div class="cfg-empty" v-if="configItems.length===0">
-          <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="1.3"/><path d="M16 12v4M16 21v.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          暂无配置数据
-        </div>
-        </div>
-
-        <!-- 屏蔽词管理 -->
-        <div v-if="configSubTab==='blockedWords'" class="page-in">
-          <div class="toolbar">
-            <span class="cnt-pill">{{ blockedWords.length }} 个屏蔽词</span>
-            <input class="tool-input" v-model="newBlockedWord" placeholder="输入屏蔽词…" @keyup.enter="addBlockedWord" spellcheck="false"/>
-            <el-button type="primary" size="small" @click="addBlockedWord" :disabled="!newBlockedWord.trim()">添加</el-button>
-          </div>
-          <el-table :data="tableBlockedWords" style="width:100%" class="tbl-wrap" v-if="blockedWords.length>0">
-            <el-table-column label="# " width="50">
-              <template #default="scope">{{ scope.$index + 1 }}</template>
-            </el-table-column>
-            <el-table-column label="屏蔽词">
-              <template #default="scope">
-                <span class="mono-id" style="color:var(--red)">{{ scope.row }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="80" align="center">
-              <template #default="scope">
-                <el-popconfirm title="确认删除此屏蔽词？" @confirm="removeBlockedWord(scope.row)">
-                  <template #reference>
-                    <el-button size="small" type="danger" icon="Delete" circle></el-button>
-                  </template>
-                </el-popconfirm>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="tbl-empty" v-if="blockedWords.length===0">
-            <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><path d="M8.5 3v8M4.5 7h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></div>
-            暂无屏蔽词，输入关键词并点击添加
           </div>
         </div>
 
-        <!-- 同步方向设置 -->
-        <div v-if="configSubTab==='syncDirection'" class="page-in">
-          <div class="sec-hd" style="margin-bottom:12px">
-            <div class="sec-title">
-              <svg viewBox="0 0 11 11" fill="none"><path d="M2 5.5l2.5 2.5L9 3.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              消息同步方向
+        <!-- 2. Sync Direction -->
+        <div v-if="configSubTab==='syncDirection'">
+          <div class="m3-card">
+            <div style="font-size:14px;color:var(--md-sys-color-on-surface-variant);margin-bottom:16px">
+              即时控制 Telegram 与 QQ 之间的消息同步流向。修改立即生效，未处理队列任务仍会正常消化。
             </div>
-            <div class="sec-line"></div>
-          </div>
-          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px">
-            <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
-              控制消息在 Telegram 和 QQ 之间的同步方向。修改后即时生效，已入队未处理的任务仍会完成。
-            </p>
-            <div style="display:flex;gap:12px;flex-wrap:wrap">
-              <div v-for="opt in syncDirectionOptions" :key="opt.value"
-                class="dir-card" :class="{active:syncDirection===opt.value}"
+            <div class="sync-dir-grid">
+              <div
+                v-for="opt in syncDirectionOptions"
+                :key="opt.value"
+                class="sync-dir-card"
+                :class="{active: syncDirection===opt.value}"
                 @click="setSyncDirection(opt.value)"
-                style="flex:1;min-width:200px;max-width:280px;background:var(--bg3);border:1px solid;border-radius:12px;padding:18px 20px;cursor:pointer;transition:border-color .2s,transform .2s;border-color:var(--border)"
-                :style="syncDirection===opt.value?{borderColor:'var(--primary)',background:'var(--prim3)'}:{}">
-                <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">{{ opt.label }}</div>
-                <div style="font-size:11px;color:var(--muted)">{{ opt.desc }}</div>
-                <div v-if="syncDirection===opt.value" style="margin-top:8px;font-size:10px;font-family:var(--mono);color:var(--primary);display:flex;align-items:center;gap:4px">
-                  <div class="bdot"></div> 当前生效
+              >
+                <div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="sync-dir-title">{{ opt.label }}</div>
+                    <span class="m-icon" v-if="syncDirection===opt.value">check_circle</span>
+                  </div>
+                  <div class="sync-dir-desc">{{ opt.desc }}</div>
+                </div>
+                <div v-if="syncDirection===opt.value" style="margin-top:12px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px">
+                  <span class="m3-pulse-dot"></span> 当前生效中
                 </div>
               </div>
             </div>
           </div>
         </div>
-        </div>
 
+        <!-- 3. Blocked Words -->
+        <div v-if="configSubTab==='blockedWords'">
+          <div class="m3-table-card">
+            <div style="display:flex;gap:10px;margin-bottom:16px;max-width:500px">
+              <input class="m3-cfg-input" v-model="newBlockedWord" placeholder="输入要屏蔽的关键词…" @keyup.enter="addBlockedWord"/>
+              <button class="m3-btn-small m3-btn-primary" @click="addBlockedWord" :disabled="!newBlockedWord.trim()">
+                <span class="m-icon">add</span>
+                <span>添加</span>
+              </button>
+            </div>
+
+            <el-table :data="tableBlockedWords" style="width:100%" v-if="blockedWords.length>0">
+              <el-table-column label="#" width="60">
+                <template #default="scope">{{ scope.$index + 1 }}</template>
+              </el-table-column>
+              <el-table-column label="屏蔽关键词">
+                <template #default="scope">
+                  <span class="mono-cell" style="color:var(--md-sys-color-error)">{{ scope.row.word }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" align="center">
+                <template #default="scope">
+                  <el-popconfirm title="确认删除此屏蔽词？" @confirm="removeBlockedWord(scope.row.word)">
+                    <template #reference>
+                      <button class="m3-icon-btn" style="color:var(--md-sys-color-error)" title="删除">
+                        <span class="m-icon">delete</span>
+                      </button>
+                    </template>
+                  </el-popconfirm>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-else style="text-align:center;padding:30px;color:var(--md-sys-color-outline)">
+              暂无屏蔽关键词
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- ═══════════ ADMINS ═══════════ -->
-      <div v-if="activeTab==='admins'" class="page-in tbl-wrap">
-        <div class="sec-hd">
-          <div class="sec-title">
-            <svg viewBox="0 0 11 11" fill="none"><path d="M5.5 1.5l.8 1.6 1.8.3-1.3 1.2.3 1.8-1.6-.8-1.6.8.3-1.8-1.3-1.2 1.8-.3.8-1.6z" stroke="currentColor" stroke-width=".9" stroke-linejoin="round"/><path d="M2 8.5c.3-1 1-1.7 2-2M9 8.5c-.3-1-1-1.7-2-2" stroke="currentColor" stroke-width=".9" stroke-linecap="round"/></svg>
-            管理员管理
+      <!-- ═══════════ ADMINS VIEW ═══════════ -->
+      <div v-if="activeTab==='admins'">
+        <div class="m3-table-card">
+          <div class="m3-toolbar">
+            <div class="m3-section-title">
+              <span class="m-icon">admin_panel_settings</span>
+              <span>管理员 ID 列表</span>
+            </div>
+            <div style="display:flex;gap:10px;max-width:400px">
+              <input class="m3-cfg-input" v-model="newAdminId" type="number" placeholder="输入 Telegram 用户 ID" @keyup.enter="addAdmin"/>
+              <button class="m3-btn-small m3-btn-primary" @click="addAdmin" :disabled="!isNewAdminValid">添加</button>
+            </div>
           </div>
-          <div class="sec-line"></div>
-          <span class="cnt-pill" style="margin-left:12px">{{ admins.length }} 个管理员</span>
-        </div>
-        <div class="toolbar">
-          <input class="tool-input" v-model="newAdminId" type="number" placeholder="输入 Telegram 用户 ID…" spellcheck="false" @keyup.enter="addAdmin"/>
-          <el-button type="primary" size="small" @click="addAdmin" :disabled="!isNewAdminValid">添加管理员</el-button>
-        </div>
-        <el-table :data="admins" style="width:100%">
-          <el-table-column label="# " width="60">
-            <template #default="scope">{{ scope.$index + 1 }}</template>
-          </el-table-column>
-          <el-table-column label="用户 ID">
-            <template #default="scope">
-              <span class="mono-id" style="color:var(--text)">{{ scope.row }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="140" align="center">
-            <template #default="scope">
-              <el-popconfirm title="确认取消此用户的管理员权限？" @confirm="toggleAdmin(scope.row)">
-                <template #reference>
-                  <el-button size="small" type="danger">取消管理员</el-button>
-                </template>
-              </el-popconfirm>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="tbl-empty" v-if="admins.length===0">
-          <div class="tbl-ei"><svg viewBox="0 0 17 17" fill="none"><path d="M8.5 8.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM3 15c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></div>
-          暂无管理员
+
+          <el-table :data="admins" style="width:100%">
+            <el-table-column label="#" width="60">
+              <template #default="scope">{{ scope.$index + 1 }}</template>
+            </el-table-column>
+            <el-table-column label="管理员 Telegram ID">
+              <template #default="scope">
+                <span class="mono-cell">{{ scope.row }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center">
+              <template #default="scope">
+                <el-popconfirm title="确认取消此管理员权限？" @confirm="toggleAdmin(scope.row)">
+                  <template #reference>
+                    <button class="m3-btn-small m3-btn-tonal" style="color:var(--md-sys-color-error)">移除</button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </div>
 
     </div>
   </div>
 </div>
+
+  <!-- ══════════════ 修改管理密码弹窗 ══════════════ -->
+  <div class="m3-dialog-scrim" v-if="changePasswordDialogVisible" @click.self="closeChangePasswordDialog">
+    <div class="m3-dialog-card">
+      <div class="m3-dialog-icon">
+        <span class="m-icon">shield_lock</span>
+      </div>
+      <div class="m3-dialog-headline">{{ status.is_initial_token ? '修改初始密码' : '修改管理密码' }}</div>
+      <div class="m3-dialog-supporting-text" v-if="status.is_initial_token">
+        系统检测到当前正在使用<b>初始随机密码</b>登录。为保障控制台安全，请设置新的管理面板访问密码。
+      </div>
+      <div class="m3-dialog-supporting-text" v-else>
+        请输入新的管理面板访问密码（至少 6 位字符）。
+      </div>
+
+      <form @submit.prevent="submitChangePassword">
+        <label class="m3-field-label">新密码</label>
+        <div class="m3-input-wrapper" style="margin-bottom: 14px;">
+          <span class="m-icon leading">lock</span>
+          <input
+            class="m3-text-field"
+            :type="showNewPw ? 'text' : 'password'"
+            v-model="newPassword"
+            placeholder="请输入新密码 (至少 6 位)"
+            required
+            autocomplete="new-password"
+          />
+          <button type="button" class="m3-eye-btn" @click="showNewPw=!showNewPw" :title="showNewPw?'隐藏':'显示'">
+            <span class="m-icon">{{ showNewPw ? 'visibility_off' : 'visibility' }}</span>
+          </button>
+        </div>
+
+        <label class="m3-field-label">确认新密码</label>
+        <div class="m3-input-wrapper" style="margin-bottom: 14px;">
+          <span class="m-icon leading">check_circle</span>
+          <input
+            class="m3-text-field"
+            :type="showNewPw ? 'text' : 'password'"
+            v-model="confirmPassword"
+            placeholder="请再次输入新密码"
+            required
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div class="m3-err-banner" v-if="changePasswordErr" style="margin-bottom: 14px;">
+          <span class="m-icon">error</span>
+          <span>{{ changePasswordErr }}</span>
+        </div>
+
+        <div class="m3-dialog-actions">
+          <button type="button" class="m3-outlined-btn" @click="closeChangePasswordDialog">稍后修改</button>
+          <button type="submit" class="m3-filled-btn" :disabled="changePasswordLoading" style="width:auto;padding:0 24px;">
+            <span class="m-icon" v-if="!changePasswordLoading">check</span>
+            <span class="m-icon" style="animation: spin 0.8s linear infinite" v-else>progress_activity</span>
+            <span>{{ changePasswordLoading ? '正在保存…' : '确认修改' }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════
+     SCRIPTS: VUE 3, ELEMENT PLUS & APPLICATION LOGIC
+     ══════════════════════════════════════════════════════════════ -->
 <script src="//unpkg.com/vue@3/dist/vue.global.js"></script>
 <script src="//unpkg.com/element-plus"></script>
 <script src="//unpkg.com/@element-plus/icons-vue"></script>
@@ -1139,13 +1614,20 @@ const ElMessage = ElementPlus.ElMessage;
 
 createApp({
   setup() {
-    /* ── 会话状态 ── */
+    /* ── 会话与主题 ── */
     const isLoggedIn   = ref(false);
     const loggingIn    = ref(false);
     const loginLoading = ref(false);
     const loginErr     = ref('');
     const inputKey     = ref(localStorage.getItem('tqsync_api_key') || '');
     const showPw       = ref(false);
+    const theme        = ref(localStorage.getItem('tqsync_theme') || 'dark');
+
+    const toggleTheme = () => {
+      theme.value = theme.value === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('tqsync_theme', theme.value);
+      document.documentElement.setAttribute('data-theme', theme.value);
+    };
 
     /* ── 导航状态 ── */
     const activeTab    = ref('dash');
@@ -1175,7 +1657,7 @@ createApp({
     /* ── 插件页 ── */
     const plugins        = ref([]);
     const pluginsLoading = ref(false);
-    const busyName       = ref('');          // 正在操作(启用/禁用/重载)的插件名，防连点
+    const busyName       = ref('');
     const uploadInputRef = ref(null);
     const drawerOpen     = ref(false);
     const drawerPlugin   = ref('');
@@ -1187,6 +1669,63 @@ createApp({
     /* ── 管理员页 ── */
     const admins       = ref([]);
     const newAdminId   = ref('');
+
+    /* ── 密码修改 ── */
+    const changePasswordDialogVisible = ref(false);
+    const newPassword = ref('');
+    const confirmPassword = ref('');
+    const showNewPw = ref(false);
+    const changePasswordLoading = ref(false);
+    const changePasswordErr = ref('');
+    const initialPromptShown = ref(false);
+
+    const openChangePasswordDialog = () => {
+      newPassword.value = '';
+      confirmPassword.value = '';
+      changePasswordErr.value = '';
+      changePasswordDialogVisible.value = true;
+    };
+
+    const closeChangePasswordDialog = () => {
+      changePasswordDialogVisible.value = false;
+      changePasswordErr.value = '';
+    };
+
+    const submitChangePassword = async () => {
+      const pwd = newPassword.value.trim();
+      if (!pwd) {
+        changePasswordErr.value = '新密码不能为空';
+        return;
+      }
+      if (pwd.length < 6) {
+        changePasswordErr.value = '新密码长度不能少于 6 位';
+        return;
+      }
+      if (pwd !== confirmPassword.value.trim()) {
+        changePasswordErr.value = '两次输入的密码不一致';
+        return;
+      }
+
+      changePasswordLoading.value = true;
+      changePasswordErr.value = '';
+      try {
+        await api.post('/admin/change-password', { new_password: pwd });
+        localStorage.setItem('tqsync_api_key', pwd);
+        api.defaults.headers['X-API-Key'] = pwd;
+        inputKey.value = pwd;
+        if (status.value) {
+          status.value.is_initial_token = false;
+        }
+        changePasswordDialogVisible.value = false;
+        newPassword.value = '';
+        confirmPassword.value = '';
+        ElMessage.success('管理员密码修改成功！');
+      } catch (e) {
+        changePasswordErr.value = e.response?.data?.detail || '密码修改失败，请重试';
+      } finally {
+        changePasswordLoading.value = false;
+      }
+    };
 
     const api = axios.create({ baseURL: window.location.origin });
 
@@ -1200,11 +1739,17 @@ createApp({
         status.value = res.data;
         localStorage.setItem('tqsync_api_key', inputKey.value);
         loggingIn.value = true;
-        setTimeout(() => { isLoggedIn.value = true; loggingIn.value = false; }, 420);
+        setTimeout(() => {
+          isLoggedIn.value = true;
+          loggingIn.value = false;
+          if (res.data.is_initial_token) {
+            openChangePasswordDialog();
+          }
+        }, 300);
       } catch(e) {
         loginErr.value = e.response?.status === 403
           ? 'Token 无效，请检查后重试'
-          : '连接失败，请稍后再试';
+          : '连接服务器失败，请检查服务状态';
       } finally { loginLoading.value = false; }
     };
 
@@ -1212,6 +1757,7 @@ createApp({
       localStorage.removeItem('tqsync_api_key');
       isLoggedIn.value = false;
       inputKey.value = ''; status.value = {};
+      initialPromptShown.value = false;
     };
 
     /* ══════════════ 仪表盘 ══════════════ */
@@ -1228,14 +1774,12 @@ createApp({
       try {
         const res = await api.get('/admin/stats/sync_history');
         syncHistory.value = (res.data.buckets || []).map(b => {
-          // hour 为 UTC 小时号 → 本地时间标签
           const label = utcHourToLocal(b.hour);
           return { ...b, label };
         });
       } catch(e) {}
     };
 
-    // UTC 小时号 → 本地 HH:00 标签（处理跨日环绕）
     const utcHourToLocal = (utcHour) => {
       const now = new Date();
       const local = new Date(now.getTime() + (utcHour - now.getUTCHours()) * 3600000);
@@ -1244,8 +1788,8 @@ createApp({
 
     const barHeight = (count) => {
       const max = Math.max(1, ...syncHistory.value.map(b => b.count));
-      if (count === 0) return 3;
-      return Math.max(6, Math.round((count / max) * 100));
+      if (count === 0) return 4;
+      return Math.max(8, Math.round((count / max) * 100));
     };
 
     const maxSync = computed(() => syncHistory.value.length ? Math.max(...syncHistory.value.map(b=>b.count)) : 0);
@@ -1283,10 +1827,10 @@ createApp({
     });
 
     const getLogCls = (l) => {
-      if (/error|ERROR|失败/i.test(l)) return 'll-err';
-      if (/warn|WARN/i.test(l))        return 'll-warn';
-      if (/success|SUCCESS|成功/i.test(l)) return 'll-ok';
-      if (/\bINFO\b|\[info\]/i.test(l)) return 'll-info';
+      if (/error|ERROR|失败/i.test(l)) return 'log-err';
+      if (/warn|WARN/i.test(l))        return 'log-warn';
+      if (/success|SUCCESS|成功/i.test(l)) return 'log-ok';
+      if (/\bINFO\b|\[info\]/i.test(l)) return 'log-info';
       return '';
     };
 
@@ -1296,8 +1840,8 @@ createApp({
     };
 
     const unbind = async (id) => {
-      try { await api.delete(`/admin/bindings/${id}`); ElMessage.success('已解除绑定'); fetchBindings(); }
-      catch(e) { ElMessage.error('操作失败'); }
+      try { await api.delete(`/admin/bindings/${id}`); ElMessage.success('已解除用户绑定'); fetchBindings(); }
+      catch(e) { ElMessage.error('解绑操作失败'); }
     };
 
     /* ══════════════ 配置页 ══════════════ */
@@ -1324,7 +1868,7 @@ createApp({
         await api.put(`/admin/config/${encodeURIComponent(item.key)}`, { key: item.key, value: item.editValue });
         item.value = item.editValue;
         item.editing = false;
-        ElMessage.success(`已更新 ${item.key}`);
+        ElMessage.success(`配置已保存: ${item.key}`);
       } catch(e) {
         ElMessage.error('更新失败: ' + (e.response?.data?.detail || e.message));
       }
@@ -1339,7 +1883,7 @@ createApp({
       if (!w) return;
       try {
         await api.post('/admin/blocked_words', { word: w });
-        ElMessage.success(`已添加屏蔽词: ${w}`);
+        ElMessage.success(`已加入屏蔽库: ${w}`);
         newBlockedWord.value = '';
         fetchBlockedWords();
       } catch(e) {
@@ -1350,11 +1894,9 @@ createApp({
     const removeBlockedWord = async (word) => {
       try {
         await api.delete(`/admin/blocked_words/${encodeURIComponent(word)}`);
-        ElMessage.success(`已删除屏蔽词: ${word}`);
+        ElMessage.success(`已移除屏蔽词: ${word}`);
         fetchBlockedWords();
-      } catch(e) {
-        ElMessage.error('删除失败');
-      }
+      } catch(e) { ElMessage.error('删除失败'); }
     };
 
     const tableBlockedWords = computed(() => blockedWords.value.map(w => ({word: w})));
@@ -1371,7 +1913,6 @@ createApp({
     const loadedCount  = computed(() => plugins.value.filter(p=>p.loaded).length);
     const enabledCount = computed(() => plugins.value.filter(p=>p.enabled).length);
 
-    // 后端 enable/disable 是两个独立端点，按当前状态精确选择
     const togglePlugin = async (row) => {
       busyName.value = row.name;
       const action = row.enabled ? 'disable' : 'enable';
@@ -1388,8 +1929,8 @@ createApp({
       busyName.value = row.name;
       try {
         const res = await api.post(`/admin/plugins/${encodeURIComponent(row.name)}/reload`);
-        if (res.data?.error) ElMessage.warning(`重载完成，但有错误: ${res.data.error}`);
-        else ElMessage.success(`插件 ${row.name} 已重载`);
+        if (res.data?.error) ElMessage.warning(`重载完成但有报错: ${res.data.error}`);
+        else ElMessage.success(`插件 ${row.name} 重载成功`);
         fetchPlugins();
       } catch(e) {
         ElMessage.error(e.response?.data?.detail || '重载失败');
@@ -1399,12 +1940,10 @@ createApp({
     const deletePlugin = async (row) => {
       try {
         await api.delete(`/admin/plugins/${encodeURIComponent(row.name)}`);
-        ElMessage.success(`插件 ${row.name} 已删除`);
+        ElMessage.success(`插件 ${row.name} 已移除`);
         if (drawerOpen.value && drawerPlugin.value === row.name) drawerOpen.value = false;
         fetchPlugins();
-      } catch(e) {
-        ElMessage.error(e.response?.data?.detail || '删除失败');
-      }
+      } catch(e) { ElMessage.error(e.response?.data?.detail || '删除失败'); }
     };
 
     const triggerUpload = () => { if (uploadInputRef.value) uploadInputRef.value.click(); };
@@ -1412,20 +1951,18 @@ createApp({
     const onUpload = async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      if (!file.name.endsWith('.py')) { ElMessage.error('只允许上传 .py 文件'); e.target.value=''; return; }
+      if (!file.name.endsWith('.py')) { ElMessage.error('仅允许上传 .py 格式插件脚本'); e.target.value=''; return; }
       const fd = new FormData();
       fd.append('file', file);
       try {
-        // 不手动设 Content-Type，由浏览器生成 multipart boundary
         await api.post('/admin/plugins/upload', fd);
-        ElMessage.success(`插件 ${file.name} 已上传并加载`);
+        ElMessage.success(`插件 ${file.name} 上传并加载成功`);
         fetchPlugins();
       } catch(err) {
-        ElMessage.error(err.response?.data?.detail || '上传失败');
+        ElMessage.error(err.response?.data?.detail || '插件上传失败');
       } finally { e.target.value = ''; }
     };
 
-    /* ── 插件数据 KV 抽屉 ── */
     const openDrawer = (row) => {
       drawerPlugin.value = row.name;
       kvNewKey.value = ''; kvNewVal.value = '';
@@ -1441,9 +1978,7 @@ createApp({
           key, value, editing: false, editVal: value
         }));
         drawerKvCount.value = drawerKvList.value.length;
-      } catch(e) {
-        ElMessage.error('加载插件数据失败');
-      }
+      } catch(e) { ElMessage.error('加载插件数据异常'); }
     };
 
     const saveNewKv = async () => {
@@ -1464,7 +1999,7 @@ createApp({
         await api.put(`/admin/plugins/${encodeURIComponent(drawerPlugin.value)}/data`, { key: kv.key, value: kv.editVal });
         kv.value = kv.editVal;
         kv.editing = false;
-        ElMessage.success('已更新');
+        ElMessage.success('已更新键值');
       } catch(e) { ElMessage.error('更新失败'); }
     };
 
@@ -1489,19 +2024,19 @@ createApp({
     const addAdmin = async () => {
       const v = Number(newAdminId.value);
       if (!Number.isInteger(v) || v <= 0) return;
-      if (admins.value.includes(v)) { ElMessage.warning('该用户已是管理员'); return; }
+      if (admins.value.includes(v)) { ElMessage.warning('该用户已经是管理员'); return; }
       try {
         await api.post('/admin/admins', null, { params: { user_id: v } });
-        ElMessage.success(`已将用户 ${v} 设为管理员`);
+        ElMessage.success(`已授权用户 ${v} 为管理员`);
         newAdminId.value = '';
         fetchAdmins();
-      } catch(e) { ElMessage.error('操作失败'); }
+      } catch(e) { ElMessage.error('授权失败'); }
     };
 
     const toggleAdmin = async (id) => {
       try {
         await api.post('/admin/admins', null, { params: { user_id: id } });
-        ElMessage.success(`已取消用户 ${id} 的管理员权限`);
+        ElMessage.success(`已移除管理员 ${id}`);
         fetchAdmins();
       } catch(e) { ElMessage.error('操作失败'); }
     };
@@ -1509,7 +2044,7 @@ createApp({
     /* ══════════════ 导航 / 通用 ══════════════ */
     const checkScreen = () => {
       const btn = document.getElementById('menu-btn');
-      if (btn) btn.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
+      if (btn) btn.style.display = window.innerWidth <= 768 ? 'inline-flex' : 'none';
     };
     window.addEventListener('resize', checkScreen);
 
@@ -1526,7 +2061,7 @@ createApp({
         const res = await api.put('/admin/sync/direction', { direction: dir });
         syncDirection.value = res.data.direction;
         ElMessage.success(res.data.message);
-      } catch(e) { ElMessage.error(e.response?.data?.detail || '设置失败'); }
+      } catch(e) { ElMessage.error(e.response?.data?.detail || '设置同步方向失败'); }
     };
 
     const handleMenu = (idx) => {
@@ -1539,21 +2074,30 @@ createApp({
     };
 
     const doRestart = async () => {
-      try { await api.post('/admin/restart'); ElMessage.success('重启指令已发送'); }
-      catch(e) { ElMessage.error('重启失败'); }
+      try { await api.post('/admin/restart'); ElMessage.success('已下发重启指令'); }
+      catch(e) { ElMessage.error('重启指令执行失败'); }
     };
 
     const pageTitle = computed(() => {
-      if (activeTab.value === 'config' && configSubTab.value === 'blockedWords') return '系统配置 / 屏蔽词管理';
+      if (activeTab.value === 'config' && configSubTab.value === 'blockedWords') return '系统配置 / 屏蔽词库';
       if (activeTab.value === 'config' && configSubTab.value === 'syncDirection') return '系统配置 / 同步方向';
-      return ({dash:'系统仪表盘',logs:'实时日志',binds:'用户管理',plugins:'插件管理',config:'系统配置',admins:'管理员管理'})[activeTab.value] || '';
+      return ({dash:'系统概览',logs:'实时日志',binds:'用户绑定',plugins:'插件管理',config:'系统配置',admins:'管理员管理'})[activeTab.value] || '';
     });
 
     onMounted(() => {
+      document.documentElement.setAttribute('data-theme', theme.value);
       checkScreen();
       if (inputKey.value) {
         api.defaults.headers['X-API-Key'] = inputKey.value;
-        fetchStatus().then(() => { if (status.value.version) isLoggedIn.value = true; }).catch(() => {});
+        fetchStatus().then(() => {
+          if (status.value.version) {
+            isLoggedIn.value = true;
+            if (status.value.is_initial_token && !initialPromptShown.value) {
+              initialPromptShown.value = true;
+              openChangePasswordDialog();
+            }
+          }
+        }).catch(() => {});
       }
       setInterval(() => {
         if (isLoggedIn.value) {
@@ -1566,7 +2110,7 @@ createApp({
     });
 
     return {
-      isLoggedIn, loggingIn, loginLoading, loginErr, inputKey, showPw,
+      isLoggedIn, loggingIn, loginLoading, loginErr, inputKey, showPw, theme, toggleTheme,
       activeTab, mobileOpen, status, logs, logFilter, filteredLogs,
       bindings, configItems, configSections, configSubTab, blockedWords, newBlockedWord, tableBlockedWords,
       logBodyRef, syncHistory, maxSync, totalToday, firstTick, midTick, lastTick, barHeight, pluginStats,
@@ -1577,7 +2121,10 @@ createApp({
       syncDirection, syncDirectionOptions, fetchSyncDirection, setSyncDirection,
       fetchPlugins, togglePlugin, reloadPlugin, deletePlugin, triggerUpload, onUpload,
       openDrawer, loadKvData, saveNewKv, startKvEdit, cancelKvEdit, saveKvEdit, deleteKv,
-      fetchAdmins, addAdmin, toggleAdmin
+      fetchAdmins, addAdmin, toggleAdmin,
+      changePasswordDialogVisible, newPassword, confirmPassword, showNewPw,
+      changePasswordLoading, changePasswordErr,
+      openChangePasswordDialog, closeChangePasswordDialog, submitChangePassword
     };
   }
 }).use(ElementPlus).use(ElementPlusIconsVue).mount('#app');

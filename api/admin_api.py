@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -52,6 +52,9 @@ def require_permission(level: int):
 class ConfigUpdate(BaseModel):
     key: str
     value: str
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str
 
 class BindingUpdate(BaseModel):
     tg_user_id: int
@@ -116,12 +119,21 @@ async def get_status():
     cpu_percent = process.cpu_percent(interval=0.1)
     
     # 磁盘使用情况
-    disk_usage = psutil.disk_usage('/')
+    try:
+        disk_usage = psutil.disk_usage(os.path.abspath(os.getcwd()))
+    except Exception:
+        disk_usage = psutil.disk_usage('/')
     
-    # 数据库文件大小
+    # 数据库文件大小 (包括 .db, .db-wal, .db-shm)
     db_size = 0
-    if os.path.exists('data/tqsync.db'):
-        db_size = os.path.getsize('data/tqsync.db')
+    actual_db_path = getattr(db, 'db_path', 'db/tqsync.db')
+    for suffix in ('', '-wal', '-shm'):
+        p = f"{actual_db_path}{suffix}"
+        if os.path.exists(p):
+            try:
+                db_size += os.path.getsize(p)
+            except OSError:
+                pass
     
     # 获取同步消息总数
     try:
@@ -148,6 +160,7 @@ async def get_status():
         "memory_usage": f"{mem_info.rss / 1024 / 1024:.1f} MB",
         "disk_usage": f"{disk_usage.percent:.1f}%",
         "db_size": f"{db_size / 1024:.1f} KB",
+        "is_initial_token": bool(config_loader.get('server.is_initial_token', False)),
         "plugins": {
             "total": len(plugins_status),
             "loaded": sum(1 for p in plugins_status if p['loaded']),
@@ -231,6 +244,19 @@ async def get_logs(lines: int = 50):
         logger.error(f"Failed to read logs: {e}")
         return {"logs": [f"读取日志出错: {str(e)}"]}
 
+@app.post("/admin/change-password", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def change_password(req: ChangePasswordRequest):
+    new_pwd = (req.new_password or "").strip()
+    if not new_pwd:
+        raise HTTPException(status_code=400, detail="新密码不能为空")
+    if len(new_pwd) < 6:
+        raise HTTPException(status_code=400, detail="新密码长度不能少于 6 位")
+    
+    config_loader.update_config('server.admin_api_key', new_pwd)
+    config_loader.update_config('server.is_initial_token', False)
+    logger.info("WebUI 管理员密码已被修改")
+    return {"status": "success", "message": "密码修改成功"}
+
 @app.put("/admin/config/{config_key}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 def update_config(config_key: str, update: ConfigUpdate):
     try:
@@ -242,6 +268,8 @@ def update_config(config_key: str, update: ConfigUpdate):
             value = int(update.value)
         
         config_loader.update_config(config_key, value)
+        if config_key == 'server.admin_api_key':
+            config_loader.update_config('server.is_initial_token', False)
         return {"status": "success", "message": f"Config {config_key} updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

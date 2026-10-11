@@ -12,6 +12,8 @@ class Database:
 
     async def init_db(self):
         async with aiosqlite.connect(self.db_path) as db:
+            await db.execute('PRAGMA journal_mode=WAL;')
+            await db.execute('PRAGMA busy_timeout=5000;')
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS bindings (
                     tg_user_id INTEGER PRIMARY KEY,
@@ -40,6 +42,12 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # 创建消息映射与绑定索引加速查询和撤回检索
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_msg_map_tg ON message_mapping(tg_message_id)')
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_msg_map_qq ON message_mapping(qq_message_id)')
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_msg_map_created ON message_mapping(created_at)')
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_bindings_qq ON bindings(qq_user_id)')
             
             # 验证码表：用于双向绑定验证
             await db.execute('''
@@ -126,6 +134,12 @@ class Database:
         """删除映射记录（用于撤回同步）"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute('DELETE FROM message_mapping WHERE tg_message_id = ?', (tg_message_id,))
+            await db.commit()
+
+    async def delete_mapping_by_qq(self, qq_message_id: int):
+        """根据 QQ 消息 ID 删除映射记录（用于 QQ 撤回同步）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute('DELETE FROM message_mapping WHERE qq_message_id = ?', (qq_message_id,))
             await db.commit()
 
     async def get_binding_by_tg(self, tg_user_id: int):

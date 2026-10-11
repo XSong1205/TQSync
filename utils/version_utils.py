@@ -5,7 +5,7 @@ def get_version():
     """从 VERSION 文件中读取版本号"""
     try:
         version_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VERSION')
-        with open(version_file, 'r', encoding='utf-8') as f:
+        with open(version_file, 'r', encoding='utf-8-sig') as f:
             return f.read().strip()
     except Exception:
         return "1.0.0"

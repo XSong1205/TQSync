@@ -16,7 +16,8 @@ class OneBotClient:
     async def _ensure_session(self):
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(ssl=False, limit=10, limit_per_host=5)
-            self._session = aiohttp.ClientSession(connector=connector)
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
     async def _post_json(self, endpoint: str, payload: dict, max_retries: int = 3, base_delay: float = 1.5):
         """带指数退避重试的 JSON POST 请求"""
@@ -64,6 +65,7 @@ class OneBotClient:
     async def close(self):
         if self._session and not self._session.closed:
             await self._session.close()
+            self._session = None
 
     async def get_bot_id(self) -> int:
         """获取当前登录的 Bot QQ 号"""

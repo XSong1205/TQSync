@@ -88,6 +88,7 @@ class SyncEngine:
                 try:
                     await retry_async(task_func, *args, max_retries=3, base_delay=2.0, **kwargs)
                 except asyncio.CancelledError:
+                    self.sync_queue.task_done()
                     raise
                 except Exception as e:
                     logger.error(f"工作者 #{worker_id} 执行任务失败 (已重试3次): {e}", exc_info=True)
@@ -96,7 +97,30 @@ class SyncEngine:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"工作者 #{worker_id} 异常退出: {e}")
+                logger.error(f"工作者 #{worker_id} 发生未知循环异常: {e}", exc_info=True)
+                await asyncio.sleep(1.0)
+        logger.info(f"同步工作者 #{worker_id} 已安全退出")
+
+    async def stop(self, timeout: float = 5.0):
+        """优雅停止同步引擎：等待当前队列任务处理完成并取消所有 worker"""
+        logger.info("正在停止同步引擎...")
+        # 尝试等待队列排空
+        try:
+            if not self.sync_queue.empty():
+                logger.info(f"等待同步队列中剩余 {self.sync_queue.qsize()} 个任务完成 (最多等待 {timeout}s)...")
+                await asyncio.wait_for(self.sync_queue.join(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning(f"同步队列未能在 {timeout}s 内排空，强制终止未完成工作")
+        except Exception as e:
+            logger.debug(f"等待队列排空时发生异常: {e}")
+
+        # 取消所有 worker 协程
+        for task in self._worker_tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*self._worker_tasks, return_exceptions=True)
+        self._worker_tasks.clear()
+        logger.info("同步引擎已完全停止")
 
     def enqueue_sync_task(self, task_func, *args, **kwargs):
         """将同步任务加入队列（同步方向控制入口）"""
@@ -158,6 +182,7 @@ class SyncEngine:
     async def forward_media_to_qq(self, tg_user_id: int, tg_username: str,
                                   file_id: str, *, file_name: str = '',
                                   file_size: int = 0,
+                                  caption: str = '',
                                   reply_segment: list = None,
                                   tg_message_id: int = None):
         """统一 TG → QQ 媒体文件转发入口。"""
@@ -183,6 +208,7 @@ class SyncEngine:
             source,
             tg_user_id=tg_user_id,
             display_name=display_name,
+            caption=caption,
             reply_segment=reply_segment,
             tg_message_id=tg_message_id
         )
@@ -872,12 +898,20 @@ class SyncEngine:
 
         # 3. 构造消息
         version_str = get_full_version_string()
+        webui_url = "未知"
+        try:
+            from utils.network_utils import get_webui_url
+            webui_url = await get_webui_url()
+        except Exception as e:
+            logger.debug(f"获取 WebUI 地址失败: {e}")
+
         message = (
             f"| TQSync NEXT {version_str} \n"
             f"--------------------------\n"
             f"- 最后更新: {last_update}\n"
             f"- 目标 QQ 群: {qq_gid}\n"
             f"- 目标 TG 群: {tg_gid}\n"
+            f"- WebUI 地址: {webui_url}\n"
             f"--------------------------"
         )
         

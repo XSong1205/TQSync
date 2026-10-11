@@ -5,6 +5,7 @@ import time
 import subprocess
 import json
 import shutil
+import html
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
@@ -31,6 +32,7 @@ from api.admin_api import app as admin_app
 from core.plugin_manager import PluginManager
 from core.plugin_base import PluginContext
 from utils.logger import logger
+from utils.banner import print_banner
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
@@ -69,9 +71,10 @@ async def handle_qq_webhook(request):
                     engine = SyncEngine.get_instance()
                     try:
                         await engine.bot.delete_message(chat_id=engine.tg_group_id, message_id=tg_msg_id)
-                        logger.info(f"Synced recall from QQ (msg_id: {qq_msg_id}) to TG (msg_id: {tg_msg_id})")
+                        logger.info(f"已同步 QQ 撤回消息至 TG (QQ: {qq_msg_id} -> TG: {tg_msg_id})")
+                        await db.delete_mapping_by_qq(qq_msg_id)
                     except Exception as e:
-                        logger.error(f"Failed to delete message in TG: {e}")
+                        logger.error(f"在 TG 端执行撤回失败: {e}")
             return web.json_response({})
 
         # 仅处理群消息
@@ -172,16 +175,17 @@ async def handle_qq_webhook(request):
             video_url = _copy_to_temp(video_url) if video_url else None
             file_url = _copy_to_temp(file_url) if file_url else None
             mface_url = _copy_to_temp(mface_url) if mface_url else None
+            voice_url = _copy_to_temp(voice_url) if voice_url else None
             
             # 优先处理合并转发消息
             if is_forward and forward_content:
-                logger.info(f"[QQ] {nickname} 发送了一条合并转发消息")
+                logger.info(f"[QQ] {nickname}: [合并转发消息]")
                 engine.enqueue_sync_task(engine.forward_merged_to_tg, qq_id, nickname, forward_content, data.get('message_id'))
                 return web.json_response({})
             
             # 处理语音消息 (Record)
             if voice_url:
-                logger.info(f"[QQ] {nickname} 发送了一条语音消息")
+                logger.info(f"[QQ] {nickname}: [语音消息]")
                 engine.enqueue_sync_task(engine.forward_voice_to_tg, qq_id, nickname, voice_url, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
                 return web.json_response({})
             
@@ -277,10 +281,9 @@ async def handle_qq_webhook(request):
                 else:
                     # 尝试插件路由（未知命令）
                     if combined_text.strip():
-                        if combined_text.strip():
-                            pm = PluginManager.get_instance()
-                            if await pm.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
-                                return web.json_response({})
+                        pm = PluginManager.get_instance()
+                        if await pm.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
+                            return web.json_response({})
                     response = 'Unknown command. Type "/help" for help.'
 
                 if response:
@@ -319,7 +322,9 @@ async def handle_qq_webhook(request):
             # 构造 TG 的 HTML 消息以支持 @
             if at_tg_ids:
                 display_name = await engine.get_display_name(qq_user_id=qq_id, fallback_name=nickname)
-                html_text = f"[QQ] <b>{display_name}</b>: "
+                safe_display_name = html.escape(display_name)
+                safe_combined_text = html.escape(combined_text)
+                html_text = f"[QQ] <b>{safe_display_name}</b>: "
                 for tid in at_tg_ids:
                     try:
                         user = await engine.bot.get_chat(tid)
@@ -327,7 +332,7 @@ async def handle_qq_webhook(request):
                     except Exception as e:
                         logger.warning(f"获取 TG 用户 {tid} 信息失败: {e}")
                         html_text += f"<a href='tg://user?id={tid}'>@User</a> "
-                html_text += combined_text
+                html_text += safe_combined_text
                 try:
                     result = await engine.bot.send_message(chat_id=engine.tg_group_id, text=html_text, parse_mode='HTML', reply_to_message_id=reply_to_tg_id)
                     if result:
@@ -342,35 +347,39 @@ async def handle_qq_webhook(request):
                                  {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
-                logger.info(f"[QQ] {nickname} 发送了一张图片")
+                caption_hint = f" ({combined_text[:30]})" if combined_text else ""
+                logger.info(f"[QQ] {nickname}: [图片]{caption_hint}")
                 source = FileSource.from_qq_webhook(image_url, image_file_name,
                     raw_file=raw_image_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, caption=combined_text,
                     reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif video_url:
-                logger.info(f"[QQ] {nickname} 发送了一个视频")
+                caption_hint = f" ({combined_text[:30]})" if combined_text else ""
+                logger.info(f"[QQ] {nickname}: [视频]{caption_hint}")
                 source = FileSource.from_qq_webhook(video_url, video_file_name,
                     raw_file=raw_video_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, caption=combined_text,
                     reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif mface_url:
-                logger.info(f"[QQ] {nickname} 发送了一个动画表情")
+                logger.info(f"[QQ] {nickname}: [动画表情]")
                 source = FileSource.from_qq_webhook(mface_url, mface_file_name,
                     raw_file=raw_mface_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, reply_to_message_id=reply_to_tg_id,
                     qq_message_id=data.get('message_id'))
             elif file_url:
-                logger.info(f"[QQ] {nickname} 发送了一个文件 ({file_name}) ")
+                logger.info(f"[QQ] {nickname}: [文件: {file_name}]")
                 source = FileSource.from_qq_webhook(file_url, file_name,
                     raw_file=raw_file_file)
                 engine.enqueue_sync_task(engine.forward_media_to_tg, qq_id, nickname,
                     source, reply_to_message_id=reply_to_tg_id,
                     qq_message_id=data.get('message_id'))
             elif combined_text:
-                logger.info(f"[QQ] {nickname} 发送了一条文本消息")
+                text_preview = (combined_text[:60] + '...') if len(combined_text) > 60 else combined_text
+                text_preview = text_preview.replace('\n', ' ')
+                logger.info(f"[QQ] {nickname}: {text_preview}")
                 engine.enqueue_sync_task(engine.forward_to_tg, qq_id, nickname, combined_text, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
 
         # 处理私聊消息 - 仅管理员可用
@@ -449,7 +458,7 @@ async def start_qq_webhook():
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, config_loader.get('server.host', '0.0.0.0'), config_loader.get('server.qq_webhook_port', 8080))
-    logger.info(f"QQ Webhook server started on port {config_loader.get('server.qq_webhook_port')}")
+    logger.info(f"QQ Webhook 服务已启动，监听端口: {config_loader.get('server.qq_webhook_port')}")
     await site.start()
     
     # 保持运行
@@ -640,7 +649,17 @@ async def main():
     global start_time
     # 再次确认赋值，防止模块加载时的时序问题
     start_time = time.time()
-    logger.info(f"系统启动时间戳: {start_time}")
+    
+    # 检查并初始化 WebUI 管理员凭据安全设置（初次启动或 Token 为空时生成随机密码并记录日志）
+    from utils.auth_utils import init_admin_security
+    init_admin_security()
+
+    # 打印启动字符画与配置概览
+    print_banner(config_loader)
+
+    from utils.version_utils import get_full_version_string
+    start_time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))
+    logger.info(f"TQSync 初始化中... (版本: {get_full_version_string()}, 启动时间: {start_time_str})")
     # 初始化数据库
     await db.init_db()
     
@@ -662,10 +681,10 @@ async def main():
     
     builder = Application.builder().token(token).request(request)
     if proxy_url:
-        logger.info(f"Using Telegram proxy: {proxy_url}")
+        logger.info(f"已启用 Telegram 代理: {proxy_url}")
         builder.proxy_url(proxy_url).get_updates_proxy_url(proxy_url)
     else:
-        logger.warning("未配置代理，如果用的clash也建议填入系统代理那栏对应的地址，更稳定")
+        logger.warning("未配置 Telegram 代理（若在受限网络环境下连接超时，建议在 config.yaml 中配置 telegram.proxy_url）")
     
     application = builder.build()
     
@@ -692,7 +711,13 @@ async def main():
     import shutil as _shutil
     system_ffmpeg = _shutil.which('ffmpeg')
 
-    logger.info(f"FFmpeg 检测结果: 本地路径={ffmpeg_local_path}, 系统路径={system_ffmpeg}, 数据库状态={ffmpeg_status}")
+    ffmpeg_active = ffmpeg_local_path or system_ffmpeg
+    if ffmpeg_active:
+        logger.info(f"FFmpeg 检测: 已就绪 ({ffmpeg_active})")
+    elif ffmpeg_status == 'cancelled':
+        logger.info("FFmpeg 检测: 未安装 (用户已取消自动下载提示)")
+    else:
+        logger.info(f"FFmpeg 检测: 未检测到可用可执行文件 (状态: {ffmpeg_status or '未配置'})")
 
     if not ffmpeg_local_path and not system_ffmpeg and ffmpeg_status != 'cancelled':
         logger.info("未检测到 FFmpeg，正在发送自动下载提示...")
@@ -716,10 +741,6 @@ async def main():
             logger.info("FFmpeg 提示已发送到 QQ")
         except Exception as e:
             logger.error(f"发送 FFmpeg 提示到 QQ 失败: {e}")
-    elif ffmpeg_local_path or system_ffmpeg:
-        logger.info(f"FFmpeg 已存在: {ffmpeg_local_path or system_ffmpeg}")
-    elif ffmpeg_status == 'cancelled':
-        logger.info("用户已取消 FFmpeg 自动下载提示")
     
     # 注册 TG 处理器
     for handler in get_tg_handlers():
@@ -875,7 +896,7 @@ async def main():
     auto_update_task = asyncio.create_task(auto_check_update())
     background_tasks.append(auto_update_task)
     
-    logger.info("TQSync is running...")
+    logger.info("TQSync 启动完成，正在监听并同步消息...")
     
     engine = SyncEngine.get_instance()
     
@@ -922,7 +943,19 @@ async def main():
         logger.error(f"主循环异常: {e}")
     finally:
         logger.info("TQSync 正在关闭...")
-        # 确保数据库连接关闭
+        # 1. 停止同步引擎（等待剩余任务排空）
+        try:
+            await global_sync_engine.stop(timeout=3.0)
+        except Exception as e:
+            logger.debug(f"同步引擎停止异常: {e}")
+
+        # 2. 关闭 OneBot HTTP 客户端长连接
+        try:
+            await onebot_client.close()
+        except Exception as e:
+            logger.debug(f"OneBotClient 关闭异常: {e}")
+
+        # 3. 确保数据库连接关闭
         try:
             await db.close()
         except Exception as e:
@@ -941,13 +974,13 @@ if __name__ == '__main__':
             logger.info("TQSync 正常退出")
             break
         except KeyboardInterrupt:
-            logger.info("Stopped by user")
+            logger.info("收到用户停止信号 (KeyboardInterrupt)，程序正常退出")
             break
         except SystemExit as e:
             if e.code == 0:
-                logger.info("TQSync 正常退出 (SystemExit code 0)")
+                logger.info("TQSync 正常退出 (进程退出码: 0)")
             else:
-                logger.error(f"TQSync 异常退出 (SystemExit code {e.code})")
+                logger.error(f"TQSync 异常退出 (进程退出码: {e.code})")
             break
         except Exception as e:
             elapsed = time.time() - loop_start

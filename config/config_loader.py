@@ -17,7 +17,7 @@ class ConfigLoader:
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
         with open(self.config_path, 'r', encoding='utf-8') as f:
-            self.config = yaml.safe_load(f)
+            self.config = yaml.safe_load(f) or {}
 
     def get(self, key: str, default=None):
         keys = key.split('.')
@@ -33,7 +33,7 @@ class ConfigLoader:
         keys = key.split('.')
         current = self.config
         for k in keys[:-1]:
-            if k not in current:
+            if k not in current or not isinstance(current[k], dict):
                 current[k] = {}
             current = current[k]
         current[keys[-1]] = value

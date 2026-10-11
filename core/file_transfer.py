@@ -605,19 +605,24 @@ class FileTransfer:
     @staticmethod
     async def transfer_tg_to_qq(source: FileSource, *,
                                 tg_user_id: int, display_name: str,
+                                caption: str = '',
                                 reply_segment: list = None,
                                 tg_message_id: int = None) -> Optional[dict]:
         """TG → QQ: 解析文件 + 发送 + 保存映射。"""
         from db.database import db
         try:
             source = await FileTransfer.resolve(source)
-            prefix = f'[TG] {display_name}\n'
+            caption_str = f": {caption}" if caption else ""
+            prefix = f'[TG] {display_name}{caption_str}\n'
             if source.media_type == MediaType.DOCUMENT:
-                prefix = f'[TG] {display_name} 发送了一个文件: {source.file_name}\n'
+                doc_title = f'[TG] {display_name} 发送了一个文件: {source.file_name}'
+                prefix = f'{doc_title}\n{caption}\n' if caption else f'{doc_title}\n'
             elif source.media_type == MediaType.VIDEO:
-                prefix = f'[TG] {display_name} 发送了一个视频\n'
+                vid_title = f'[TG] {display_name} 发送了一个视频'
+                prefix = f'{vid_title}\n{caption}\n' if caption else f'{vid_title}\n'
             elif source.media_type == MediaType.AUDIO:
-                prefix = f'[TG] {display_name} 发送了一条语音\n'
+                audio_title = f'[TG] {display_name} 发送了一条语音'
+                prefix = f'{audio_title}\n{caption}\n' if caption else f'{audio_title}\n'
 
             result = await FileTransfer.send_to_qq(
                 source, prefix=prefix, reply_segment=reply_segment

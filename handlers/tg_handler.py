@@ -11,14 +11,14 @@ from utils.logger import logger
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息删除事件，同步撤回到 QQ"""
-    logger.info(f"收到 Telegram 删除消息事件: {update}")
-    
     # PTB v21+ 中，deleted_message_ids 位于 update.channel_post 或 update.message 之外，直接在 update 对象上
     deleted_ids = getattr(update, 'deleted_message_ids', [])
     
     if not deleted_ids:
-        logger.warning("更新中未找到 deleted_message_ids")
+        logger.debug("更新中未找到 deleted_message_ids")
         return
+
+    logger.info(f"收到 Telegram 消息撤回事件 (IDs: {deleted_ids})")
 
     # 检查聊天 ID (优先使用 effective_chat)
     chat_id = None
@@ -68,6 +68,8 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_segment.append({"type": "reply", "data": {"id": str(original_qq_id)}})
             logger.info(f"[TG] 映射回复消息至 {original_qq_id}")
 
+    sender_name = user.username or f"{user.first_name or ''} {user.last_name or ''}".strip() or str(user.id)
+
     # 处理图片消息
     if msg.photo:
         file_id = msg.photo[-1].file_id
@@ -77,9 +79,11 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if blocked_word:
                 logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
                 return
-        logger.info(f"[TG] {user.username} 发送了一张图片")
+        caption_hint = f" ({caption[:30]})" if caption else ""
+        logger.info(f"[TG] {sender_name}: [图片]{caption_hint}")
         engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
             user.username or str(user.id), file_id,
+            caption=caption,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
@@ -87,10 +91,18 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.video:
         file_id = msg.video.file_id
         file_name = msg.video.file_name or f'video_{uuid.uuid4().hex[:8]}.mp4'
-        logger.info(f"[TG] {user.username} 发送了一个视频")
+        caption = msg.caption or ""
+        if caption:
+            blocked_word = await db.check_blocked_word_in_text(caption.strip())
+            if blocked_word:
+                logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+                return
+        caption_hint = f" ({caption[:30]})" if caption else ""
+        logger.info(f"[TG] {sender_name}: [视频: {file_name}]{caption_hint}")
         engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
             user.username or str(user.id), file_id,
             file_name=file_name, file_size=msg.video.file_size or 0,
+            caption=caption,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
@@ -98,10 +110,18 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.document:
         file_id = msg.document.file_id
         filename = msg.document.file_name or f"file_{uuid.uuid4().hex[:8]}.dat"
-        logger.info(f"[TG] {user.username} 发送了一个文件 ({filename})")
+        caption = msg.caption or ""
+        if caption:
+            blocked_word = await db.check_blocked_word_in_text(caption.strip())
+            if blocked_word:
+                logger.info(f"[屏蔽] TG用户 {user.id}(@{user.username}) 的消息被拦截 (关键词: {blocked_word})")
+                return
+        caption_hint = f" ({caption[:30]})" if caption else ""
+        logger.info(f"[TG] {sender_name}: [文件: {filename}]{caption_hint}")
         engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
             user.username or str(user.id), file_id,
             file_name=filename, file_size=msg.document.file_size or 0,
+            caption=caption,
             reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
@@ -109,14 +129,14 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.sticker:
         file_id = msg.sticker.file_id
         is_animated = msg.sticker.is_animated or msg.sticker.is_video
-        logger.info(f"[TG] {user.username} 发送了一个贴纸 (动态: {is_animated})")
+        logger.info(f"[TG] {sender_name}: [贴纸{'(动态)' if is_animated else ''}]")
         engine.enqueue_sync_task(engine.forward_sticker_to_qq, user.id, user.username or str(user.id), file_id, is_animated, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
 
     # 处理语音消息 (Voice) - 仅限 Telegram 的语音消息
     if msg.voice:
         file_id = msg.voice.file_id
-        logger.info(f"[TG] {user.username} 发送了一个语音消息")
+        logger.info(f"[TG] {sender_name}: [语音消息]")
         engine.enqueue_sync_task(engine.forward_voice_to_qq, user.id, user.username or str(user.id), file_id, reply_segment=reply_segment, tg_message_id=msg.message_id)
         return
     
@@ -124,7 +144,7 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg.audio:
         file_id = msg.audio.file_id
         filename = msg.audio.file_name or f"audio_{msg.audio.file_unique_id}.mp3"
-        logger.info(f"[TG] {user.username} 发送了一个文件: {filename}")
+        logger.info(f"[TG] {sender_name}: [音频: {filename}]")
         engine.enqueue_sync_task(engine.forward_media_to_qq, user.id,
             user.username or str(user.id), file_id,
             file_name=filename, file_size=msg.audio.file_size or 0,
@@ -143,7 +163,9 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
             return
 
-        logger.info(f"[TG] {user.username} 发送了一条文本消息")
+        text_preview = (text[:60] + '...') if len(text) > 60 else text
+        text_preview = text_preview.replace('\n', ' ')
+        logger.info(f"[TG] {sender_name}: {text_preview}")
         engine.enqueue_sync_task(engine.forward_to_qq, user.id, user.username or str(user.id), text,
             reply_segment=reply_segment, tg_message_id=msg.message_id,
             entities=msg.entities)
