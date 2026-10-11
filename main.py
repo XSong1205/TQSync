@@ -935,7 +935,7 @@ async def main():
             elapsed_ms = int(time.time() * 1000 - reboot_info['start_time'])
             platform = reboot_info.get('platform', 'qq')
             
-            reboot_msg = f"✅ 重启完成\n⏱ 耗时: {elapsed_ms}ms"
+            reboot_msg = f"重启完成\n - 耗时: {elapsed_ms}ms"
             
             if platform == 'tg':
                 await engine.bot.send_message(engine.tg_group_id, reboot_msg)
