@@ -62,6 +62,15 @@ class BindingUpdate(BaseModel):
     tg_username: Optional[str] = None
     qq_nickname: Optional[str] = None
 
+class BlockedWordAdd(BaseModel):
+    """屏蔽词新增请求体。
+
+    注意：这类请求体模型必须在路由注册前定义。使用
+    ``from __future__ import annotations`` 时注解是字符串，FastAPI 在
+    注册路由时若解析不到模型会把参数当成 query 参数，导致请求恒 422。
+    """
+    word: str
+
 @app.get("/admin/config", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def get_config():
     """获取所有配置项（敏感字段自动屏蔽）"""
@@ -346,21 +355,31 @@ async def get_blocked_words():
 
 @app.post("/admin/blocked_words", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def add_blocked_word(body: BlockedWordAdd):
-    if not body.word.strip():
+    word = (body.word or "").strip()
+    if not word:
         raise HTTPException(status_code=400, detail="屏蔽词不能为空")
-    success = await db.add_blocked_word(body.word)
+    if len(word) > 200:
+        raise HTTPException(status_code=400, detail="屏蔽词过长（最多 200 字符）")
+    success = await db.add_blocked_word(word)
     if not success:
         raise HTTPException(status_code=409, detail="屏蔽词已存在")
-    return {"status": "success", "message": f"已添加屏蔽词: {body.word}", "word": body.word}
+    return {"status": "success", "message": f"已添加屏蔽词: {word}", "word": word}
 
-@app.delete("/admin/blocked_words/{word}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+@app.delete("/admin/blocked_words/{word:path}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def delete_blocked_word(word: str):
+    """删除屏蔽词。
+
+    使用 ``:path`` 转换器：屏蔽词常见会包含 ``/``（如 ``http://``），
+    普通路径参数在解码后会被当成分隔符而 404。
+    """
     from urllib.parse import unquote
-    word = unquote(word)
+    word = unquote(word).strip()
+    if not word:
+        raise HTTPException(status_code=400, detail="屏蔽词不能为空")
     success = await db.remove_blocked_word(word)
     if not success:
         raise HTTPException(status_code=404, detail="屏蔽词不存在")
-    return {"status": "success", "message": f"已删除屏蔽词: {word}"}
+    return {"status": "success", "message": f"已删除屏蔽词: {word}", "word": word}
 
 
 # ── 插件管理 API ──
@@ -478,9 +497,6 @@ async def upload_plugin(file: UploadFile = File(...)):
 class PluginDataUpdate(BaseModel):
     key: str
     value: str
-
-class BlockedWordAdd(BaseModel):
-    word: str
 
 
 @app.get("/admin/plugins/data", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])

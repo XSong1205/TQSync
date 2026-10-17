@@ -745,6 +745,10 @@ body {
   color: var(--md-sys-color-on-surface); font-family: var(--font-mono); font-size: 13px;
   outline: none;
 }
+.m3-cfg-textarea {
+  height: auto; min-height: 72px; padding: 10px 12px;
+  line-height: 1.6; resize: vertical;
+}
 
 /* Sync Direction Cards */
 .sync-dir-grid {
@@ -1233,7 +1237,7 @@ body {
             </el-table-column>
             <el-table-column label="操作" width="100" align="center">
               <template #default="scope">
-                <el-popconfirm v-if="scope.row.status==='已绑定'" title="确认解除此账号绑定关系？" @confirm="unbind(scope.row.tg_user_id)">
+                <el-popconfirm v-if="scope.row.status==='已绑定'" title="确认解除此账号绑定关系？" confirm-button-text="解绑" cancel-button-text="取消" @confirm="unbind(scope.row.tg_user_id)">
                   <template #reference>
                     <button class="m3-icon-btn" style="color:var(--md-sys-color-error)" title="解除绑定">
                       <span class="m-icon">link_off</span>
@@ -1312,7 +1316,7 @@ body {
                   <button class="m3-btn-small m3-btn-tonal" style="height:30px;padding:0 10px;font-size:12px" @click="openDrawer(scope.row)">
                     数据
                   </button>
-                  <el-popconfirm title="确认删除此插件文件？" @confirm="deletePlugin(scope.row)">
+                  <el-popconfirm title="确认删除此插件文件？" confirm-button-text="删除" cancel-button-text="取消" @confirm="deletePlugin(scope.row)">
                     <template #reference>
                       <button class="m3-icon-btn" style="width:30px;height:30px;color:var(--md-sys-color-error)" title="删除插件">
                         <span class="m-icon" style="font-size:18px">delete</span>
@@ -1361,7 +1365,7 @@ body {
                 </div>
                 <div style="display:flex;gap:4px">
                   <button class="m3-icon-btn" @click="startKvEdit(kv)" title="编辑"><span class="m-icon" style="font-size:18px">edit</span></button>
-                  <el-popconfirm title="确认删除此项？" @confirm="deleteKv(kv.key)">
+                  <el-popconfirm title="确认删除此项？" confirm-button-text="删除" cancel-button-text="取消" @confirm="deleteKv(kv.key)">
                     <template #reference>
                       <button class="m3-icon-btn" style="color:var(--md-sys-color-error)"><span class="m-icon" style="font-size:18px">delete</span></button>
                     </template>
@@ -1384,7 +1388,7 @@ body {
             <span>系统设置与控制</span>
           </div>
           <div class="m3-segmented-group">
-            <button class="m3-segment-btn" :class="{active: configSubTab==='config'}" @click="configSubTab='config'">配置文件</button>
+            <button class="m3-segment-btn" :class="{active: configSubTab==='config'}" @click="configSubTab='config';fetchConfig()">配置文件</button>
             <button class="m3-segment-btn" :class="{active: configSubTab==='syncDirection'}" @click="configSubTab='syncDirection';fetchSyncDirection()">同步方向</button>
             <button class="m3-segment-btn" :class="{active: configSubTab==='blockedWords'}" @click="configSubTab='blockedWords';fetchBlockedWords()">屏蔽词库</button>
           </div>
@@ -1463,15 +1467,43 @@ body {
         <!-- 3. Blocked Words -->
         <div v-if="configSubTab==='blockedWords'">
           <div class="m3-table-card">
-            <div style="display:flex;gap:10px;margin-bottom:16px;max-width:500px">
-              <input class="m3-cfg-input" v-model="newBlockedWord" placeholder="输入要屏蔽的关键词…" @keyup.enter="addBlockedWord"/>
-              <button class="m3-btn-small m3-btn-primary" @click="addBlockedWord" :disabled="!newBlockedWord.trim()">
-                <span class="m-icon">add</span>
-                <span>添加</span>
+            <div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start">
+              <textarea
+                class="m3-cfg-input m3-cfg-textarea"
+                v-model="newBlockedWord"
+                rows="2"
+                placeholder="输入要屏蔽的关键词；支持一次添加多个：换行、逗号、分号分隔，Ctrl+Enter 提交"
+                @keydown.ctrl.enter.prevent="addBlockedWord"
+                style="flex:1"
+              ></textarea>
+              <button
+                class="m3-btn-small m3-btn-primary"
+                @click="addBlockedWord"
+                :disabled="blockedAdding || !newBlockedWord.trim()"
+                style="height:72px;min-width:96px;justify-content:center"
+              >
+                <span class="m-icon">{{ blockedAdding ? 'hourglass_top' : 'add' }}</span>
+                <span>{{ blockedAdding ? '添加中…' : '添加' }}</span>
+              </button>
+            </div>
+            <div style="font-size:12px;color:var(--md-sys-color-outline);margin-bottom:16px">
+              已配置 <b style="color:var(--md-sys-color-primary)">{{ blockedWords.length }}</b> 个关键词；消息命中任一关键词时会被直接拦截，不再转发到对端。
+            </div>
+
+            <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+              <input
+                class="m3-cfg-input"
+                v-model="blockedWordFilter"
+                placeholder="搜索关键词…"
+                style="max-width:320px"
+              />
+              <button class="m3-btn-small m3-btn-tonal" @click="fetchBlockedWords" :disabled="blockedWordsLoading">
+                <span class="m-icon">refresh</span>
+                <span>{{ blockedWordsLoading ? '刷新中…' : '刷新' }}</span>
               </button>
             </div>
 
-            <el-table :data="tableBlockedWords" style="width:100%" v-if="blockedWords.length>0">
+            <el-table :data="tableBlockedWords" style="width:100%" v-if="tableBlockedWords.length>0">
               <el-table-column label="#" width="60">
                 <template #default="scope">{{ scope.$index + 1 }}</template>
               </el-table-column>
@@ -1482,10 +1514,15 @@ body {
               </el-table-column>
               <el-table-column label="操作" width="100" align="center">
                 <template #default="scope">
-                  <el-popconfirm title="确认删除此屏蔽词？" @confirm="removeBlockedWord(scope.row.word)">
+                  <el-popconfirm title="确认删除此屏蔽词？" confirm-button-text="删除" cancel-button-text="取消" @confirm="removeBlockedWord(scope.row.word)">
                     <template #reference>
-                      <button class="m3-icon-btn" style="color:var(--md-sys-color-error)" title="删除">
-                        <span class="m-icon">delete</span>
+                      <button
+                        class="m3-icon-btn"
+                        style="color:var(--md-sys-color-error)"
+                        title="删除"
+                        :disabled="deletingWord===scope.row.word"
+                      >
+                        <span class="m-icon">{{ deletingWord===scope.row.word ? 'hourglass_top' : 'delete' }}</span>
                       </button>
                     </template>
                   </el-popconfirm>
@@ -1493,7 +1530,7 @@ body {
               </el-table-column>
             </el-table>
             <div v-else style="text-align:center;padding:30px;color:var(--md-sys-color-outline)">
-              暂无屏蔽关键词
+              {{ blockedWordsLoading ? '加载中…' : (blockedWords.length ? '没有匹配的关键词' : '暂无屏蔽关键词') }}
             </div>
           </div>
         </div>
@@ -1524,7 +1561,7 @@ body {
             </el-table-column>
             <el-table-column label="操作" width="120" align="center">
               <template #default="scope">
-                <el-popconfirm title="确认取消此管理员权限？" @confirm="toggleAdmin(scope.row)">
+                <el-popconfirm title="确认取消此管理员权限？" confirm-button-text="移除" cancel-button-text="取消" @confirm="toggleAdmin(scope.row)">
                   <template #reference>
                     <button class="m3-btn-small m3-btn-tonal" style="color:var(--md-sys-color-error)">移除</button>
                   </template>
@@ -1652,6 +1689,10 @@ createApp({
     const configSubTab = ref('config');
     const blockedWords = ref([]);
     const newBlockedWord = ref('');
+    const blockedWordFilter = ref('');
+    const blockedWordsLoading = ref(false);
+    const blockedAdding = ref(false);
+    const deletingWord = ref('');
     const syncDirection = ref('both');
     const syncDirectionOptions = ref([]);
 
@@ -1729,6 +1770,18 @@ createApp({
     };
 
     const api = axios.create({ baseURL: window.location.origin });
+
+    /* 统一把后端错误转成可读文本（FastAPI 校验错误是数组，直接塞进提示会变成 [object Object]） */
+    const errText = (e) => {
+      const detail = e?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        return detail.map(d => d?.msg ? `${(d.loc || []).slice(1).join('.') || '参数'}: ${d.msg}` : JSON.stringify(d)).join('；');
+      }
+      if (typeof detail === 'string' && detail) return detail;
+      if (e?.code === 'ERR_NETWORK') return '无法连接服务器';
+      if (e?.response?.status === 403) return '没有权限，请重新登录';
+      return e?.message || '未知错误';
+    };
 
     /* ══════════════ 登录 / 登出 ══════════════ */
     const doLogin = async () => {
@@ -1837,12 +1890,13 @@ createApp({
 
     /* ══════════════ 绑定页 ══════════════ */
     const fetchBindings = async () => {
-      try { const res = await api.get('/admin/bindings'); bindings.value = res.data; } catch(e) {}
+      try { const res = await api.get('/admin/bindings'); bindings.value = res.data; }
+      catch(e) { if (e.response?.status !== 403) ElMessage.error('加载绑定列表失败：' + errText(e)); }
     };
 
     const unbind = async (id) => {
       try { await api.delete(`/admin/bindings/${id}`); ElMessage.success('已解除用户绑定'); fetchBindings(); }
-      catch(e) { ElMessage.error('解绑操作失败'); }
+      catch(e) { ElMessage.error('解绑失败：' + errText(e)); }
     };
 
     /* ══════════════ 配置页 ══════════════ */
@@ -1850,7 +1904,9 @@ createApp({
       try {
         const res = await api.get('/admin/config');
         configItems.value = (res.data.config || []).map(c => ({...c, editing: false, editValue: c.value, revealed: false}));
-      } catch(e) {}
+      } catch(e) {
+        if (e.response?.status !== 403) ElMessage.error('加载配置失败：' + errText(e));
+      }
     };
 
     const configSections = computed(() => {
@@ -1869,38 +1925,100 @@ createApp({
         await api.put(`/admin/config/${encodeURIComponent(item.key)}`, { key: item.key, value: item.editValue });
         item.value = item.editValue;
         item.editing = false;
-        ElMessage.success(`配置已保存: ${item.key}`);
+        // 登录密钥本身被修改后，旧 Key 立即失效，这里同步切换，避免整套界面变成 403
+        if (item.key === 'server.admin_api_key' && item.editValue) {
+          localStorage.setItem('tqsync_api_key', item.editValue);
+          api.defaults.headers['X-API-Key'] = item.editValue;
+          inputKey.value = item.editValue;
+          ElMessage.success('配置已保存，登录密钥已同步更新');
+        } else {
+          ElMessage.success(`配置已保存: ${item.key}`);
+        }
       } catch(e) {
-        ElMessage.error('更新失败: ' + (e.response?.data?.detail || e.message));
+        ElMessage.error('更新失败: ' + errText(e));
       }
     };
 
     const fetchBlockedWords = async () => {
-      try { const res = await api.get('/admin/blocked_words'); blockedWords.value = res.data.words || []; } catch(e) {}
+      blockedWordsLoading.value = true;
+      try {
+        const res = await api.get('/admin/blocked_words');
+        blockedWords.value = Array.isArray(res.data?.words) ? res.data.words : [];
+      } catch(e) {
+        if (e.response?.status !== 403) ElMessage.error('加载屏蔽词失败：' + errText(e));
+      } finally {
+        blockedWordsLoading.value = false;
+      }
+    };
+
+    /* 支持一次粘贴多个词：换行、中英文逗号、分号、顿号分隔 */
+    const parseBlockedWords = (raw) => {
+      const parts = String(raw || '')
+        .split(/[\n\r,，;；、]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      return Array.from(new Set(parts));
     };
 
     const addBlockedWord = async () => {
-      const w = newBlockedWord.value.trim();
-      if (!w) return;
-      try {
-        await api.post('/admin/blocked_words', { word: w });
-        ElMessage.success(`已加入屏蔽库: ${w}`);
+      if (blockedAdding.value) return;
+      const words = parseBlockedWords(newBlockedWord.value);
+      if (!words.length) return;
+
+      const existing = new Set(blockedWords.value);
+      const pending = words.filter(w => !existing.has(w));
+      const duplicated = words.length - pending.length;
+      if (!pending.length) {
+        ElMessage.warning('输入的关键词都已存在');
+        return;
+      }
+
+      blockedAdding.value = true;
+      const added = [];
+      const failed = [];
+      let lastError = null;
+      for (const word of pending) {
+        try {
+          await api.post('/admin/blocked_words', { word });
+          added.push(word);
+        } catch(e) {
+          failed.push(word);
+          lastError = e;
+        }
+      }
+      blockedAdding.value = false;
+
+      if (added.length) {
+        blockedWords.value = [...blockedWords.value, ...added];
+        const dupTip = duplicated ? `（跳过 ${duplicated} 个重复）` : '';
+        ElMessage.success(`已添加 ${added.length} 个屏蔽词${dupTip}`);
+      }
+      if (failed.length) {
+        newBlockedWord.value = failed.join('\n');
+        ElMessage.error(`${failed.length} 个未添加：${errText(lastError)}（已保留在输入框）`);
+      } else {
         newBlockedWord.value = '';
-        fetchBlockedWords();
-      } catch(e) {
-        ElMessage.error(e.response?.data?.detail || '添加失败');
       }
     };
 
     const removeBlockedWord = async (word) => {
+      deletingWord.value = word;
       try {
         await api.delete(`/admin/blocked_words/${encodeURIComponent(word)}`);
+        blockedWords.value = blockedWords.value.filter(w => w !== word);
         ElMessage.success(`已移除屏蔽词: ${word}`);
-        fetchBlockedWords();
-      } catch(e) { ElMessage.error('删除失败'); }
+      } catch(e) {
+        ElMessage.error('删除失败：' + errText(e));
+      } finally {
+        deletingWord.value = '';
+      }
     };
 
-    const tableBlockedWords = computed(() => blockedWords.value.map(w => ({word: w})));
+    const tableBlockedWords = computed(() => {
+      const q = blockedWordFilter.value.trim().toLowerCase();
+      const list = q ? blockedWords.value.filter(w => w.toLowerCase().includes(q)) : blockedWords.value;
+      return list.map(w => ({ word: w }));
+    });
 
     /* ══════════════ 插件页 ══════════════ */
     const fetchPlugins = async () => {
@@ -1908,7 +2026,9 @@ createApp({
       try {
         const res = await api.get('/admin/plugins');
         plugins.value = res.data.plugins || [];
-      } catch(e) {} finally { pluginsLoading.value = false; }
+      } catch(e) {
+        if (e.response?.status !== 403) ElMessage.error('加载插件列表失败：' + errText(e));
+      } finally { pluginsLoading.value = false; }
     };
 
     const loadedCount  = computed(() => plugins.value.filter(p=>p.loaded).length);
@@ -2014,7 +2134,8 @@ createApp({
 
     /* ══════════════ 管理员页 ══════════════ */
     const fetchAdmins = async () => {
-      try { const res = await api.get('/admin/admins'); admins.value = res.data.admins || []; } catch(e) {}
+      try { const res = await api.get('/admin/admins'); admins.value = res.data.admins || []; }
+      catch(e) { if (e.response?.status !== 403) ElMessage.error('加载管理员列表失败：' + errText(e)); }
     };
 
     const isNewAdminValid = computed(() => {
@@ -2070,7 +2191,11 @@ createApp({
       if (idx === 'logs') fetchLogs();
       if (idx === 'binds') fetchBindings();
       if (idx === 'plugins') fetchPlugins();
-      if (idx === 'config') { fetchConfig(); fetchBlockedWords(); configSubTab.value = 'config'; }
+      if (idx === 'config') {
+        // 保留上次停留的子页签；仅在需要时请求，避免每次进入都全量刷新
+        if (!configItems.value.length) fetchConfig();
+        if (configSubTab.value === 'blockedWords') fetchBlockedWords();
+      }
       if (idx === 'admins') fetchAdmins();
     };
 
@@ -2114,6 +2239,7 @@ createApp({
       isLoggedIn, loggingIn, loginLoading, loginErr, inputKey, showPw, theme, toggleTheme,
       activeTab, mobileOpen, status, logs, logFilter, filteredLogs,
       bindings, configItems, configSections, configSubTab, blockedWords, newBlockedWord, tableBlockedWords,
+      blockedWordFilter, blockedWordsLoading, blockedAdding, deletingWord,
       logBodyRef, syncHistory, maxSync, totalToday, firstTick, midTick, lastTick, barHeight, pluginStats,
       plugins, pluginsLoading, busyName, uploadInputRef, drawerOpen, drawerPlugin, drawerKvList, drawerKvCount,
       kvNewKey, kvNewVal, admins, newAdminId, loadedCount, enabledCount, isNewAdminValid,
