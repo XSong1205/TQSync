@@ -96,11 +96,11 @@ tmux_ensure_console() {
         return 0
     fi
     if printf '%s\n' "$names" | grep -qx 'shell'; then
-        tmux respawn-window -k -t "$SESSION_NAME:shell" -c "$TQSYNC_DIR" "bash '$SELF' console" 2>/dev/null \
+        tmux respawn-window -k -t "$SESSION_NAME:shell" -c "$TQSYNC_DIR" "TQSYNC_SCREEN='$SESSION_NAME' bash '$SELF' console" 2>/dev/null \
             && tmux rename-window -t "$SESSION_NAME:shell" cmd 2>/dev/null \
             && return 0
     fi
-    tmux new-window -t "=$SESSION_NAME" -n cmd -c "$TQSYNC_DIR" "bash '$SELF' console"
+    tmux new-window -t "=$SESSION_NAME" -n cmd -c "$TQSYNC_DIR" "TQSYNC_SCREEN='$SESSION_NAME' bash '$SELF' console"
 }
 
 tmux_start() {
@@ -127,7 +127,7 @@ tmux_start() {
     require_venv || return 1
     echo "[TQSync] 正在 tmux 后台启动..."
     tmux_prepare_server
-    tmux new-session -d -s "$SESSION_NAME" -n cmd -c "$TQSYNC_DIR" "bash '$SELF' console"
+    tmux new-session -d -s "$SESSION_NAME" -n cmd -c "$TQSYNC_DIR" "TQSYNC_SCREEN='$SESSION_NAME' bash '$SELF' console"
     tmux set-option -t "$SESSION_NAME" history-limit "$HISTORY_LIMIT" 2>/dev/null || true
     tmux_spawn_logs
     tmux_apply_options
