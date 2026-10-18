@@ -35,7 +35,7 @@ from core.plugin_base import PluginContext
 from utils.logger import logger
 from utils.auth import is_admin
 from utils.banner import print_banner
-from utils.qq_text import tg_emoji_from_qq
+from utils.qq_text import tg_emoji_from_qq, format_qq_face, face_id_of
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
@@ -74,6 +74,23 @@ async def _copy_to_temp(file_url: str) -> str:
         return file_url
     logger.debug(f"已复制本地文件到 temp: {os.path.basename(local_path)}")
     return dest
+
+
+def _is_face_only_message(message_array) -> bool:
+    """判断一条 QQ 消息是否只由表情段组成（允许空白文本和引用段）。"""
+    has_face = False
+    for part in message_array or []:
+        part_type = part.get('type')
+        if part_type == 'face':
+            has_face = True
+        elif part_type == 'text':
+            if str((part.get('data') or {}).get('text', '')).strip():
+                return False
+        elif part_type == 'reply':
+            continue
+        else:
+            return False
+    return has_face
 
 
 async def _handle_qq_emoji_like_notice(data: dict) -> None:
@@ -221,6 +238,7 @@ async def handle_qq_webhook(request):
             reply_to_tg_id = None
             file_name = "unknown_file"
             at_tg_ids = []
+            face_ids = []
             is_forward = False
             forward_content = None
             
@@ -232,6 +250,13 @@ async def handle_qq_webhook(request):
                 msg_type = msg_part.get('type')
                 if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
+                elif msg_type == 'face':
+                    # QQ 小黄脸表情：文本里放占位符；纯表情消息还会走原图转发
+                    data_part = msg_part.get('data') or {}
+                    text_parts.append(format_qq_face(data_part))
+                    face_id = face_id_of(data_part)
+                    if face_id is not None:
+                        face_ids.append(face_id)
                 elif msg_type == 'at':
                     qq_val = msg_part['data'].get('qq', '0')
                     if qq_val == 'all':
@@ -454,7 +479,17 @@ async def handle_qq_webhook(request):
                         break
             
             combined_text = "".join(text_parts).strip()
-            
+
+            # 纯表情消息：把 QQ 表情原图直接发到 TG（图文混排仍走文本占位）
+            if face_ids and _is_face_only_message(message_array) and config_loader.get('sync.face_as_image', True):
+                logger.info(f"[QQ] {nickname}: [表情 x{len(face_ids)}]")
+                engine.enqueue_sync_task(
+                    engine.forward_face_images_to_tg, qq_id, nickname, list(face_ids),
+                    reply_to_message_id=reply_to_tg_id,
+                    qq_message_id=data.get('message_id'),
+                )
+                return web.json_response({})
+
             # 构造 TG 的 HTML 消息以支持 @
             if at_tg_ids:
                 display_name = await engine.get_display_name(qq_user_id=qq_id, fallback_name=nickname)

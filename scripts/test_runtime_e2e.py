@@ -82,6 +82,22 @@ class FakeBot:
         self.sent.append(('photo', chat_id, str(photo), mid))
         return FakeMessage(mid)
 
+    async def send_media_group(self, chat_id, media, **kwargs):
+        await asyncio.sleep(self.delay)
+        msgs = []
+        for item in media:
+            source = getattr(item, 'media', item)
+            inner = getattr(source, 'input_file', None)
+            name = getattr(source, 'name', None) or getattr(inner, 'name', None) \
+                or getattr(source, 'filename', None) or str(source)
+            # 文件对象能被 PTB 打开就说明文件存在；否则退回路径检查
+            exists = os.path.exists(str(name)) or inner is not None
+            self.photo_exists.append(exists)
+            mid = self._next()
+            self.sent.append(('media_group', chat_id, str(name), mid))
+            msgs.append(FakeMessage(mid))
+        return tuple(msgs)
+
     async def send_document(self, chat_id, document, filename=None, **kwargs):
         await asyncio.sleep(self.delay)
         mid = self._next()
@@ -354,7 +370,58 @@ async def run() -> None:
             finally:
                 onebot_client.set_msg_emoji_like = orig_set_like
 
-            # ---- 5. 突发吞吐 ----
+            # ---- 5. QQ 表情 ----
+            print("[QQ 表情：文本占位 / 纯表情发原图]")
+            # 5.1 图文混排 -> 文本占位 [微笑]，不发图
+            photos_before = len([s for s in bot.sent if s[0] in ('photo', 'media_group')])
+            payload = text_payload('', 90600)
+            payload['message'] = [
+                {'type': 'text', 'data': {'text': '表情：'}},
+                {'type': 'face', 'data': {'id': '14', 'raw': {'faceText': '/微笑'}}},
+                {'type': 'text', 'data': {'text': ' 完'}},
+            ]
+            await post(payload)
+            for _ in range(200):
+                if any('表情：' in s[2] for s in bot.sent):
+                    break
+                await asyncio.sleep(0.01)
+            mixed_text = next((s[2] for s in bot.sent if '表情：' in s[2]), '')
+            check('[微笑]' in mixed_text, f"混排消息里表情转成文本占位（{mixed_text[:40]}）")
+            check(len([s for s in bot.sent if s[0] in ('photo', 'media_group')]) == photos_before,
+                  "混排消息不额外发图")
+
+            # 5.2 纯表情 -> 发内置原图
+            payload = text_payload('', 90601)
+            payload['message'] = [
+                {'type': 'face', 'data': {'id': '14'}},
+                {'type': 'face', 'data': {'id': '13'}},
+            ]
+            await post(payload)
+            for _ in range(200):
+                if len([s for s in bot.sent if s[0] == 'media_group']) >= 1:
+                    break
+                await asyncio.sleep(0.01)
+            group_items = [s for s in bot.sent if s[0] == 'media_group']
+            check(len(group_items) == 2, f"两张表情走相册发送（实际 {len(group_items)} 张）")
+            names = [os.path.basename(s[2]) for s in group_items]
+            check(names == ['14.png', '13.png'], f"按 face id 取到内置原图（{names}）")
+            check(all(os.path.isfile(os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    'assets', 'qq_face', 'png', n)) for n in names),
+                  "内置表情原图确实存在")
+            check(await db.get_tg_msg_id_by_qq(90601) == group_items[0][3], "表情消息映射已写入数据库")
+
+            # 5.3 没有内置图的表情 -> 降级文本
+            payload = text_payload('', 90602)
+            payload['message'] = [{'type': 'face', 'data': {'id': '99999'}}]
+            await post(payload)
+            for _ in range(200):
+                if any(s[2].startswith('[QQ]') and '[表情]' in s[2] for s in bot.sent):
+                    break
+                await asyncio.sleep(0.01)
+            check(any('[表情]' in s[2] for s in bot.sent), "无内置原图时降级为 [表情] 文本")
+
+            # ---- 6. 突发吞吐 ----
             print("[20 条消息突发]")
             t0 = time.perf_counter()
             await asyncio.gather(*[
@@ -376,7 +443,7 @@ async def run() -> None:
         print(f"       事件循环最大停顿 {max_lag:.1f} ms")
         check(max_lag < 150, f"事件循环无明显停顿（最大 {max_lag:.1f} ms）")
 
-        # ---- 6. Admin API ----
+        # ---- 7. Admin API ----
         print("[Admin API]")
         async with aiohttp.ClientSession() as session:
             async with session.get(f'http://127.0.0.1:{admin_port}/health') as resp:

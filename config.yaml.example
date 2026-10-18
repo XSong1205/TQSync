@@ -27,6 +27,7 @@ sync:
   direction: "both"  # 同步方向: "both"(双向), "tg_to_qq"(仅TG→QQ), "qq_to_tg"(仅QQ→TG)
   sync_notice: true  # 是否启用群公告双向自动感知同步 (默认: true)
   sync_reaction: true  # 是否同步表情回应: TG 表情回应 -> QQ 消息表情点赞 (默认: true)
+  face_as_image: true  # 纯表情消息直接发送 QQ 表情原图；设为 false 则统一用 [微笑] 文本 (默认: true)
   worker_count: 3  # 同步工作者并发数 (默认: 3)。高峰可调到 4~8；调大会占用更多带宽与连接
   queue_size: 50  # 待同步队列上限 (默认: 50)。队列满时会丢弃新任务，高峰可适当调大
 

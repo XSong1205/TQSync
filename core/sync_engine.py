@@ -1,4 +1,4 @@
-from telegram import Bot, MessageEntity
+from telegram import Bot, MessageEntity, InputMediaPhoto
 from telegram.constants import MessageEntityType
 import os
 import sys
@@ -12,6 +12,7 @@ import time
 import asyncio
 import ffmpeg
 import subprocess
+from pathlib import Path
 from datetime import datetime
 from utils.version_utils import get_full_version_string
 from config.config_loader import config_loader
@@ -141,7 +142,8 @@ class SyncEngine:
         direction = config_loader.get('sync.direction', 'both')
         forward_to_qq_funcs = ('forward_to_qq', 'forward_media_to_qq', 'forward_voice_to_qq', 'forward_sticker_to_qq')
         forward_to_tg_funcs = ('forward_to_tg', 'forward_media_to_tg', 'forward_voice_to_tg',
-                               'forward_merged_to_tg', 'forward_reaction_to_tg')
+                               'forward_merged_to_tg', 'forward_reaction_to_tg',
+                               'forward_face_images_to_tg')
 
         func_name = task_func.__name__
         if direction == 'tg_to_qq' and func_name in forward_to_tg_funcs:
@@ -891,6 +893,77 @@ class SyncEngine:
                 logger.error("【代理/DNS 异常】Telegram API 返回了 HTML 网页而非 Telegram JSON 响应！这通常表明请求被代理错误分流或遭遇 DNS 污染（请求被发送到了 Facebook 等第三方服务器）。请检查代理分流规则是否将 api.telegram.org 设为了代理模式。")
             logger.error(f"转发文本至 Telegram 失败 (已重试3次): {e}")
             return None
+
+    async def forward_face_images_to_tg(self, qq_user_id: int, qq_nickname: str, face_ids: list,
+                                        reply_to_message_id: int = None, qq_message_id: int = None):
+        """纯 QQ 表情消息 -> TG：发送内置表情原图。
+
+        - 1 张：send_photo；
+        - 2~10 张：send_media_group（相册）；
+        - 超过 10 张：按 10 张一批分别发送；
+        - 没有内置图（或发送失败）：降级为 `[微笑]` 文本占位，走普通文本转发。
+        """
+        from utils.qq_text import face_image_path, format_qq_face
+
+        display_name = await self.get_display_name(qq_user_id=qq_user_id, fallback_name=qq_nickname)
+        paths = [p for p in (face_image_path(face_id) for face_id in face_ids) if p]
+        placeholder = ''.join(format_qq_face({'id': str(face_id)}) for face_id in face_ids)
+
+        if not paths:
+            logger.debug(f"QQ 表情 {face_ids} 没有内置原图，降级为文本")
+            return await self.forward_to_tg(
+                qq_user_id, qq_nickname, placeholder or '[表情]',
+                reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
+
+        caption = f"[QQ] {display_name}"
+        first_message_id = None
+        try:
+            for start in range(0, len(paths), 10):
+                chunk = paths[start:start + 10]
+                chunk_caption = caption if start == 0 else None
+                is_reply = start == 0 and reply_to_message_id is not None
+                if len(chunk) == 1:
+                    with open(chunk[0], 'rb') as f:
+                        msg = await self.bot.send_photo(
+                            chat_id=self.tg_group_id, photo=f,
+                            caption=chunk_caption,
+                            reply_to_message_id=reply_to_message_id if is_reply else None,
+                        )
+                else:
+                    handles = []
+                    try:
+                        media = []
+                        for index, path in enumerate(chunk):
+                            handle = open(path, 'rb')
+                            handles.append(handle)
+                            media.append(InputMediaPhoto(
+                                media=handle,
+                                caption=chunk_caption if index == 0 else None,
+                            ))
+                        msgs = await self.bot.send_media_group(
+                            chat_id=self.tg_group_id, media=media,
+                            reply_to_message_id=reply_to_message_id if is_reply else None,
+                        )
+                        msg = msgs[0] if msgs else None
+                    finally:
+                        for handle in handles:
+                            handle.close()
+                if first_message_id is None and msg is not None:
+                    first_message_id = getattr(msg, 'message_id', None)
+
+            if first_message_id and qq_message_id:
+                await db.save_message_mapping(
+                    tg_message_id=first_message_id,
+                    qq_message_id=qq_message_id,
+                    sender_qq_id=qq_user_id,
+                )
+            logger.info(f"已同步 {len(paths)} 个 QQ 表情原图至 TG（{placeholder}）")
+            return first_message_id
+        except Exception as e:
+            logger.error(f"转发 QQ 表情原图失败，降级为文本占位: {e}")
+            return await self.forward_to_tg(
+                qq_user_id, qq_nickname, placeholder or '[表情]',
+                reply_to_message_id=reply_to_message_id, qq_message_id=qq_message_id)
 
     async def forward_reaction_to_tg(self, qq_user_id: int, qq_nickname: str, emoji: str,
                                      target_qq_message_id: int = None):
