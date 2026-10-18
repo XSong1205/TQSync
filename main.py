@@ -9,6 +9,7 @@ import html
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
+import aiohttp
 from aiohttp import web
 import uvicorn
 
