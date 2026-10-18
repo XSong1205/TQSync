@@ -1,11 +1,12 @@
 from telegram import Update
-from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler
+from telegram.ext import ContextTypes, MessageHandler, MessageReactionHandler, filters, CommandHandler
 from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
 from handlers.qq_handler import onebot_client
 from handlers.command_handler import handle_setprefix_command as handle_setprefix_command_logic, handle_help_command as handle_help_command_logic, handle_status_command, handle_update_command, handle_checkupdate_command, handle_reboot_command as handle_reboot_command_logic, handle_blockword_command as handle_blockword_command_logic, handle_unblockword_command as handle_unblockword_command_logic, handle_blockwords_command as handle_blockwords_command_logic, handle_webui_command as handle_webui_command_logic
 from core.plugin_manager import PluginManager
+from utils.qq_text import tg_emoji_to_qq_emoji_id
 import uuid
 from utils.logger import logger
 from utils.auth import is_admin
@@ -469,6 +470,63 @@ async def handle_syncnotice_command(update: Update, context: ContextTypes.DEFAUL
     else:
         await msg.edit_text("已拉取完毕，当前 QQ 群无未同步的有效公告。")
 
+async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Telegram 表情回应 -> QQ 消息表情点赞（set_msg_emoji_like）。
+
+    - 只处理目标群组内的 emoji 回应（自定义表情贴纸不做映射）；
+    - 新增回应 -> set=True，取消回应 -> set=False；
+    - 依赖 message_mapping 把 TG 消息 ID 映射回 QQ 消息 ID。
+    """
+    reaction = getattr(update, 'message_reaction', None)
+    if not reaction:
+        return
+
+    chat = getattr(reaction, 'chat', None)
+    if not chat or chat.id != config_loader.get('telegram.group_id'):
+        return
+    if not config_loader.get('sync.sync_reaction', True):
+        return
+    if config_loader.get('sync.direction', 'both') == 'qq_to_tg':
+        return
+
+    def _first_emoji(items):
+        for item in items or []:
+            emoji = getattr(item, 'emoji', None)
+            if emoji:
+                return emoji
+        return None
+
+    added = _first_emoji(reaction.new_reaction)
+    removed = _first_emoji(reaction.old_reaction)
+
+    if added:
+        emoji, set_like = added, True
+    elif removed:
+        # 取消回应：把 QQ 侧对应的点赞也撤掉
+        emoji, set_like = removed, False
+    else:
+        return
+
+    qq_msg_id = await db.get_qq_msg_id_by_tg(reaction.message_id)
+    if not qq_msg_id:
+        logger.debug(f"[TG 表情回应] TG 消息 {reaction.message_id} 没有对应的 QQ 映射，跳过")
+        return
+
+    emoji_id = tg_emoji_to_qq_emoji_id(emoji)
+    if not emoji_id:
+        return
+
+    try:
+        res = await onebot_client.set_msg_emoji_like(qq_msg_id, emoji_id, set_like=set_like)
+        if res.get('retcode') == 0:
+            action = '回应' if set_like else '取消回应'
+            logger.info(f"[TG] {emoji} {action}已同步至 QQ 消息 {qq_msg_id}（emoji_id={emoji_id}）")
+        else:
+            logger.warning(f"[TG] 表情回应同步到 QQ 失败: {res}")
+    except Exception as e:
+        logger.warning(f"[TG] 表情回应同步异常: {e}")
+
+
 def get_tg_handlers():
     return [
         MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_tg_pinned_message),
@@ -490,5 +548,6 @@ def get_tg_handlers():
         CommandHandler('notice', handle_notice_command),
         CommandHandler('announce', handle_notice_command),
         CommandHandler('syncnotice', handle_syncnotice_command),
+        MessageReactionHandler(handle_message_reaction),
         MessageHandler(filters.UpdateType.MESSAGE & filters.COMMAND, handle_unhandled_command),
     ]

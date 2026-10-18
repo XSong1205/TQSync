@@ -35,9 +35,18 @@ from core.plugin_base import PluginContext
 from utils.logger import logger
 from utils.auth import is_admin
 from utils.banner import print_banner
+from utils.qq_text import format_qq_face, tg_emoji_from_qq
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
+
+# Telegram 默认的 getUpdates 不包含 message_reaction 等类型，显式声明后才能收到表情回应。
+# 这里保持"常用消息类更新 + 表情回应"，不引入业务尚不支持的类型。
+ALLOWED_TG_UPDATES = [
+    "message", "edited_message", "channel_post", "edited_channel_post",
+    "callback_query", "inline_query", "my_chat_member", "chat_member",
+    "chat_join_request", "message_reaction", "message_reaction_count",
+]
 
 async def _copy_to_temp(file_url: str) -> str:
     """若是本地 file:// 路径则复制到 temp 目录并返回新路径；否则原样返回
@@ -65,6 +74,97 @@ async def _copy_to_temp(file_url: str) -> str:
         return file_url
     logger.debug(f"已复制本地文件到 temp: {os.path.basename(local_path)}")
     return dest
+
+
+async def _handle_poke_notice(data: dict) -> None:
+    """QQ 戳一戳 -> TG 提示消息。"""
+    if not config_loader.get('sync.sync_poke', True):
+        return
+    target_group = config_loader.get('qq.group_id')
+    if data.get('group_id') not in (None, target_group):
+        logger.debug(f"忽略非目标群组的戳一戳: {data.get('group_id')}")
+        return
+
+    try:
+        user_id = int(data.get('user_id') or 0)
+    except (TypeError, ValueError):
+        return
+    if not user_id:
+        return
+
+    # 反回环：Bot 自己发出的戳一戳不再同步回 TG
+    bot_qq_id = await onebot_client.get_bot_id()
+    if bot_qq_id and user_id == int(bot_qq_id):
+        logger.debug("忽略 Bot 自身发出的戳一戳")
+        return
+
+    try:
+        target_id = int(data.get('target_id')) if data.get('target_id') is not None else None
+    except (TypeError, ValueError):
+        target_id = None
+
+    sender = data.get('sender') or {}
+    nickname = sender.get('card') or sender.get('nickname')
+
+    logger.info(f"[戳一戳] {nickname or user_id} -> {target_id or '未知'}")
+    engine = SyncEngine.get_instance()
+    engine.enqueue_sync_task(engine.forward_poke_to_tg, user_id, nickname, target_qq_id=target_id)
+
+
+async def _handle_qq_emoji_like_notice(data: dict) -> None:
+    """QQ 消息表情点赞（表情回应）-> TG 表情回应。"""
+    if not config_loader.get('sync.sync_reaction', True):
+        return
+    if config_loader.get('sync.direction', 'both') == 'tg_to_qq':
+        return
+    target_group = config_loader.get('qq.group_id')
+    if data.get('group_id') not in (None, target_group):
+        return
+
+    qq_msg_id = data.get('message_id') or data.get('msg_id')
+    if not qq_msg_id:
+        return
+
+    # 不同 NapCat 版本字段名略有差异：likes / emoji_likes_list / emoji_likes
+    likes = data.get('likes') or data.get('emoji_likes_list') or data.get('emoji_likes') or []
+    emoji = ''
+    if isinstance(likes, list) and likes:
+        first = likes[0]
+        if isinstance(first, dict):
+            emoji = tg_emoji_from_qq(first)
+        elif isinstance(first, str):
+            emoji = first
+    if not emoji:
+        logger.debug(f"[表情回应] 无法从 QQ 事件解析 emoji，原始 likes={likes!r}")
+        return
+
+    try:
+        user_id = int(data.get('user_id') or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+    sender = data.get('sender') or {}
+    nickname = sender.get('card') or sender.get('nickname')
+    logger.info(f"[表情回应] QQ 消息 {qq_msg_id} 收到 {emoji}")
+    engine = SyncEngine.get_instance()
+    engine.enqueue_sync_task(engine.forward_reaction_to_tg, user_id, nickname, emoji,
+                             target_qq_message_id=qq_msg_id)
+
+
+# 记录出现过的未处理通知类型（每种只记一次），便于后续按真实报文扩展
+_unknown_notice_types: set = set()
+
+
+def _log_unknown_notice(data: dict) -> None:
+    if data.get('post_type') != 'notice':
+        return
+    key = (data.get('notice_type'), data.get('sub_type'))
+    if key in _unknown_notice_types:
+        return
+    _unknown_notice_types.add(key)
+    logger.info(
+        f"[QQ] 暂未处理的通知类型: notice_type={key[0]} sub_type={key[1]}"
+        f"（字段: {sorted(data.keys())[:14]}），如需支持请按此报文扩展"
+    )
 
 
 async def handle_qq_webhook(request):
@@ -114,6 +214,21 @@ async def handle_qq_webhook(request):
             asyncio.create_task(notice_sync_manager.check_and_sync_qq_notices())
             return web.json_response({})
 
+        # 处理戳一戳通知 (Notice)
+        # NapCat: post_type=notice, notice_type=notify, sub_type=poke；兼容 notice_type=poke 的老写法
+        if data.get('post_type') == 'notice' and (
+            data.get('notice_type') == 'poke' or
+            (data.get('notice_type') == 'notify' and data.get('sub_type') == 'poke')
+        ):
+            await _handle_poke_notice(data)
+            return web.json_response({})
+
+        # 处理消息表情点赞 / 表情回应通知 (Notice)
+        # NapCat: notice_type=group_msg_emoji_like；不同版本字段略有差异，做兼容解析
+        if data.get('post_type') == 'notice' and 'emoji_like' in str(data.get('notice_type', '')):
+            await _handle_qq_emoji_like_notice(data)
+            return web.json_response({})
+
         # 仅处理群消息
         if data.get('message_type') == 'group':
             # [新增] 校验群组 ID，防止同步非目标群组的消息
@@ -161,6 +276,9 @@ async def handle_qq_webhook(request):
                 msg_type = msg_part.get('type')
                 if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
+                elif msg_type == 'face':
+                    # QQ 小黄脸表情 -> 可读文本，避免同步到 TG 时整段丢失
+                    text_parts.append(format_qq_face(msg_part.get('data') or {}))
                 elif msg_type == 'at':
                     qq_val = msg_part['data'].get('qq', '0')
                     if qq_val == 'all':
@@ -513,6 +631,8 @@ async def handle_qq_webhook(request):
                 await onebot_client.send_private_msg(qq_id, response)
             return web.json_response({})
 
+        # 走到这里说明是没有对应处理逻辑的上报类型：每种只记一次，便于后续扩展
+        _log_unknown_notice(data)
         return web.json_response({"status": "ok"})
     except Exception as e:
         logger.error(f"Webhook error: {e}")
@@ -878,7 +998,10 @@ async def main():
                 logger.error(f"【重要排查提示】当前已配置代理: {proxy_url}，但仍然连接超时。请检查：1. 代理服务是否已在运行；2. 代理端口和 IP 是否正确；3. 代理是否能正常访问外网。")
         raise
     await application.start()
-    updater_task = asyncio.create_task(application.updater.start_polling(drop_pending_updates=True))
+    updater_task = asyncio.create_task(application.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=ALLOWED_TG_UPDATES,
+    ))
     background_tasks.append(updater_task)
     
     # 启动 QQ Webhook

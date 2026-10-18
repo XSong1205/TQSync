@@ -140,7 +140,8 @@ class SyncEngine:
         # 同步方向检查
         direction = config_loader.get('sync.direction', 'both')
         forward_to_qq_funcs = ('forward_to_qq', 'forward_media_to_qq', 'forward_voice_to_qq', 'forward_sticker_to_qq')
-        forward_to_tg_funcs = ('forward_to_tg', 'forward_media_to_tg', 'forward_voice_to_tg', 'forward_merged_to_tg')
+        forward_to_tg_funcs = ('forward_to_tg', 'forward_media_to_tg', 'forward_voice_to_tg',
+                               'forward_merged_to_tg', 'forward_poke_to_tg', 'forward_reaction_to_tg')
 
         func_name = task_func.__name__
         if direction == 'tg_to_qq' and func_name in forward_to_tg_funcs:
@@ -890,6 +891,72 @@ class SyncEngine:
                 logger.error("【代理/DNS 异常】Telegram API 返回了 HTML 网页而非 Telegram JSON 响应！这通常表明请求被代理错误分流或遭遇 DNS 污染（请求被发送到了 Facebook 等第三方服务器）。请检查代理分流规则是否将 api.telegram.org 设为了代理模式。")
             logger.error(f"转发文本至 Telegram 失败 (已重试3次): {e}")
             return None
+
+    async def forward_poke_to_tg(self, qq_user_id: int, qq_nickname: str = None,
+                                 target_qq_id: int = None, target_nickname: str = None):
+        """QQ 戳一戳 -> TG 文本提示。
+
+        Telegram 没有「戳一戳」概念，因此以一条简短提示同步过去；
+        不写入 message_mapping（戳一戳本身没有可撤回的消息映射）。
+        """
+        display_name = await self.get_display_name(
+            qq_user_id=qq_user_id, fallback_name=qq_nickname or str(qq_user_id)
+        )
+        if target_qq_id:
+            target_name = await self.get_display_name(
+                qq_user_id=target_qq_id, fallback_name=target_nickname or str(target_qq_id)
+            )
+            message = f"👉 [QQ] {display_name} 戳了戳 {target_name}"
+        else:
+            message = f"👉 [QQ] {display_name} 戳了戳自己"
+
+        try:
+            result = await retry_async(
+                self.bot.send_message,
+                chat_id=self.tg_group_id,
+                text=message,
+                max_retries=3,
+                base_delay=1.0
+            )
+            logger.info(f"已同步 QQ 戳一戳至 TG: {display_name} -> {target_qq_id or '自己'}")
+            return result
+        except Exception as e:
+            logger.error(f"转发戳一戳至 Telegram 失败: {e}")
+            return None
+
+    async def forward_reaction_to_tg(self, qq_user_id: int, qq_nickname: str, emoji: str,
+                                     target_qq_message_id: int = None):
+        """QQ 表情点赞 -> TG 表情回应（给对应的同步消息加同样的 emoji）。
+
+        找不到对应的 TG 消息（映射缺失）时静默跳过。
+        """
+        if not target_qq_message_id:
+            return None
+        tg_msg_id = await db.get_tg_msg_id_by_qq(target_qq_message_id)
+        if not tg_msg_id:
+            logger.debug(f"未找到 QQ {target_qq_message_id} 对应的 TG 消息，跳过表情回应同步")
+            return None
+        display_name = await self.get_display_name(
+            qq_user_id=qq_user_id, fallback_name=qq_nickname or str(qq_user_id)
+        )
+        try:
+            await self.bot.set_message_reaction(
+                chat_id=self.tg_group_id,
+                message_id=tg_msg_id,
+                reaction=emoji,
+            )
+            logger.info(f"已同步 QQ 表情回应至 TG: {display_name} -> {emoji}")
+        except Exception as e:
+            # TG 侧可能未开启表情回应权限，降级为普通提示，避免丢信息
+            logger.debug(f"TG 设置表情回应失败（降级为文本提示）: {e}")
+            try:
+                await self.bot.send_message(
+                    chat_id=self.tg_group_id,
+                    text=f"👉 [QQ] {display_name} 给一条消息点了 {emoji}",
+                )
+            except Exception as e2:
+                logger.warning(f"表情回应降级提示发送失败: {e2}")
+                return None
 
     async def send_startup_notification(self):
         """向两个平台发送启动成功通知"""

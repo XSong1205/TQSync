@@ -206,6 +206,38 @@ class OneBotClient:
             logger.debug(f"/_del_group_notice 失败，尝试降级到 /del_group_notice: {e}")
             return await self._post_json("/del_group_notice", payload)
 
+    async def send_poke(self, user_id: int, group_id: int = None) -> dict:
+        """发送戳一戳。
+
+        Args:
+            user_id: 被戳的用户 QQ 号
+            group_id: 群号；为空时按私聊戳一戳处理
+        """
+        payload = {"user_id": user_id}
+        if group_id:
+            payload["group_id"] = group_id
+        return await self._post_json("/send_poke", payload, max_retries=2, base_delay=1.0)
+
+    async def set_msg_emoji_like(self, message_id: int, emoji_id: str, set_like: bool = True) -> dict:
+        """给指定 QQ 消息设置/取消表情点赞（表情回应）。
+
+        Args:
+            message_id: QQ 消息 ID
+            emoji_id: NapCat 表情 ID，十进制 Unicode 码点（如 "128077"）或 QQ 表情 id（如 "14"）
+            set_like: True 点赞，False 取消
+        """
+        payload = {
+            "message_id": message_id,
+            "emoji_id": str(emoji_id),
+            "set": bool(set_like),
+        }
+        return await self._post_json("/set_msg_emoji_like", payload, max_retries=2, base_delay=1.0)
+
+    async def get_emoji_likes(self, message_id: int) -> dict:
+        """获取指定消息的表情点赞列表。"""
+        return await self._post_json("/get_emoji_likes", {"message_id": message_id},
+                                     max_retries=2, base_delay=1.0)
+
 # 全局实例
 onebot_client = OneBotClient()
 
