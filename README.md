@@ -187,3 +187,7 @@ docker compose up -d
 - **绑定用户**：在 Telegram 群组中发送 `/bind <你的QQ号>`。
 - **WebUI**：默认运行在 `http://localhost:8081/`，可以查看和管理绑定关系或修改配置。
 
+---
+
+[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
+
