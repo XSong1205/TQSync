@@ -154,7 +154,7 @@ install_aliases() {
     local bin_dirs=("/usr/local/bin" "$HOME/.local/bin")
     for dir in "${bin_dirs[@]}"; do
         if [ -w "$dir" ] 2>/dev/null || ([ "$(id -u)" -eq 0 ] && mkdir -p "$dir" 2>/dev/null); then
-            for cmd in start stop restart status attach logs shell copy; do
+            for cmd in start stop restart status attach logs shell; do
                 local alias_name="tq$cmd"
                 [ "$cmd" = "attach" ] && alias_name="tqlog"
                 cat > "$dir/$alias_name" <<EOF
@@ -175,12 +175,12 @@ EOF
 # 用法示例：
 #   tqstart   后台启动机器人 (tmux)
 #   tqlog     回到日志窗口（滚轮翻历史，Ctrl+b d 退出）
+#              tqlog -l 300 直接查看最近 300 行；tqlog -c 300 导出到文件
 #   tqshell   切到命令窗口（可实时执行 tqstop/tqrestart 等）
 #   tqstop    停止机器人
 #   tqrestart 重启机器人
 #   tqstatus  查看运行状态
 #   tqlogs    查看最近日志（自动解析）
-#   tqcopy    导出最近日志为纯文本文件（方便 scp 下载）
 export TQSYNC_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 alias tqstart="bash \$TQSYNC_HOME/scripts/tqsync.sh start"
 alias tqlog="bash \$TQSYNC_HOME/scripts/tqsync.sh attach"
@@ -189,7 +189,6 @@ alias tqstop="bash \$TQSYNC_HOME/scripts/tqsync.sh stop"
 alias tqrestart="bash \$TQSYNC_HOME/scripts/tqsync.sh restart"
 alias tqstatus="bash \$TQSYNC_HOME/scripts/tqsync.sh status"
 alias tqlogs="bash \$TQSYNC_HOME/scripts/tqsync.sh logs 50"
-alias tqcopy="bash \$TQSYNC_HOME/scripts/tqsync.sh copy 300"
 EOF
 
     local rc
@@ -221,6 +220,7 @@ info "下一步:"
 info "  1. 编辑 $TQSYNC_DIR/config.yaml 填入配置"
 info "  2. 启动机器人:  bash $SCRIPT_DIR/tqsync.sh start   (或输入 tqstart)"
 info "  3. 查看日志:    bash $SCRIPT_DIR/tqsync.sh attach  (或输入 tqlog，滚轮翻历史，Ctrl+b d 退出)"
+info "     查看/导出:   tqlog -l 300 直接看；tqlog -c 300 导出到文件"
 info "     实时命令:    tqshell (或进入日志窗口后按 Ctrl+b 1)"
 info "  4. 停止机器人:  bash $SCRIPT_DIR/tqsync.sh stop    (或输入 tqstop)"
 echo ""

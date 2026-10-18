@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # TQSync 运行管理脚本（tmux 优先，自动回退 screen）
 # 用法:
-#   ./tqsync.sh start       后台启动机器人
-#   ./tqsync.sh stop        停止机器人
-#   ./tqsync.sh restart     重启机器人
-#   ./tqsync.sh attach      进入日志窗口（滚轮可翻历史）
-#   ./tqsync.sh shell       进入命令窗口（可实时执行 tqstart/tqstop 等）
-#   ./tqsync.sh status      查看运行状态
-#   ./tqsync.sh logs [n]    查看最近日志（自动解析 JSON 行）
-#   ./tqsync.sh copy [n]    导出最近 n 行日志为纯文本文件（方便 scp 下载）
-#   ./tqsync.sh install     执行一键安装
+#   ./tqsync.sh start             后台启动机器人
+#   ./tqsync.sh stop              停止机器人
+#   ./tqsync.sh restart           重启机器人
+#   ./tqsync.sh attach            进入日志窗口（滚轮可翻历史）
+#   ./tqsync.sh attach -l 200     直接查看最近 200 行
+#   ./tqsync.sh attach -c 200     导出最近 200 行到文件（方便 scp）
+#   ./tqsync.sh shell             进入命令窗口（可实时执行 tqstart/tqstop 等）
+#   ./tqsync.sh status            查看运行状态
+#   ./tqsync.sh logs [n]          查看最近日志（自动解析 JSON 行）
+#   ./tqsync.sh install           执行一键安装
 #
 # 会话结构 (tmux):
 #   tqsync:logs   机器人进程 + 实时日志（鼠标滚轮可回看历史）
@@ -210,6 +211,21 @@ cmd_restart() {
 }
 
 cmd_attach() {
+    # tqlog 兼容用法：
+    #   tqlog              进入日志窗口
+    #   tqlog -l 300       直接打印最近 300 行
+    #   tqlog -c 300       导出最近 300 行到文件（原 tqcopy）
+    #   tqlog 300 / -300   等同于 -l 300
+    local mode="${1:-}"
+    local lines="${2:-}"
+    case "$mode" in
+        -c|--copy)  cmd_copy "${lines:-300}"; return 0 ;;
+        -l|--lines) cmd_logs "${lines:-50}"; return 0 ;;
+        -h|--help)  cmd_help; return 0 ;;
+        -[0-9]*)    cmd_logs "${mode#-}"; return 0 ;;
+        [0-9]*)     cmd_logs "$mode"; return 0 ;;
+    esac
+
     if screen_is_running; then
         echo "[TQSync] 检测到旧的 screen 会话（不支持鼠标滚轮）"
         echo "[TQSync] 翻页: 先按 Ctrl+A 再按 [ ，用 PgUp/PgDn 滚动，q 退出"
@@ -304,7 +320,7 @@ cmd_copy() {
         echo "[TQSync] 暂无日志文件: $LOGFILE"
         return 1
     fi
-    local out="$TQSYNC_DIR/logs/tqcopy-$(date +%Y%m%d-%H%M%S).log"
+    local out="$TQSYNC_DIR/logs/tqlog-$(date +%Y%m%d-%H%M%S).log"
     format_logs "$lines" > "$out"
     echo "[TQSync] 已导出最近 $lines 行到: $out"
     echo "[TQSync] 下载到本地: scp root@<服务器>:$out ./"
@@ -328,7 +344,7 @@ cmd_install() {
 }
 
 cmd_help() {
-    sed -n '3,17p' "$0" | sed 's/^# *//'
+    sed -n '3,13p' "$0" | sed 's/^# *//'
 }
 
 cmd="${1:-help}"
@@ -336,10 +352,9 @@ case "$cmd" in
     start)     cmd_start ;;
     stop)      cmd_stop ;;
     restart)   cmd_restart ;;
-    attach)    cmd_attach ;;
+    attach)    cmd_attach "${2:-}" "${3:-}" ;;
     shell)     cmd_shell ;;
     logs)      cmd_logs "${2:-50}" ;;
-    copy)      cmd_copy "${2:-300}" ;;
     apply)     cmd_apply ;;
     status)    cmd_status ;;
     install)   cmd_install ;;

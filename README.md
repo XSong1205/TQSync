@@ -66,24 +66,23 @@ bash scripts/install.sh
 | 命令 | 说明 |
 | --- | --- |
 | `tqstart` | 在 tmux 后台启动机器人 |
-| `tqlog` | 进入日志窗口，**鼠标滚轮可翻历史** |
+| `tqlog` | 进入日志窗口，**鼠标滚轮可翻历史**；`tqlog -l 300` 直接看最近 300 行，`tqlog -c 300` 导出到文件 |
 | `tqshell` | 切到命令窗口，实时执行 `tqstop`/`tqrestart` 等命令 |
 | `tqstop` | 停止机器人 |
 | `tqrestart` | 重启机器人 |
 | `tqstatus` | 查看运行状态（含窗口列表） |
-| `tqlogs` | 查看最近日志（自动解析 JSON 行） |
-| `tqcopy` | 导出最近 300 行日志为纯文本文件，便于 `scp` 下载 |
+| `tqlogs` | 查看最近日志（自动解析 JSON 行），等价于 `tqlog -l 50` |
 
 不想用别名时，也可直接调用管理脚本：
 
 ```bash
-bash scripts/tqsync.sh start      # 启动
-bash scripts/tqsync.sh attach     # 进入日志窗口（滚轮翻历史）
-bash scripts/tqsync.sh shell      # 切换到命令窗口
-bash scripts/tqsync.sh stop       # 停止
-bash scripts/tqsync.sh status     # 状态
-bash scripts/tqsync.sh logs 100   # 最近 100 行（已格式化）
-bash scripts/tqsync.sh copy 300   # 导出最近 300 行为 logs/tqcopy-*.log
+bash scripts/tqsync.sh start            # 启动
+bash scripts/tqsync.sh attach           # 进入日志窗口（滚轮翻历史）
+bash scripts/tqsync.sh attach -l 100    # 直接查看最近 100 行
+bash scripts/tqsync.sh attach -c 300    # 导出最近 300 行为 logs/tqlog-*.log
+bash scripts/tqsync.sh shell            # 切换到命令窗口
+bash scripts/tqsync.sh stop             # 停止
+bash scripts/tqsync.sh status           # 状态
 ```
 
 > **说明:** 机器人在 tmux 会话 `tqsync` 中后台运行，分为 `logs`（实时日志）和 `shell`（命令窗口）两个窗口：
