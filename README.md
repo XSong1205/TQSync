@@ -55,7 +55,7 @@ python install.py
 
 ### 快速安装(Linux)
 
-支持 Debian/Ubuntu、CentOS/RHEL、Arch 系发行版。脚本会自动：创建 `venv` 虚拟环境、安装依赖、安装 `ffmpeg`/`tmux`（并保留 `screen` 作为回退）、生成 `config.yaml`，并写入快捷命令。
+支持 Debian/Ubuntu、CentOS/RHEL、Arch 系发行版。脚本会自动：创建 `venv` 虚拟环境、安装依赖、安装 `ffmpeg`/`screen`、生成 `config.yaml`，并写入快捷命令。
 
 ```bash
 bash scripts/install.sh
@@ -65,38 +65,28 @@ bash scripts/install.sh
 
 | 命令 | 说明 |
 | --- | --- |
-| `tqstart` | 在 tmux 后台启动机器人 |
-| `tqlog` | 进入日志窗口，**鼠标滚轮可翻历史**；`tqlog -l 300` 直接看最近 300 行，`tqlog -c 300` 导出到文件 |
-| `tqshell` | 打开一个普通 bash 窗口 |
+| `tqstart` | 在 screen 后台启动机器人 |
+| `tqlog` | 进入日志窗口（退出按 `Ctrl+A` 再按 `D`）；`tqlog -l 300` 直接看最近 300 行，`tqlog -c 300` 导出到文件 |
 | `tqstop` | 停止机器人 |
 | `tqrestart` | 重启机器人 |
-| `tqstatus` | 查看运行状态（含窗口列表） |
+| `tqstatus` | 查看运行状态 |
 | `tqlogs` | 查看最近日志（自动解析 JSON 行），等价于 `tqlog -l 50` |
-
-进入日志窗口后按 `Ctrl+b` `0` 可切到 **TQSync 命令控制台**，直接输入 `start` / `stop` / `restart` / `status` / `logs 100` / `copy 300` / `help` / `exit`，命令会在当前会话里立即执行，不需要退出 tmux 再敲 `tqstart`。
 
 不想用别名时，也可直接调用管理脚本：
 
 ```bash
 bash scripts/tqsync.sh start            # 启动
-bash scripts/tqsync.sh attach           # 进入日志窗口（滚轮翻历史）
+bash scripts/tqsync.sh attach           # 进入日志窗口（Ctrl+A D 退出）
 bash scripts/tqsync.sh attach -l 100    # 直接查看最近 100 行
 bash scripts/tqsync.sh attach -c 300    # 导出最近 300 行为 logs/tqlog-*.log
-bash scripts/tqsync.sh console          # 命令控制台（start/stop/status/...）
-bash scripts/tqsync.sh shell            # 打开普通 bash 窗口
 bash scripts/tqsync.sh stop             # 停止
 bash scripts/tqsync.sh status           # 状态
 ```
 
-> **说明:** 机器人在 tmux 会话 `tqsync` 中后台运行，分为 `cmd`（命令控制台）和 `logs`（实时日志）两个窗口：
-> - `Ctrl+b` 然后按 `0` 进命令控制台、按 `1` 回日志，`Ctrl+b` 然后按 `d` 退出（进程继续后台运行）；
-> - 命令控制台支持 `start` / `stop` / `restart` / `status` / `logs [n]` / `copy [n]` / `attach` / `shell` / `clear` / `help` / `exit`；
-> - 日志窗口内直接滚动鼠标滚轮即可回看历史（默认保留 10 万行），按 `q` 退出翻页；
-> - **复制日志**：tmux 开启鼠标捕获时终端无法直接框选，有三种办法：
->   1. 按住 **Shift** 再用鼠标拖动（临时绕过 tmux，用终端自身的复制/右键菜单）；
->   2. 按 `Ctrl+b` 然后按 `m` 关闭鼠标捕获，之后可正常框选/右键复制，再按一次恢复滚轮；
->   3. 用 `tqlog -c 500` 导出文件后 `scp` 下载，或用 `tqlog -l` 直接看（tmux 内选中也会经 OSC52 写入本地剪贴板，Windows Terminal 等终端支持）。
-> - 未安装 `tmux` 时自动回退到 `screen`（翻页用 `Ctrl+A [`），`/reboot` 与自动更新在两种会话下都能自动重启。
+> **说明:** 机器人在 `screen` 会话 `tqsync` 中后台运行，`/reboot` 与自动更新会在会话内自动重启：
+> - **回看历史**：先按 `Ctrl+A` 再按 `[` 进入翻页模式，用 `PgUp`/`PgDn` 或方向键滚动，`q` 退出翻页；
+> - **退出会话**：先按 `Ctrl+A` 再按 `D`，机器人继续在后台运行；
+> - **复制日志**：翻页模式下无法用鼠标框选，可直接 `tqlog -c 500` 导出文件后 `scp` 下载，或用 `tqlog -l` / `tqlogs` 在终端里查看后复制。
 
 ### 手动安装(Windows/Linux/macOS)
 

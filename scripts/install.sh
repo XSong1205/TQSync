@@ -44,13 +44,6 @@ install_system_deps() {
             pacman) pkgs+=(ffmpeg) ;;
         esac
     fi
-    if ! command -v tmux >/dev/null 2>&1; then
-        case "$pkgmgr" in
-            apt)    pkgs+=(tmux) ;;
-            dnf|yum) pkgs+=(tmux) ;;
-            pacman) pkgs+=(tmux) ;;
-        esac
-    fi
     if ! command -v screen >/dev/null 2>&1; then
         case "$pkgmgr" in
             apt)    pkgs+=(screen) ;;
@@ -77,7 +70,7 @@ install_system_deps() {
     fi
 
     if [ "$pkgmgr" = "unknown" ]; then
-        warn "未识别到包管理器，请手动安装: ffmpeg tmux screen python3-venv"
+        warn "未识别到包管理器，请手动安装: ffmpeg screen python3-venv"
         return 0
     fi
 
@@ -154,7 +147,7 @@ install_aliases() {
     local bin_dirs=("/usr/local/bin" "$HOME/.local/bin")
     for dir in "${bin_dirs[@]}"; do
         if [ -w "$dir" ] 2>/dev/null || ([ "$(id -u)" -eq 0 ] && mkdir -p "$dir" 2>/dev/null); then
-            for cmd in start stop restart status attach logs shell; do
+            for cmd in start stop restart status attach logs; do
                 local alias_name="tq$cmd"
                 [ "$cmd" = "attach" ] && alias_name="tqlog"
                 cat > "$dir/$alias_name" <<EOF
@@ -163,7 +156,7 @@ exec bash "$SCRIPT_DIR/tqsync.sh" $cmd "\$@"
 EOF
                 chmod +x "$dir/$alias_name"
             done
-            info "已创建全局快捷命令至 $dir (tqstart/tqlog/tqshell/tqstop 等立即生效)"
+            info "已创建全局快捷命令至 $dir (tqstart/tqlog/tqstop 等立即生效)"
             break
         fi
     done
@@ -173,10 +166,9 @@ EOF
     cat > "$alias_file" <<'EOF'
 # ===== TQSync 快捷命令 (由 scripts/install.sh 生成，修改请谨慎) =====
 # 用法示例：
-#   tqstart   后台启动机器人 (tmux)
-#   tqlog     回到日志窗口（滚轮翻历史，Ctrl+b d 退出）
+#   tqstart   后台启动机器人 (screen)
+#   tqlog     回到日志窗口（退出按 Ctrl+A 再按 D）
 #              tqlog -l 300 直接查看最近 300 行；tqlog -c 300 导出到文件
-#   tqshell   打开一个普通 bash 窗口
 #   tqstop    停止机器人
 #   tqrestart 重启机器人
 #   tqstatus  查看运行状态
@@ -184,7 +176,6 @@ EOF
 export TQSYNC_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 alias tqstart="bash \$TQSYNC_HOME/scripts/tqsync.sh start"
 alias tqlog="bash \$TQSYNC_HOME/scripts/tqsync.sh attach"
-alias tqshell="bash \$TQSYNC_HOME/scripts/tqsync.sh shell"
 alias tqstop="bash \$TQSYNC_HOME/scripts/tqsync.sh stop"
 alias tqrestart="bash \$TQSYNC_HOME/scripts/tqsync.sh restart"
 alias tqstatus="bash \$TQSYNC_HOME/scripts/tqsync.sh status"
@@ -219,8 +210,7 @@ info "安装完成！"
 info "下一步:"
 info "  1. 编辑 $TQSYNC_DIR/config.yaml 填入配置"
 info "  2. 启动机器人:  bash $SCRIPT_DIR/tqsync.sh start   (或输入 tqstart)"
-info "  3. 查看日志:    bash $SCRIPT_DIR/tqsync.sh attach  (或输入 tqlog，滚轮翻历史，Ctrl+b d 退出)"
+info "  3. 查看日志:    bash $SCRIPT_DIR/tqsync.sh attach  (或输入 tqlog，退出按 Ctrl+A D)"
 info "     查看/导出:   tqlog -l 300 直接看；tqlog -c 300 导出到文件"
-info "     命令控制台:  进入日志窗口后按 Ctrl+b 0（输入 start/stop/status 等），或 tqshell 开普通 shell"
 info "  4. 停止机器人:  bash $SCRIPT_DIR/tqsync.sh stop    (或输入 tqstop)"
 echo ""
