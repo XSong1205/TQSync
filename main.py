@@ -35,7 +35,7 @@ from core.plugin_base import PluginContext
 from utils.logger import logger
 from utils.auth import is_admin
 from utils.banner import print_banner
-from utils.qq_text import format_qq_face, tg_emoji_from_qq
+from utils.qq_text import tg_emoji_from_qq
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
@@ -74,41 +74,6 @@ async def _copy_to_temp(file_url: str) -> str:
         return file_url
     logger.debug(f"已复制本地文件到 temp: {os.path.basename(local_path)}")
     return dest
-
-
-async def _handle_poke_notice(data: dict) -> None:
-    """QQ 戳一戳 -> TG 提示消息。"""
-    if not config_loader.get('sync.sync_poke', True):
-        return
-    target_group = config_loader.get('qq.group_id')
-    if data.get('group_id') not in (None, target_group):
-        logger.debug(f"忽略非目标群组的戳一戳: {data.get('group_id')}")
-        return
-
-    try:
-        user_id = int(data.get('user_id') or 0)
-    except (TypeError, ValueError):
-        return
-    if not user_id:
-        return
-
-    # 反回环：Bot 自己发出的戳一戳不再同步回 TG
-    bot_qq_id = await onebot_client.get_bot_id()
-    if bot_qq_id and user_id == int(bot_qq_id):
-        logger.debug("忽略 Bot 自身发出的戳一戳")
-        return
-
-    try:
-        target_id = int(data.get('target_id')) if data.get('target_id') is not None else None
-    except (TypeError, ValueError):
-        target_id = None
-
-    sender = data.get('sender') or {}
-    nickname = sender.get('card') or sender.get('nickname')
-
-    logger.info(f"[戳一戳] {nickname or user_id} -> {target_id or '未知'}")
-    engine = SyncEngine.get_instance()
-    engine.enqueue_sync_task(engine.forward_poke_to_tg, user_id, nickname, target_qq_id=target_id)
 
 
 async def _handle_qq_emoji_like_notice(data: dict) -> None:
@@ -214,15 +179,6 @@ async def handle_qq_webhook(request):
             asyncio.create_task(notice_sync_manager.check_and_sync_qq_notices())
             return web.json_response({})
 
-        # 处理戳一戳通知 (Notice)
-        # NapCat: post_type=notice, notice_type=notify, sub_type=poke；兼容 notice_type=poke 的老写法
-        if data.get('post_type') == 'notice' and (
-            data.get('notice_type') == 'poke' or
-            (data.get('notice_type') == 'notify' and data.get('sub_type') == 'poke')
-        ):
-            await _handle_poke_notice(data)
-            return web.json_response({})
-
         # 处理消息表情点赞 / 表情回应通知 (Notice)
         # NapCat: notice_type=group_msg_emoji_like；不同版本字段略有差异，做兼容解析
         if data.get('post_type') == 'notice' and 'emoji_like' in str(data.get('notice_type', '')):
@@ -276,9 +232,6 @@ async def handle_qq_webhook(request):
                 msg_type = msg_part.get('type')
                 if msg_type == 'text':
                     text_parts.append(msg_part['data'].get('text', ''))
-                elif msg_type == 'face':
-                    # QQ 小黄脸表情 -> 可读文本，避免同步到 TG 时整段丢失
-                    text_parts.append(format_qq_face(msg_part.get('data') or {}))
                 elif msg_type == 'at':
                     qq_val = msg_part['data'].get('qq', '0')
                     if qq_val == 'all':

@@ -1,5 +1,10 @@
 from telegram import Update
-from telegram.ext import ContextTypes, MessageHandler, MessageReactionHandler, filters, CommandHandler
+from telegram.ext import ContextTypes, MessageHandler, filters, CommandHandler
+try:
+    # 表情回应 handler 需要 PTB >= 21.2；低版本降级为不注册，其它功能不受影响
+    from telegram.ext import MessageReactionHandler
+except ImportError:  # pragma: no cover
+    MessageReactionHandler = None
 from config.config_loader import config_loader
 from core.sync_engine import SyncEngine
 from db.database import db
@@ -528,7 +533,7 @@ async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_
 
 
 def get_tg_handlers():
-    return [
+    handlers = [
         MessageHandler(filters.StatusUpdate.PINNED_MESSAGE, handle_tg_pinned_message),
         MessageHandler(filters.UpdateType.MESSAGE & ~filters.COMMAND & ~filters.StatusUpdate.ALL, handle_tg_message),
         CommandHandler('bind', handle_bind_command),
@@ -548,6 +553,8 @@ def get_tg_handlers():
         CommandHandler('notice', handle_notice_command),
         CommandHandler('announce', handle_notice_command),
         CommandHandler('syncnotice', handle_syncnotice_command),
-        MessageReactionHandler(handle_message_reaction),
         MessageHandler(filters.UpdateType.MESSAGE & filters.COMMAND, handle_unhandled_command),
     ]
+    if MessageReactionHandler is not None:
+        handlers.insert(-1, MessageReactionHandler(handle_message_reaction))
+    return handlers

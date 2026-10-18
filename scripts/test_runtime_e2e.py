@@ -160,15 +160,10 @@ async def run() -> None:
     from core.sync_engine import SyncEngine
     from db.database import db
     from handlers.qq_handler import onebot_client
-    from utils.qq_text import (format_qq_face, qq_emoji_id_to_emoji,
-                               tg_emoji_from_qq, tg_emoji_to_qq_emoji_id)
+    from utils.qq_text import qq_emoji_id_to_emoji, tg_emoji_from_qq, tg_emoji_to_qq_emoji_id
 
-    # ---- 0. 文本/表情格式化工具 ----
-    print("[格式化工具]")
-    check(format_qq_face({'id': '14', 'raw': {'faceText': '/微笑'}}) == '[微笑]',
-          "face 段优先使用 raw.faceText")
-    check(format_qq_face({'id': '13'}) == '[呲牙]', "缺少 faceText 时回退 id->名称表")
-    check(format_qq_face({'id': '99999'}) == '[表情]', "未知表情 id 回退为 [表情]")
+    # ---- 0. 表情回应转换工具 ----
+    print("[表情回应转换工具]")
     check(tg_emoji_to_qq_emoji_id('👍') == '128077', "TG emoji -> 十进制码点")
     check(tg_emoji_to_qq_emoji_id('❤️') == '10084', "多码点 emoji 取基础字符码点")
     check(tg_emoji_from_qq({'emoji_id': '128077'}) == '👍', "NapCat 码点 -> TG emoji")
@@ -310,39 +305,7 @@ async def run() -> None:
             check(bot.deleted and bot.deleted[-1][1] == tg_msg_id, "TG 端执行了删除")
             check(await db.get_tg_msg_id_by_qq(90001) is None, "数据库映射已清理")
 
-            # ---- 4. QQ 表情同步 ----
-            print("[QQ 表情 -> 文本]")
-            payload = text_payload('', 90600)
-            payload['message'] = [
-                {'type': 'text', 'data': {'text': '表情：'}},
-                {'type': 'face', 'data': {'id': '14', 'raw': {'faceText': '/微笑'}}},
-                {'type': 'face', 'data': {'id': '13'}},
-                {'type': 'text', 'data': {'text': ' 完'}},
-            ]
-            await post(payload)
-            for _ in range(200):
-                if any('表情：' in s[2] for s in bot.sent if s[0] == 'message'):
-                    break
-                await asyncio.sleep(0.01)
-            face_text = next((s[2] for s in bot.sent if '表情：' in s[2]), '')
-            check('[微笑]' in face_text, f"face 段按 raw.faceText 转成文本（{face_text[:40]}）")
-            check('[呲牙]' in face_text, "face 段缺少 faceText 时用内置 id->名称表兜底")
-
-            # ---- 5. 戳一戳 ----
-            print("[戳一戳 QQ -> TG]")
-            await post({
-                'post_type': 'notice', 'notice_type': 'notify', 'sub_type': 'poke',
-                'group_id': group_id, 'user_id': 12345, 'target_id': 88888,
-            })
-            for _ in range(200):
-                if any('戳了戳' in s[2] for s in bot.sent):
-                    break
-                await asyncio.sleep(0.01)
-            poke_text = next((s[2] for s in bot.sent if '戳了戳' in s[2]), '')
-            check(bool(poke_text), f"戳一戳已同步为 TG 提示（{poke_text[:40]}）")
-            check('88888' in poke_text, "戳一戳目标 QQ 号出现在提示里")
-
-            # ---- 6. 表情回应 TG -> QQ ----
+            # ---- 4. 表情回应 TG -> QQ ----
             print("[表情回应 TG -> QQ]")
             from handlers import tg_handler
             like_calls = []
@@ -354,25 +317,25 @@ async def run() -> None:
             orig_set_like = onebot_client.set_msg_emoji_like
             onebot_client.set_msg_emoji_like = fake_set_like
             try:
-                tg_id_for_face = await db.get_tg_msg_id_by_qq(90600)
-                check(bool(tg_id_for_face), "表情消息已建立 TG 映射，可用于回应同步")
+                tg_id_for_media = await db.get_tg_msg_id_by_qq(90002)
+                check(bool(tg_id_for_media), "已同步消息存在映射，可用于回应同步")
 
                 reaction_update = _Obj(message_reaction=_Obj(
                     chat=_Obj(id=config_loader.get('telegram.group_id')),
-                    message_id=tg_id_for_face,
+                    message_id=tg_id_for_media,
                     new_reaction=[_Obj(emoji='👍')],
                     old_reaction=[],
                 ))
                 await tg_handler.handle_message_reaction(reaction_update, None)
                 check(len(like_calls) == 1, "新增表情回应触发了一次 QQ 点赞调用")
-                check(like_calls[0][0] == 90600, f"回应对应到正确的 QQ 消息（{like_calls[0][0]}）")
+                check(like_calls[0][0] == 90002, f"回应对应到正确的 QQ 消息（{like_calls[0][0]}）")
                 check(like_calls[0][1] == str(ord('👍')), f"emoji 转成十进制码点（{like_calls[0][1]}）")
                 check(like_calls[0][2] is True, "新增回应 => set=True")
 
                 # 取消回应
                 reaction_update2 = _Obj(message_reaction=_Obj(
                     chat=_Obj(id=config_loader.get('telegram.group_id')),
-                    message_id=tg_id_for_face,
+                    message_id=tg_id_for_media,
                     new_reaction=[],
                     old_reaction=[_Obj(emoji='👍')],
                 ))
@@ -382,7 +345,7 @@ async def run() -> None:
                 # 非目标群 / 无映射时应跳过
                 before = len(like_calls)
                 await tg_handler.handle_message_reaction(_Obj(message_reaction=_Obj(
-                    chat=_Obj(id=-1), message_id=tg_id_for_face,
+                    chat=_Obj(id=-1), message_id=tg_id_for_media,
                     new_reaction=[_Obj(emoji='👍')], old_reaction=[])), None)
                 await tg_handler.handle_message_reaction(_Obj(message_reaction=_Obj(
                     chat=_Obj(id=config_loader.get('telegram.group_id')), message_id=999999999,
@@ -391,7 +354,7 @@ async def run() -> None:
             finally:
                 onebot_client.set_msg_emoji_like = orig_set_like
 
-            # ---- 7. 突发吞吐 ----
+            # ---- 5. 突发吞吐 ----
             print("[20 条消息突发]")
             t0 = time.perf_counter()
             await asyncio.gather(*[
@@ -413,7 +376,7 @@ async def run() -> None:
         print(f"       事件循环最大停顿 {max_lag:.1f} ms")
         check(max_lag < 150, f"事件循环无明显停顿（最大 {max_lag:.1f} ms）")
 
-        # ---- 8. Admin API ----
+        # ---- 6. Admin API ----
         print("[Admin API]")
         async with aiohttp.ClientSession() as session:
             async with session.get(f'http://127.0.0.1:{admin_port}/health') as resp:
