@@ -1065,6 +1065,143 @@ async def main():
         except Exception as e:
             logger.debug(f"数据库关闭（最终清理）: {e}")
 
+
+# ────────────────────── 崩溃现场保存与告警 ──────────────────────
+
+CRASH_NOTIFY_INTERVAL = 120  # 秒；崩溃循环时最多每 2 分钟提醒一次，避免刷屏
+
+
+def _save_crash_report(exc: BaseException, elapsed: float) -> tuple:
+    """保存崩溃现场：traceback + 最近日志，并复制一份完整日志。
+
+    返回 (报告路径, 完整日志副本路径)；失败时对应路径为空字符串。
+    """
+    import traceback
+    from utils.version_utils import get_full_version_string
+
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        os.makedirs("logs", exist_ok=True)
+    except Exception:
+        pass
+
+    report_path = os.path.join("logs", f"crash-{ts}.log")
+    copy_path = os.path.join("logs", f"crash-{ts}-full.log")
+
+    try:
+        if os.path.exists("logs/tqsync.log"):
+            shutil.copyfile("logs/tqsync.log", copy_path)
+        else:
+            copy_path = ""
+    except Exception as e:
+        logger.error(f"复制完整日志失败: {e}")
+        copy_path = ""
+
+    try:
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"版本: {get_full_version_string()}\n")
+            f.write(f"运行时长: {elapsed:.0f}s\n")
+            f.write(f"异常: {type(exc).__name__}: {exc}\n\n")
+            f.write("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+            f.write("\n\n===== 最近 200 行日志 =====\n")
+            try:
+                with open("logs/tqsync.log", "r", encoding="utf-8", errors="replace") as src:
+                    f.writelines(src.readlines()[-200:])
+            except Exception:
+                f.write("(读取日志失败)\n")
+    except Exception as e:
+        logger.error(f"写入崩溃报告失败: {e}")
+        report_path = ""
+
+    return report_path, copy_path
+
+
+def _should_notify_crash() -> bool:
+    """崩溃提醒节流：120 秒内只提醒一次。"""
+    marker = os.path.join("logs", ".last_crash_alert")
+    now = time.time()
+    try:
+        if os.path.exists(marker):
+            with open(marker, "r", encoding="utf-8") as f:
+                if now - float(f.read().strip() or 0) < CRASH_NOTIFY_INTERVAL:
+                    return False
+    except Exception:
+        pass
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write(str(now))
+    except Exception:
+        pass
+    return True
+
+
+def _build_crash_message(exc: BaseException, elapsed: float, attempt: int,
+                         max_restarts: int, report_path: str, copy_path: str) -> str:
+    from utils.version_utils import get_full_version_string
+
+    err = f"{type(exc).__name__}: {exc}"
+    if len(err) > 400:
+        err = err[:400] + "…"
+
+    cwd = os.getcwd()
+    lines = [
+        "⚠️ TQSync 崩溃提醒",
+        f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"版本: {get_full_version_string()}",
+        f"已运行: {elapsed:.0f}s（第 {attempt}/{max_restarts} 次崩溃）",
+        f"异常: {err}",
+        "",
+    ]
+    if report_path:
+        lines.append(f"崩溃报告: {report_path}")
+    if copy_path:
+        lines.append(f"完整日志: {copy_path}")
+    lines += [
+        "",
+        "下载日志:",
+        "  tqlog -c 500",
+        f"  scp root@<服务器>:{cwd}/{report_path} ./".replace("//", "/"),
+    ]
+    return "\n".join(lines)
+
+
+async def _send_crash_alerts(text: str) -> None:
+    """崩溃提醒：直连 TG Bot API 与 NapCat HTTP API，不依赖已关闭的运行时对象。"""
+    # Telegram
+    try:
+        from telegram import Bot
+        token = config_loader.get('telegram.bot_token')
+        chat_id = config_loader.get('telegram.group_id')
+        if token and chat_id:
+            bot = Bot(token=token)
+            async with bot:
+                await asyncio.wait_for(bot.send_message(chat_id=chat_id, text=text), timeout=15)
+            logger.info("崩溃提醒已发送到 Telegram")
+    except Exception as e:
+        logger.error(f"崩溃提醒发送到 Telegram 失败: {e}")
+
+    # QQ (NapCat HTTP API)
+    try:
+        base = (config_loader.get('qq.napcat_api_url') or '').rstrip('/')
+        group_id = config_loader.get('qq.group_id')
+        token = config_loader.get('qq.access_token')
+        if not base or not group_id:
+            return
+        headers = {'Authorization': f'Bearer {token}'} if token else {}
+        timeout = aiohttp.ClientTimeout(total=15, connect=8)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                f"{base}/send_group_msg",
+                json={"group_id": group_id, "message": text},
+                headers=headers,
+            ) as resp:
+                await resp.json()
+        logger.info("崩溃提醒已发送到 QQ")
+    except Exception as e:
+        logger.error(f"崩溃提醒发送到 QQ 失败: {e}")
+
+
 if __name__ == '__main__':
     MAX_RESTARTS = 5
     RESTART_BASE_DELAY = 10  # 秒
@@ -1097,6 +1234,19 @@ if __name__ == '__main__':
             logger.opt(exception=True).error(
                 "程序异常退出 (运行 {}s): {}", elapsed, e
             )
+
+            # 崩溃现场保存 + 双端提醒（任何失败都不阻断后续重启流程）
+            try:
+                report_path, copy_path = _save_crash_report(e, elapsed)
+                if _should_notify_crash():
+                    message = _build_crash_message(
+                        e, elapsed, restart_count, MAX_RESTARTS, report_path, copy_path
+                    )
+                    asyncio.run(_send_crash_alerts(message))
+                else:
+                    logger.info("崩溃提醒已节流（120 秒内已提醒过），本次仅保存日志")
+            except Exception as notify_err:
+                logger.error(f"崩溃提醒流程失败: {notify_err}")
 
             if restart_count >= MAX_RESTARTS:
                 logger.error(f"已达到最大重启次数 {MAX_RESTARTS}，程序终止")
