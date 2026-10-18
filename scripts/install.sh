@@ -176,7 +176,7 @@ EOF
 #   tqstart   后台启动机器人 (tmux)
 #   tqlog     回到日志窗口（滚轮翻历史，Ctrl+b d 退出）
 #              tqlog -l 300 直接查看最近 300 行；tqlog -c 300 导出到文件
-#   tqshell   切到命令窗口（可实时执行 tqstop/tqrestart 等）
+#   tqshell   打开一个普通 bash 窗口
 #   tqstop    停止机器人
 #   tqrestart 重启机器人
 #   tqstatus  查看运行状态
@@ -221,6 +221,6 @@ info "  1. 编辑 $TQSYNC_DIR/config.yaml 填入配置"
 info "  2. 启动机器人:  bash $SCRIPT_DIR/tqsync.sh start   (或输入 tqstart)"
 info "  3. 查看日志:    bash $SCRIPT_DIR/tqsync.sh attach  (或输入 tqlog，滚轮翻历史，Ctrl+b d 退出)"
 info "     查看/导出:   tqlog -l 300 直接看；tqlog -c 300 导出到文件"
-info "     实时命令:    tqshell (或进入日志窗口后按 Ctrl+b 1)"
+info "     命令控制台:  进入日志窗口后按 Ctrl+b 0（输入 start/stop/status 等），或 tqshell 开普通 shell"
 info "  4. 停止机器人:  bash $SCRIPT_DIR/tqsync.sh stop    (或输入 tqstop)"
 echo ""
