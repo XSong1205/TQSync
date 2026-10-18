@@ -32,6 +32,7 @@ from api.admin_api import app as admin_app
 from core.plugin_manager import PluginManager
 from core.plugin_base import PluginContext
 from utils.logger import logger
+from utils.auth import is_admin
 from utils.banner import print_banner
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
@@ -55,6 +56,20 @@ def _copy_to_temp(file_url: str) -> str:
 
 async def handle_qq_webhook(request):
     try:
+        # Webhook 鉴权：配置了 server.webhook_token 时，要求发送方携带
+        # Authorization: Bearer <token>（同时兼容不带 Bearer 前缀的写法）。
+        # 未配置时保持旧行为，避免影响尚未升级 NapCat 配置的部署。
+        expected_token = config_loader.get('server.webhook_token', '') or ''
+        if expected_token:
+            auth_header = request.headers.get('Authorization', '') or ''
+            supplied = auth_header[7:] if auth_header.lower().startswith('bearer ') else auth_header
+            if supplied != expected_token:
+                logger.warning(
+                    f"拒绝未授权的 QQ webhook 请求 (来源 {request.remote}, "
+                    f"Authorization {'缺失' if not auth_header else '不匹配'})"
+                )
+                return web.json_response({"status": "unauthorized"}, status=401)
+
         # 更新 QQ 健康时间戳（排除 notice 类型的纯撤回通知）
         import main as main_module
         if hasattr(main_module, '_health_last_qq_msg'):
@@ -221,8 +236,7 @@ async def handle_qq_webhook(request):
                         await onebot_client.send_group_msg(engine.qq_group_id, response)
                         return web.json_response({})
 
-                    admin_ids = config_loader.get('server.admin_user_ids', [])
-                    if admin_ids and qq_id not in admin_ids:
+                    if not is_admin(qq_id):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
                     
@@ -236,8 +250,7 @@ async def handle_qq_webhook(request):
                         await onebot_client.send_group_msg(engine.qq_group_id, response)
                         return web.json_response({})
 
-                    admin_ids = config_loader.get('server.admin_user_ids', [])
-                    if admin_ids and qq_id not in admin_ids:
+                    if not is_admin(qq_id):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
 
@@ -273,22 +286,19 @@ async def handle_qq_webhook(request):
                     await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。或发送 /confirm 重新开始下载")
                     return web.json_response({})
                 elif cmd == '/blockword':
-                    admin_ids = config_loader.get('server.admin_user_ids', [])
-                    if admin_ids and qq_id not in admin_ids:
+                    if not is_admin(qq_id):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
                     response = await handle_blockword_command(args, qq_id, 'qq')
                 elif cmd == '/unblockword':
-                    admin_ids = config_loader.get('server.admin_user_ids', [])
-                    if admin_ids and qq_id not in admin_ids:
+                    if not is_admin(qq_id):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
                         return web.json_response({})
                     response = await handle_unblockword_command(args, qq_id, 'qq')
                 elif cmd == '/blockwords':
                     response = await handle_blockwords_command()
                 elif cmd in ('/notice', '/announce'):
-                    admin_ids = config_loader.get('server.admin_user_ids', [])
-                    if admin_ids and qq_id not in admin_ids:
+                    if not is_admin(qq_id):
                         await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以发布群公告，请联系管理员。")
                         return web.json_response({})
                     if not args:
@@ -430,9 +440,8 @@ async def handle_qq_webhook(request):
         if data.get('message_type') == 'private':
             qq_id = int(data['user_id'])
             
-            # 检查是否为管理员
-            admin_ids = config_loader.get('server.admin_user_ids', [])
-            if not admin_ids or qq_id not in admin_ids:
+            # 检查是否为管理员（白名单为空时 fail-closed）
+            if not is_admin(qq_id):
                 return web.json_response({})
             
             # 解析消息文本

@@ -8,6 +8,7 @@ from handlers.command_handler import handle_setprefix_command as handle_setprefi
 from core.plugin_manager import PluginManager
 import uuid
 from utils.logger import logger
+from utils.auth import is_admin
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息删除事件，同步撤回到 QQ"""
@@ -205,10 +206,9 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
     import asyncio
     from main import graceful_restart
     
-    admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
     
-    if admin_ids and user_id not in admin_ids:
+    if not is_admin(user_id):
         await update.message.reply_text("您的权限不足以执行此操作")
         return
         
@@ -222,10 +222,9 @@ async def handle_update_command_tg(update: Update, context: ContextTypes.DEFAULT
     from main import graceful_restart
     from config.config_loader import config_loader
 
-    admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
 
-    if admin_ids and user_id not in admin_ids:
+    if not is_admin(user_id):
         await update.message.reply_text("您的权限不足以执行此操作")
         return
 
@@ -346,9 +345,8 @@ async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_blockword_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /blockword <关键词> (管理员)"""
-    admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
-    if admin_ids and user_id not in admin_ids:
+    if not is_admin(user_id):
         await update.message.reply_text("您的权限不足以执行此操作")
         return
     response = await handle_blockword_command_logic(context.args or [], user_id, 'tg')
@@ -356,9 +354,8 @@ async def handle_blockword_command(update: Update, context: ContextTypes.DEFAULT
 
 async def handle_unblockword_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /unblockword <关键词> (管理员)"""
-    admin_ids = config_loader.get('server.admin_user_ids', [])
     user_id = update.effective_user.id
-    if admin_ids and user_id not in admin_ids:
+    if not is_admin(user_id):
         await update.message.reply_text("您的权限不足以执行此操作")
         return
     response = await handle_unblockword_command_logic(context.args or [], user_id, 'tg')
@@ -391,8 +388,7 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if is_group:
         pass
     else:
-        admin_ids = config_loader.get('server.admin_user_ids', [])
-        if not admin_ids or user.id not in admin_ids:
+        if not is_admin(user.id):
             return
 
     engine = SyncEngine.get_instance()
@@ -427,8 +423,7 @@ async def handle_tg_pinned_message(update: Update, context: ContextTypes.DEFAULT
 async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /notice <公告内容> 或 /announce <公告内容> 指令"""
     user = update.effective_user
-    admin_ids = config_loader.get('server.admin_user_ids', [])
-    if admin_ids and user.id not in admin_ids:
+    if not is_admin(user.id):
         await update.message.reply_text("您的权限不足以发布群公告")
         return
 
