@@ -28,6 +28,23 @@ app.add_middleware(
 PERM_LEVEL_USER = 0   # 普通用户：仅查看状态
 PERM_LEVEL_ADMIN = 1  # 管理员：所有操作
 
+
+def _read_tail_lines(path: str, n: int, block_size: int = 64 * 1024) -> list:
+    """从文件尾部按块回读最后 n 行，避免对大日志文件做 readlines 全量加载。"""
+    with open(path, 'rb') as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        block = min(size, block_size)
+        chunks = []
+        while True:
+            f.seek(size - block)
+            chunks.append(f.read(block))
+            text = b''.join(reversed(chunks)).decode('utf-8', errors='replace')
+            parts = text.splitlines()
+            if len(parts) > n or block >= size:
+                return parts[-n:] if n > 0 else []
+            block = min(size, block * 2)
+
 @app.get("/health")
 async def health():
     """容器健康检查专用接口（无需鉴权）"""
@@ -125,7 +142,8 @@ async def get_status():
     # 性能监控数据
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
-    cpu_percent = process.cpu_percent(interval=0.1)
+    # cpu_percent(interval=0.1) 会阻塞 100ms，放到线程里执行，避免 WebUI 刷新时卡住事件循环
+    cpu_percent = await asyncio.to_thread(process.cpu_percent, 0.1)
     
     # 磁盘使用情况
     try:
@@ -213,9 +231,7 @@ async def get_logs(lines: int = 50):
         if not os.path.exists(log_file):
             return {"logs": ["日志文件未找到，请检查系统是否正常运行。"]}
         
-        with open(log_file, 'r', encoding='utf-8') as f:
-            all_lines = f.readlines()
-            last_n_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        last_n_lines = await asyncio.to_thread(_read_tail_lines, log_file, max(1, min(lines, 5000)))
             
         clean_logs = []
         for line in last_n_lines:

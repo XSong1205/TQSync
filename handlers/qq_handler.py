@@ -1,7 +1,15 @@
 import aiohttp
 import asyncio
+import time
 from config.config_loader import config_loader
 from utils.logger import logger
+
+# Bot QQ 号获取失败后的负缓存时长（秒）。
+# 反回环判重完全依赖 bot_id（main.py: `if bot_qq_id and qq_id == int(bot_qq_id)`），
+# 因此负缓存不能太长：NapCat 刚启动/短暂抖动时，窗口内 Bot 自己的消息可能被当成
+# 普通用户消息同步出去（回声）。10 秒窗口既能挡住"每条消息 3 次重试 + 退避"的雪崩，
+# 又能把副作用限制在可接受范围内。
+BOT_ID_FAIL_CACHE_TTL = 10.0
 
 class OneBotClient:
     def __init__(self):
@@ -11,11 +19,20 @@ class OneBotClient:
         if self.access_token:
             self.headers['Authorization'] = f'Bearer {self.access_token}'
         self._bot_id = None
+        # Bot QQ 号获取失败的时间窗口：monotonic 时间早于该值时直接返回 None，不再请求
+        self._bot_id_fail_until = 0.0
         self._session: aiohttp.ClientSession = None
 
     async def _ensure_session(self):
         if self._session is None or self._session.closed:
-            connector = aiohttp.TCPConnector(ssl=False, limit=10, limit_per_host=5)
+            # 连接池上限调大，降低突发消息时 /send_* 请求的排队等待；
+            # 超时语义（total=30, connect=10）与重试逻辑保持不变
+            connector = aiohttp.TCPConnector(
+                ssl=False,
+                limit=50,
+                limit_per_host=20,
+                enable_cleanup_closed=True
+            )
             timeout = aiohttp.ClientTimeout(total=30, connect=10)
             self._session = aiohttp.ClientSession(connector=connector, timeout=timeout)
 
@@ -68,15 +85,47 @@ class OneBotClient:
             self._session = None
 
     async def get_bot_id(self) -> int:
-        """获取当前登录的 Bot QQ 号"""
-        if self._bot_id is None:
-            try:
-                res = await self._get_json("/get_login_info")
-                if res.get('retcode') == 0:
-                    self._bot_id = res['data']['user_id']
-            except Exception as e:
-                logger.warning(f"获取 Bot QQ ID 失败: {e}")
+        """获取当前登录的 Bot QQ 号（成功结果长期缓存，失败结果负缓存 10 秒）。
+
+        获取失败（NapCat 不可用、接口异常、retcode 非 0）后，在
+        BOT_ID_FAIL_CACHE_TTL 秒内直接返回 None，不再发起网络请求，避免 QQ
+        每来一条消息都触发一次 /get_login_info（内部还带 3 次重试与 1s/2s 退避）
+        把 webhook 热路径拖慢数秒。
+        """
+        if self._bot_id is not None:
+            return self._bot_id
+
+        if time.monotonic() < self._bot_id_fail_until:
+            return None
+
+        try:
+            res = await self._get_json("/get_login_info")
+            if res.get('retcode') == 0:
+                self._bot_id = res['data']['user_id']
+            else:
+                # 接口可达但返回错误，同样视为一次失败，进入负缓存窗口
+                self._bot_id_fail_until = time.monotonic() + BOT_ID_FAIL_CACHE_TTL
+                logger.warning(
+                    f"获取 Bot QQ ID 失败: retcode={res.get('retcode')}，"
+                    f"{BOT_ID_FAIL_CACHE_TTL:.0f}s 内不再重试"
+                )
+        except Exception as e:
+            self._bot_id_fail_until = time.monotonic() + BOT_ID_FAIL_CACHE_TTL
+            logger.warning(f"获取 Bot QQ ID 失败: {e}（{BOT_ID_FAIL_CACHE_TTL:.0f}s 内不再重试）")
         return self._bot_id
+
+    def invalidate_bot_id(self) -> None:
+        """清除 Bot QQ 号缓存（含失败负缓存），下次 get_bot_id() 会重新请求。"""
+        self._bot_id = None
+        self._bot_id_fail_until = 0.0
+
+    async def warmup(self) -> None:
+        """启动预热：提前拉取 Bot QQ 号，失败也不影响启动（异常不外抛）。"""
+        try:
+            await self.get_bot_id()
+        except Exception as e:
+            # get_bot_id 自身已兜底，这里再兜一层，保证预热任务绝不冒泡异常
+            logger.debug(f"Bot QQ ID 预热失败（不影响启动）: {e}")
 
     async def send_group_msg(self, group_id: int, message):
         """发送群消息。支持字符串（CQ码）或列表（消息段数组）。"""

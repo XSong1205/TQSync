@@ -66,10 +66,22 @@ class SyncEngine:
         FileTransfer.tg_group_id = self.tg_group_id
         FileTransfer.qq_group_id = self.qq_group_id
         
-        # 异步同步队列：限制并发数为 3，防止大文件耗尽资源
-        self.sync_queue = asyncio.Queue(maxsize=50)
-        self.max_concurrent_syncs = 3
+        # 异步同步队列：并发数与队列长度可通过 config.yaml 调优
+        # （sync.worker_count 默认 3，sync.queue_size 默认 50；大群高并发可适当调大）
+        try:
+            workers = int(config_loader.get('sync.worker_count', 3) or 3)
+        except (TypeError, ValueError):
+            workers = 3
+        self.max_concurrent_syncs = max(1, min(workers, 16))
+
+        try:
+            queue_size = int(config_loader.get('sync.queue_size', 50) or 50)
+        except (TypeError, ValueError):
+            queue_size = 50
+        self.sync_queue = asyncio.Queue(maxsize=max(10, queue_size))
         self._worker_tasks = []
+
+        logger.info(f"同步队列初始化: 并发工作者 {self.max_concurrent_syncs} 个, 队列上限 {max(10, queue_size)}")
         
         # 启动后台工作者
         for i in range(self.max_concurrent_syncs):
@@ -884,8 +896,10 @@ class SyncEngine:
         # 1. 获取最后更新时间
         last_update = "Unknown"
         try:
-            result = subprocess.run(['git', 'log', '-1', '--format=%ci'], 
-                                    capture_output=True, text=True, check=True)
+            result = await asyncio.to_thread(
+                subprocess.run, ['git', 'log', '-1', '--format=%ci'],
+                capture_output=True, text=True, check=True
+            )
             git_time_str = result.stdout.strip()
             last_update = git_time_str.split('+')[0].strip()
         except Exception:

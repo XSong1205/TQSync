@@ -10,6 +10,7 @@ import os
 import shutil
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Callable, Optional
@@ -55,6 +56,9 @@ _MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
 # 大文件阈值 (50 MB)，超过此大小使用流式下载
 _STREAMING_THRESHOLD = 50 * 1024 * 1024
 
+# temp 目录缓存（进程内只创建一次，避免每次下载都做 makedirs 系统调用）
+_temp_dir_cache: Optional[str] = None
+
 
 # ---------------------------------------------------------------------------
 # 辅助
@@ -68,13 +72,117 @@ def _format_size(size_bytes: int) -> str:
 
 
 def _resolve_temp_dir() -> str:
+    """返回 temp 目录绝对路径，进程内只在首次调用时创建一次并缓存结果。"""
+    global _temp_dir_cache
+    cached = _temp_dir_cache
+    if cached is not None:
+        return cached
     d = os.path.join(os.getcwd(), 'temp')
     os.makedirs(d, exist_ok=True)
+    _temp_dir_cache = d
     return d
 
 
 def _unique_temp_path(prefix: str = 'file', ext: str = '.tmp') -> str:
     return os.path.join(_resolve_temp_dir(), f'{prefix}_{uuid.uuid4().hex}_{int(time.time() * 1000)}{ext}')
+
+
+# ---------------------------------------------------------------------------
+# HTTP 共享会话 — 复用连接池，避免每次下载都新建 ClientSession / Connector
+# ---------------------------------------------------------------------------
+_HTTP_CONNECTOR_LIMIT = 16        # 连接池总上限
+_HTTP_DNS_CACHE_TTL = 300         # DNS 缓存有效期 (秒)
+_HTTP_TIMEOUT_TOTAL = 600         # 单次请求总超时 (秒)，与旧实现一致
+_HTTP_TIMEOUT_CONNECT = 30        # 建连超时 (秒)，与旧实现一致
+
+_http_session: Optional[aiohttp.ClientSession] = None
+_http_session_loop: Optional[asyncio.AbstractEventLoop] = None
+_http_session_lock: Optional[asyncio.Lock] = None
+_http_session_lock_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _get_session_lock() -> asyncio.Lock:
+    """获取当前事件循环使用的创建锁；事件循环变化时自动重建，避免锁绑定到旧 loop。"""
+    global _http_session_lock, _http_session_lock_loop
+    loop = asyncio.get_running_loop()
+    lock = _http_session_lock
+    if lock is None or _http_session_lock_loop is not loop:
+        lock = asyncio.Lock()
+        _http_session_lock = lock
+        _http_session_lock_loop = loop
+    return lock
+
+
+async def _get_http_session() -> aiohttp.ClientSession:
+    """获取进程级共享 ClientSession（懒加载，连接池复用）。
+
+    - 首次调用时创建，之后所有 HTTP 下载复用同一连接池，省去重复的
+      TCP/TLS 握手与 Connector 创建开销；
+    - 若 session 已被 aclose_http_session() 关闭（session.closed），或上次创建
+      它的事件循环已结束，则自动重建；
+    - 并发首次调用通过锁保证只创建一个 session。
+    """
+    global _http_session, _http_session_loop
+    loop = asyncio.get_running_loop()
+    session = _http_session
+    if session is not None and not session.closed and _http_session_loop is loop:
+        return session
+
+    async with _get_session_lock():
+        session = _http_session
+        if session is not None and not session.closed and _http_session_loop is loop:
+            return session
+        if session is not None:
+            # 旧 session 已关闭或属于已结束的事件循环：尽力清理后重建
+            _http_session = None
+            _http_session_loop = None
+            try:
+                if not session.closed:
+                    await session.close()
+            except Exception:
+                pass
+        with warnings.catch_warnings():
+            # Python 3.14 起该参数被忽略（CPython 底层问题已修复），仅抑制这条无害的弃用警告
+            warnings.filterwarnings(
+                'ignore',
+                message='.*enable_cleanup_closed ignored.*',
+                category=DeprecationWarning,
+            )
+            connector = aiohttp.TCPConnector(
+                ssl=False,
+                limit=_HTTP_CONNECTOR_LIMIT,
+                ttl_dns_cache=_HTTP_DNS_CACHE_TTL,
+                enable_cleanup_closed=True,
+            )
+        _http_session = aiohttp.ClientSession(
+            connector=connector,
+            timeout=aiohttp.ClientTimeout(
+                total=_HTTP_TIMEOUT_TOTAL,
+                connect=_HTTP_TIMEOUT_CONNECT,
+            ),
+        )
+        _http_session_loop = loop
+        logger.debug('已创建共享 HTTP ClientSession (连接池复用)')
+        return _http_session
+
+
+async def aclose_http_session() -> None:
+    """关闭共享 HTTP ClientSession，供进程退出/重启时调用。
+
+    幂等（可重复调用）且容错（关闭异常只记录 debug 日志，不向外抛出）。
+    """
+    global _http_session, _http_session_loop
+    session = _http_session
+    _http_session = None
+    _http_session_loop = None
+    if session is None:
+        return
+    try:
+        if not session.closed:
+            await session.close()
+            logger.debug('已关闭共享 HTTP ClientSession')
+    except Exception as e:
+        logger.debug(f'关闭共享 HTTP ClientSession 失败: {e}')
 
 
 # ---------------------------------------------------------------------------
@@ -391,36 +499,48 @@ class FileTransfer:
 
     @staticmethod
     async def _http_download(url: str, file_name: str) -> str:
-        """HTTP 下载文件到 temp 目录，支持流式进度日志。"""
+        """HTTP 下载文件到 temp 目录，支持流式进度日志。
+
+        复用模块级共享 ClientSession（连接池），不再为每次下载新建
+        ClientSession / TCPConnector；单请求超时语义与旧实现保持一致
+        （total=600s / connect=30s）。
+        """
         temp_dir = _resolve_temp_dir()
         ext = os.path.splitext(url.split('?')[0])[1] or os.path.splitext(file_name)[1] or '.tmp'
 
         temp_path = _unique_temp_path('dl', '.tmp')
         final_path = os.path.join(temp_dir, f'dl_{uuid.uuid4().hex[:8]}_{int(time.time())}{ext}')
 
-        connector = aiohttp.TCPConnector(ssl=False)
-        timeout = aiohttp.ClientTimeout(total=600, connect=30)
-
         start_time = time.time()
-        try:
-            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        raise Exception(f'HTTP {resp.status}')
-                    total_size = int(resp.headers.get('content-length', 0))
-                    downloaded = 0
-                    last_log = start_time
 
-                    async with aiofiles.open(temp_path, 'wb') as f:
-                        async for chunk in resp.content.iter_chunked(65536):
-                            await f.write(chunk)
-                            downloaded += len(chunk)
-                            now = time.time()
-                            if now - last_log >= 2.0 and total_size > 0:
-                                pct = downloaded / total_size * 100
-                                speed = downloaded / (now - start_time) if now > start_time else 0
-                                logger.debug(f'下载: {pct:.1f}% ({_format_size(speed)}/s)')
-                                last_log = now
+        async def _stream_once(session: aiohttp.ClientSession) -> None:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    raise Exception(f'HTTP {resp.status}')
+                total_size = int(resp.headers.get('content-length', 0))
+                downloaded = 0
+                last_log = start_time
+
+                async with aiofiles.open(temp_path, 'wb') as f:
+                    async for chunk in resp.content.iter_chunked(65536):
+                        await f.write(chunk)
+                        downloaded += len(chunk)
+                        now = time.time()
+                        if now - last_log >= 2.0 and total_size > 0:
+                            pct = downloaded / total_size * 100
+                            speed = downloaded / (now - start_time) if now > start_time else 0
+                            logger.debug(f'下载: {pct:.1f}% ({_format_size(speed)}/s)')
+                            last_log = now
+
+        try:
+            session = await _get_http_session()
+            try:
+                await _stream_once(session)
+            except RuntimeError:
+                # 共享 session 可能刚被 aclose_http_session() 关闭 → 重建后重试一次
+                if not session.closed:
+                    raise
+                await _stream_once(await _get_http_session())
 
             shutil.move(temp_path, final_path)
             elapsed = time.time() - start_time

@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 import re
+import asyncio
 from datetime import datetime
 from utils.logger import logger
 
@@ -99,8 +100,11 @@ async def handle_status_command(start_time: float = None):
     # 1. 获取最后更新时间
     last_update = "Unknown"
     try:
-        result = subprocess.run(['git', 'log', '-1', '--format=%ci'], 
-                                capture_output=True, text=True, check=True)
+        # subprocess 是阻塞调用（Windows 上启动进程 ~30-100ms），放线程池避免卡事件循环
+        result = await asyncio.to_thread(
+            subprocess.run, ['git', 'log', '-1', '--format=%ci'],
+            capture_output=True, text=True, check=True
+        )
         git_time_str = result.stdout.strip()
         last_update = git_time_str.split('+')[0].strip()
     except Exception:

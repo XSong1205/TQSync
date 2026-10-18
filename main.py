@@ -39,8 +39,12 @@ from utils.banner import print_banner
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
 
-def _copy_to_temp(file_url: str) -> str:
-    """若是本地 file:// 路径则复制到 temp 目录并返回新路径；否则原样返回"""
+async def _copy_to_temp(file_url: str) -> str:
+    """若是本地 file:// 路径则复制到 temp 目录并返回新路径；否则原样返回
+
+    注意：文件复制是阻塞 IO（大视频可达数百 MB），必须放到线程池执行，
+    否则会卡住整个事件循环，导致 TG 轮询与 Webhook 全部停滞。
+    """
     if not file_url or file_url.startswith('http'):
         return file_url
     local_path = file_url.replace('file:///', '').replace('file://', '')
@@ -50,7 +54,15 @@ def _copy_to_temp(file_url: str) -> str:
     temp_dir = os.path.join(os.getcwd(), 'temp')
     os.makedirs(temp_dir, exist_ok=True)
     dest = os.path.join(temp_dir, f"webhook_{int(time.time() * 1000)}_{os.path.basename(local_path)}")
-    shutil.copy(local_path, dest)
+
+    def _do_copy():
+        shutil.copy(local_path, dest)
+
+    try:
+        await asyncio.to_thread(_do_copy)
+    except Exception as e:
+        logger.warning(f"复制本地文件到 temp 失败（将尝试直接使用原路径）: {e}")
+        return file_url
     logger.debug(f"已复制本地文件到 temp: {os.path.basename(local_path)}")
     return dest
 
@@ -195,13 +207,10 @@ async def handle_qq_webhook(request):
             
             combined_text = "".join(text_parts).strip()
             
-            # 立即复制本地文件到 temp 目录，防止 NapCat 提前清理缓存
-            image_url = _copy_to_temp(image_url) if image_url else None
-            video_url = _copy_to_temp(video_url) if video_url else None
-            file_url = _copy_to_temp(file_url) if file_url else None
-            mface_url = _copy_to_temp(mface_url) if mface_url else None
-            voice_url = _copy_to_temp(voice_url) if voice_url else None
-            
+            # 本地文件复制延后到真正需要转发时执行（见各分支），避免为一条消息
+            # 无差别复制 5 种媒体文件（例如纯图片消息不再先复制视频）；
+            # 复制本身也已改为线程池执行，不会阻塞事件循环。
+
             # 优先处理合并转发消息
             if is_forward and forward_content:
                 logger.info(f"[QQ] {nickname}: [合并转发消息]")
@@ -211,6 +220,7 @@ async def handle_qq_webhook(request):
             # 处理语音消息 (Record)
             if voice_url:
                 logger.info(f"[QQ] {nickname}: [语音消息]")
+                voice_url = await _copy_to_temp(voice_url)
                 engine.enqueue_sync_task(engine.forward_voice_to_tg, qq_id, nickname, voice_url, reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
                 return web.json_response({})
             
@@ -402,6 +412,7 @@ async def handle_qq_webhook(request):
                                  {"type": "reply", "data": {"id": str(data.get('message_id'))}}]
                     await onebot_client.send_group_msg(engine.qq_group_id, error_msg)
             elif image_url:
+                image_url = await _copy_to_temp(image_url)
                 caption_hint = f" ({combined_text[:30]})" if combined_text else ""
                 logger.info(f"[QQ] {nickname}: [图片]{caption_hint}")
                 source = FileSource.from_qq_webhook(image_url, image_file_name,
@@ -410,6 +421,7 @@ async def handle_qq_webhook(request):
                     source, caption=combined_text,
                     reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif video_url:
+                video_url = await _copy_to_temp(video_url)
                 caption_hint = f" ({combined_text[:30]})" if combined_text else ""
                 logger.info(f"[QQ] {nickname}: [视频]{caption_hint}")
                 source = FileSource.from_qq_webhook(video_url, video_file_name,
@@ -418,6 +430,7 @@ async def handle_qq_webhook(request):
                     source, caption=combined_text,
                     reply_to_message_id=reply_to_tg_id, qq_message_id=data.get('message_id'))
             elif mface_url:
+                mface_url = await _copy_to_temp(mface_url)
                 logger.info(f"[QQ] {nickname}: [动画表情]")
                 source = FileSource.from_qq_webhook(mface_url, mface_file_name,
                     raw_file=raw_mface_file)
@@ -425,6 +438,7 @@ async def handle_qq_webhook(request):
                     source, reply_to_message_id=reply_to_tg_id,
                     qq_message_id=data.get('message_id'))
             elif file_url:
+                file_url = await _copy_to_temp(file_url)
                 logger.info(f"[QQ] {nickname}: [文件: {file_name}]")
                 source = FileSource.from_qq_webhook(file_url, file_name,
                     raw_file=raw_file_file)
@@ -549,6 +563,21 @@ async def graceful_restart(platform: str = 'qq'):
         os._exit(0)
 
     logger.info("正在重启...")
+
+    # 退出前收口：冲刷日志 sink（若将来启用异步 sink 会等待队列排空）并释放共享下载连接池，
+    # 避免 os._exit 丢掉最后几条日志、或残留半开连接。
+    try:
+        from utils.logger import shutdown_logger
+        await asyncio.wait_for(shutdown_logger(), timeout=2.0)
+    except Exception as e:
+        logger.debug(f"日志冲刷失败（非致命）: {e}")
+
+    # 释放共享的文件下载连接池，避免残留半开连接
+    try:
+        from core.file_transfer import aclose_http_session
+        await asyncio.wait_for(aclose_http_session(), timeout=3.0)
+    except Exception as e:
+        logger.debug(f"关闭文件下载连接池失败（非致命）: {e}")
 
     reboot_info = {
         "start_time": time.time() * 1000,
@@ -855,6 +884,11 @@ async def main():
     # 启动 QQ Webhook
     webhook_task = asyncio.create_task(start_qq_webhook())
     background_tasks.append(webhook_task)
+
+    # 后台预热 Bot QQ 号：反回环判重需要它，预热后 webhook 热路径不再发 /get_login_info。
+    # 用后台任务，NapCat 未就绪时也不会拖慢启动。
+    if hasattr(onebot_client, 'warmup'):
+        background_tasks.append(asyncio.create_task(onebot_client.warmup()))
     
     # 启动群公告双向自动感知管理器
     from core.notice_sync import notice_sync_manager
