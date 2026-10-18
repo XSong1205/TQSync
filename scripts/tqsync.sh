@@ -8,12 +8,14 @@
 #   ./tqsync.sh shell       进入命令窗口（可实时执行 tqstart/tqstop 等）
 #   ./tqsync.sh status      查看运行状态
 #   ./tqsync.sh logs [n]    查看最近日志（自动解析 JSON 行）
+#   ./tqsync.sh copy [n]    导出最近 n 行日志为纯文本文件（方便 scp 下载）
 #   ./tqsync.sh install     执行一键安装
 #
 # 会话结构 (tmux):
 #   tqsync:logs   机器人进程 + 实时日志（鼠标滚轮可回看历史）
 #   tqsync:shell  命令窗口，随时执行 tqstatus / tqrestart / tail 等命令
 #   快捷键: Ctrl+b 0 / 1 切换窗口，Ctrl+b d 退出（进程保持后台运行）
+#   复制日志: Ctrl+b m 关闭鼠标捕获后可直接框选/右键；或按住 Shift 拖动临时绕过
 
 set -u
 
@@ -58,10 +60,17 @@ tmux_apply_options() {
     tmux set-option -t "$SESSION_NAME" mouse on 2>/dev/null || true
     tmux set-option -t "$SESSION_NAME" history-limit "$HISTORY_LIMIT" 2>/dev/null || true
     tmux set-option -t "$SESSION_NAME" allow-rename off 2>/dev/null || true
-    tmux set-option -t "$SESSION_NAME" status-right " 滚轮翻历史 · Ctrl+b 0/1 切换 · Ctrl+b d 退出 " 2>/dev/null || true
-    tmux set-option -t "$SESSION_NAME" status-right-length 80 2>/dev/null || true
+    tmux set-option -t "$SESSION_NAME" status-right " 滚轮翻历史 · Ctrl+b m 鼠标 · Ctrl+b 0/1 窗口 · Ctrl+b d 退出 " 2>/dev/null || true
+    tmux set-option -t "$SESSION_NAME" status-right-length 96 2>/dev/null || true
     tmux set-window-option -t "$SESSION_NAME" automatic-rename off 2>/dev/null || true
     tmux set-window-option -t "$SESSION_NAME" mode-keys vi 2>/dev/null || true
+
+    # 复制支持：
+    #   1) Ctrl+b m 切换鼠标捕获 —— 关闭后可直接用终端原生框选 / 右键复制（滚轮也交还终端）
+    #   2) 临时框选：按住 Shift 拖动可绕过 tmux 鼠标捕获，使用终端自身的复制
+    #   3) set-clipboard on：tmux 内的复制通过 OSC52 写入本地剪贴板（Windows Terminal 等支持）
+    tmux set-option -g set-clipboard on 2>/dev/null || true
+    tmux bind-key m set-option mouse \; display-message "鼠标捕获: 关闭后可用原生框选/右键复制，开启后滚轮翻历史" 2>/dev/null || true
 }
 
 tmux_prepare_server() {
@@ -259,7 +268,7 @@ cmd_status() {
     [ "$running" = "1" ] && return 0
 }
 
-cmd_logs() {
+format_logs() {
     local lines="${1:-50}"
     if [ ! -f "$LOGFILE" ]; then
         echo "[TQSync] 暂无日志文件: $LOGFILE"
@@ -284,13 +293,42 @@ for line in sys.stdin:
     fi
 }
 
+cmd_logs() {
+    format_logs "${1:-50}"
+}
+
+# 把最近日志导出成纯文本文件，方便 scp 下来 / 在编辑器里复制
+cmd_copy() {
+    local lines="${1:-300}"
+    if [ ! -f "$LOGFILE" ]; then
+        echo "[TQSync] 暂无日志文件: $LOGFILE"
+        return 1
+    fi
+    local out="$TQSYNC_DIR/logs/tqcopy-$(date +%Y%m%d-%H%M%S).log"
+    format_logs "$lines" > "$out"
+    echo "[TQSync] 已导出最近 $lines 行到: $out"
+    echo "[TQSync] 下载到本地: scp root@<服务器>:$out ./"
+    echo "[TQSync] 也可以直接:  cat $out"
+}
+
+# 对已存在的 tmux 会话重新应用鼠标/复制/状态栏设置
+cmd_apply() {
+    if have_tmux && tmux_session_exists; then
+        tmux_apply_options
+        echo "[TQSync] 已刷新 tmux 选项 (mouse on / set-clipboard on / Ctrl+b m 切换鼠标)"
+        return 0
+    fi
+    echo "[TQSync] 没有正在运行的 tmux 会话"
+    return 1
+}
+
 cmd_install() {
     echo "[TQSync] 执行一键安装..."
     bash "$SCRIPT_DIR/install.sh"
 }
 
 cmd_help() {
-    sed -n '3,15p' "$0" | sed 's/^# *//'
+    sed -n '3,17p' "$0" | sed 's/^# *//'
 }
 
 cmd="${1:-help}"
@@ -301,6 +339,8 @@ case "$cmd" in
     attach)    cmd_attach ;;
     shell)     cmd_shell ;;
     logs)      cmd_logs "${2:-50}" ;;
+    copy)      cmd_copy "${2:-300}" ;;
+    apply)     cmd_apply ;;
     status)    cmd_status ;;
     install)   cmd_install ;;
     help|--help|-h) cmd_help ;;

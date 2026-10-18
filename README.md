@@ -72,6 +72,7 @@ bash scripts/install.sh
 | `tqrestart` | 重启机器人 |
 | `tqstatus` | 查看运行状态（含窗口列表） |
 | `tqlogs` | 查看最近日志（自动解析 JSON 行） |
+| `tqcopy` | 导出最近 300 行日志为纯文本文件，便于 `scp` 下载 |
 
 不想用别名时，也可直接调用管理脚本：
 
@@ -82,11 +83,16 @@ bash scripts/tqsync.sh shell      # 切换到命令窗口
 bash scripts/tqsync.sh stop       # 停止
 bash scripts/tqsync.sh status     # 状态
 bash scripts/tqsync.sh logs 100   # 最近 100 行（已格式化）
+bash scripts/tqsync.sh copy 300   # 导出最近 300 行为 logs/tqcopy-*.log
 ```
 
 > **说明:** 机器人在 tmux 会话 `tqsync` 中后台运行，分为 `logs`（实时日志）和 `shell`（命令窗口）两个窗口：
 > - `Ctrl+b` 然后按 `0` / `1` 切换窗口，`Ctrl+b` 然后按 `d` 退出（进程继续后台运行）；
 > - 日志窗口内直接滚动鼠标滚轮即可回看历史（默认保留 10 万行），按 `q` 退出翻页；
+> - **复制日志**：tmux 开启鼠标捕获时终端无法直接框选，有三种办法：
+>   1. 按住 **Shift** 再用鼠标拖动（临时绕过 tmux，用终端自身的复制/右键菜单）；
+>   2. 按 `Ctrl+b` 然后按 `m` 关闭鼠标捕获，之后可正常框选/右键复制，再按一次恢复滚轮；
+>   3. 用 `tqcopy 500` 导出文件后 `scp` 下载，或用 `tqlogs` 直接看（tmux 内选中也会经 OSC52 写入本地剪贴板，Windows Terminal 等终端支持）。
 > - 未安装 `tmux` 时自动回退到 `screen`（翻页用 `Ctrl+A [`），`/reboot` 与自动更新在两种会话下都能自动重启。
 
 ### 手动安装(Windows/Linux/macOS)

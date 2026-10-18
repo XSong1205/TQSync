@@ -154,7 +154,7 @@ install_aliases() {
     local bin_dirs=("/usr/local/bin" "$HOME/.local/bin")
     for dir in "${bin_dirs[@]}"; do
         if [ -w "$dir" ] 2>/dev/null || ([ "$(id -u)" -eq 0 ] && mkdir -p "$dir" 2>/dev/null); then
-            for cmd in start stop restart status attach logs shell; do
+            for cmd in start stop restart status attach logs shell copy; do
                 local alias_name="tq$cmd"
                 [ "$cmd" = "attach" ] && alias_name="tqlog"
                 cat > "$dir/$alias_name" <<EOF
@@ -180,6 +180,7 @@ EOF
 #   tqrestart 重启机器人
 #   tqstatus  查看运行状态
 #   tqlogs    查看最近日志（自动解析）
+#   tqcopy    导出最近日志为纯文本文件（方便 scp 下载）
 export TQSYNC_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 alias tqstart="bash \$TQSYNC_HOME/scripts/tqsync.sh start"
 alias tqlog="bash \$TQSYNC_HOME/scripts/tqsync.sh attach"
@@ -188,6 +189,7 @@ alias tqstop="bash \$TQSYNC_HOME/scripts/tqsync.sh stop"
 alias tqrestart="bash \$TQSYNC_HOME/scripts/tqsync.sh restart"
 alias tqstatus="bash \$TQSYNC_HOME/scripts/tqsync.sh status"
 alias tqlogs="bash \$TQSYNC_HOME/scripts/tqsync.sh logs 50"
+alias tqcopy="bash \$TQSYNC_HOME/scripts/tqsync.sh copy 300"
 EOF
 
     local rc
