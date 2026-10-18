@@ -100,7 +100,8 @@ class SyncEngine:
                 try:
                     await retry_async(task_func, *args, max_retries=3, base_delay=2.0, **kwargs)
                 except asyncio.CancelledError:
-                    self.sync_queue.task_done()
+                    # task_done() 统一由下面的 finally 负责，这里重复调用会抛
+                    # "task_done() called too many times" 并把 worker 打出主循环
                     raise
                 except Exception as e:
                     logger.error(f"工作者 #{worker_id} 执行任务失败 (已重试3次): {e}", exc_info=True)

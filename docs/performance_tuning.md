@@ -20,6 +20,15 @@ sink 写出搬到后台线程，格式化 + JSON serialize + 跨线程投递仍�
 单次 `logger.info` 从 ~0.06ms 涨到 ~0.45ms（4~7 倍），对"每条消息几次日志"的
 机器人是净损失。进程强杀前的日志收口由 `utils.logger.shutdown_logger()` 负责。
 
+**顺带修复（运行时测试暴露）**：
+
+- `core/sync_engine.py`：worker 在任务被取消时会对同一个任务调用两次
+  `task_done()`，抛 `ValueError: task_done() called too many times` 后被外层
+  捕获，worker 存活但队列计数错乱，`SyncEngine.stop()` 的 `gather()` 会永久挂起
+  ——也就是重启/退出时可能卡死。已改为只由 `finally` 调用一次。
+- `core/file_transfer.py`：`temp` 目录缓存同时记录 cwd，工作目录变化时自动重算，
+  避免清理逻辑与实际 temp 目录脱节。
+
 ## 2. 实测数据
 
 `python scripts/bench_perf.py --ops 300`（Windows / Python 3.14，单次调用耗时）：
@@ -62,6 +71,14 @@ python scripts/test_database.py         # 数据库层功能回归（45 项断�
 python scripts/test_webhook_hotpath.py  # Webhook 热路径行为（11 项断言）
 python scripts/test_file_transfer_perf.py  # 下载连接复用 + 清理（10 项检查）
 python scripts/test_logger_qq.py        # 日志落盘 + Bot ID 负缓存（33 项断言）
+python scripts/test_runtime_e2e.py      # 运行时端到端冒烟（23 项断言）
 ```
 
 以上脚本都使用临时数据库 / 临时目录 / localhost 服务，不会访问真实 NapCat 或 Telegram。
+
+`test_runtime_e2e.py` 会拉起真实的事件循环、真实 aiohttp Webhook 服务、真实
+uvicorn Admin API 与真实 SQLite，只有 Telegram Bot（记录发送）与 NapCat HTTP
+是替身，因此**不需要真实 token/群号，也不会向真实群发消息**。它覆盖：
+文本 QQ→TG、媒体 QQ→TG（含 temp 复制与清理）、撤回同步、20 条消息突发吞吐与
+事件循环停顿、Admin API 鉴权与统计。实测：单条端到端 46ms（含 30ms 模拟网络
+延迟），20 条突发 337ms，事件循环最大停顿 13.4ms。

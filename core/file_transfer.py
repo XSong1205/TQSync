@@ -57,7 +57,7 @@ _MAGIC_SIGNATURES: list[tuple[bytes, str]] = [
 _STREAMING_THRESHOLD = 50 * 1024 * 1024
 
 # temp 目录缓存（进程内只创建一次，避免每次下载都做 makedirs 系统调用）
-_temp_dir_cache: Optional[str] = None
+_temp_dir_cache: Optional[tuple[str, str]] = None  # (cwd, temp_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -72,14 +72,18 @@ def _format_size(size_bytes: int) -> str:
 
 
 def _resolve_temp_dir() -> str:
-    """返回 temp 目录绝对路径，进程内只在首次调用时创建一次并缓存结果。"""
+    """返回 temp 目录绝对路径，进程内只在首次调用时创建一次并缓存结果。
+
+    缓存同时记录当时的 cwd：进程工作目录若被改变（测试脚本/容器场景），
+    自动按新 cwd 重新计算，避免缓存路径与实际 temp 目录脱节导致临时文件清理失效。
+    """
     global _temp_dir_cache
-    cached = _temp_dir_cache
-    if cached is not None:
-        return cached
-    d = os.path.join(os.getcwd(), 'temp')
+    cwd = os.getcwd()
+    if _temp_dir_cache is not None and _temp_dir_cache[0] == cwd:
+        return _temp_dir_cache[1]
+    d = os.path.join(cwd, 'temp')
     os.makedirs(d, exist_ok=True)
-    _temp_dir_cache = d
+    _temp_dir_cache = (cwd, d)
     return d
 
 
