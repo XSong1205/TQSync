@@ -549,10 +549,11 @@ async def graceful_restart(platform: str = 'qq'):
     with open(REBOOT_INFO_FILE, 'w', encoding='utf-8') as f:
         json.dump(reboot_info, f)
 
-    # screen 会话 (scripts/tqsync.sh) 下：不派生新进程，写重启标记后退出，
-    # 由 scripts/tqsync-run.sh 检测标记并重新拉起，避免子进程随 screen 退出被 SIGHUP。
-    if os.environ.get("STY"):
-        logger.info("检测到 screen 会话，由外部 runner 负责重启")
+    # tmux / screen 会话 (scripts/tqsync.sh) 下：不派生新进程，写重启标记后退出，
+    # 由 scripts/tqsync-run.sh 检测标记并重新拉起，避免子进程随会话退出被 SIGHUP。
+    if os.environ.get("STY") or os.environ.get("TMUX"):
+        session_type = "tmux" if os.environ.get("TMUX") else "screen"
+        logger.info(f"检测到 {session_type} 会话，由外部 runner 负责重启")
         with open(RESTART_MARKER_FILE, 'w', encoding='utf-8') as f:
             f.write("1")
         await asyncio.sleep(0.5)

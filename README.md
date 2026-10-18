@@ -55,7 +55,7 @@ python install.py
 
 ### 快速安装(Linux)
 
-支持 Debian/Ubuntu、CentOS/RHEL、Arch 系发行版。脚本会自动：创建 `venv` 虚拟环境、安装依赖、安装 `ffmpeg`/`screen`、生成 `config.yaml`，并写入快捷命令。
+支持 Debian/Ubuntu、CentOS/RHEL、Arch 系发行版。脚本会自动：创建 `venv` 虚拟环境、安装依赖、安装 `ffmpeg`/`tmux`（并保留 `screen` 作为回退）、生成 `config.yaml`，并写入快捷命令。
 
 ```bash
 bash scripts/install.sh
@@ -65,23 +65,29 @@ bash scripts/install.sh
 
 | 命令 | 说明 |
 | --- | --- |
-| `tqstart` | 在 screen 后台启动机器人 |
-| `tqlog` | 回到运行日志窗口 (退出按 `Ctrl+A` 再按 `D`) |
+| `tqstart` | 在 tmux 后台启动机器人 |
+| `tqlog` | 进入日志窗口，**鼠标滚轮可翻历史** |
+| `tqshell` | 切到命令窗口，实时执行 `tqstop`/`tqrestart` 等命令 |
 | `tqstop` | 停止机器人 |
 | `tqrestart` | 重启机器人 |
-| `tqstatus` | 查看运行状态 |
-| `tqlogs` | 查看最近日志 |
+| `tqstatus` | 查看运行状态（含窗口列表） |
+| `tqlogs` | 查看最近日志（自动解析 JSON 行） |
 
 不想用别名时，也可直接调用管理脚本：
 
 ```bash
 bash scripts/tqsync.sh start      # 启动
-bash scripts/tqsync.sh attach     # 回到日志窗口 (Ctrl+A D 退出)
+bash scripts/tqsync.sh attach     # 进入日志窗口（滚轮翻历史）
+bash scripts/tqsync.sh shell      # 切换到命令窗口
 bash scripts/tqsync.sh stop       # 停止
 bash scripts/tqsync.sh status     # 状态
+bash scripts/tqsync.sh logs 100   # 最近 100 行（已格式化）
 ```
 
-> **说明:** 机器人在 `screen` 会话中后台运行，`/reboot` 与自动更新会在会话内自动重启，无需手动干预。
+> **说明:** 机器人在 tmux 会话 `tqsync` 中后台运行，分为 `logs`（实时日志）和 `shell`（命令窗口）两个窗口：
+> - `Ctrl+b` 然后按 `0` / `1` 切换窗口，`Ctrl+b` 然后按 `d` 退出（进程继续后台运行）；
+> - 日志窗口内直接滚动鼠标滚轮即可回看历史（默认保留 10 万行），按 `q` 退出翻页；
+> - 未安装 `tmux` 时自动回退到 `screen`（翻页用 `Ctrl+A [`），`/reboot` 与自动更新在两种会话下都能自动重启。
 
 ### 手动安装(Windows/Linux/macOS)
 

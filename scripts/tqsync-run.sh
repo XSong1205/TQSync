@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TQSync screen 会话内循环 wrapper
 # 由 scripts/tqsync.sh start 在 screen 中调用，配合 main.py 的 screen 感知重启：
-#   - main.py 检测到 STY 时写 logs/.restart_marker 后退出 (code 42)
+#   - main.py 检测到 STY/TMUX 时写 logs/.restart_marker 后退出 (code 42)
 #   - 本脚本检测到 marker 时自动重新拉起，实现进程内 /reboot 与自动更新
 #   - 未检测到 marker 则视为异常退出，最多重试 5 次后停止，避免无限循环
 set -u
