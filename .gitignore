@@ -118,3 +118,13 @@ CLAUDE.md
 # autopusher 相关
 push.py
 utils/version_bumper.py
+
+# 测试/基准脚本产生的临时目录（正常会自动清理，中断时可能残留）
+tqsync_runtime_*/
+bench_logger_*/
+dbg_*/
+perf_copy_*/
+perf_log_*/
+tqsync_test_db_*/
+tqsync_webhook_*/
+tqsync_logger_qq_*/
