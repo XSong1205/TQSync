@@ -165,11 +165,6 @@ async def handle_qq_webhook(request):
                 )
                 return web.json_response({"status": "unauthorized"}, status=401)
 
-        # 更新 QQ 健康时间戳（排除 notice 类型的纯撤回通知）
-        import main as main_module
-        if hasattr(main_module, '_health_last_qq_msg'):
-            main_module._health_last_qq_msg = time.time()
-
         data = await request.json()
         
         # 处理撤回通知 (Notice)
@@ -1037,51 +1032,11 @@ async def main():
     cleanup_codes_task = asyncio.create_task(cleanup_verification_codes())
     background_tasks.append(cleanup_codes_task)
 
-    async def health_monitor():
-        """每 5 分钟检查 QQ 连接健康状态，异常时向 TG 发送告警。
-
-        - QQ 侧：检测最近 10 分钟内是否收到过 webhook 消息
-        - TG 端稳定无需监控
-        """
-        # 启动后等 5 分钟再开始检测，避免刚启动就误报
-        await asyncio.sleep(300)
-
-        # 记录 QQ 端最近收到消息的时间戳 (webhook 收到消息时更新)
-        last_qq_msg = time.time()
-
-        # 注册到模块变量，供 webhook 更新
-        import main as main_module
-        main_module._health_last_qq_msg = last_qq_msg
-
-        alert_cooldown_qq = 0   # QQ 告警冷却计时
-        ALERT_INTERVAL = 1800   # 同类型告警最多每 30 分钟发一次
-
-        while True:
-            try:
-                now = time.time()
-                engine = SyncEngine.get_instance()
-
-                # 检查 QQ（最近 10 分钟无消息 + 不在冷却期）
-                qq_silence = now - main_module._health_last_qq_msg
-                if qq_silence > 600 and (now - alert_cooldown_qq) > ALERT_INTERVAL:
-                    alert_msg = (
-                        f"⚠️ [健康告警] QQ 端可能已离线\n"
-                        f"已有 {int(qq_silence // 60)} 分钟未收到 QQ webhook 消息\n"
-                        f"请检查 NapCat 是否正常运行"
-                    )
-                    try:
-                        await engine.bot.send_message(chat_id=engine.tg_group_id, text=alert_msg)
-                        logger.warning(f"健康告警: QQ 离线 {int(qq_silence // 60)} 分钟，已通知 TG")
-                        alert_cooldown_qq = now
-                    except Exception as e:
-                        logger.error(f"发送 QQ 健康告警到 TG 失败: {e}")
-
-            except Exception as e:
-                logger.error(f"健康监控异常: {e}")
-
-            await asyncio.sleep(300)
-
-    health_monitor_task = asyncio.create_task(health_monitor())
+    # QQ 主动健康监测：定时探测 NapCat HTTP 接口（有响应即连通），
+    # 仅在「断开 / 恢复」状态翻转时通知 TG，离线期间保持静默。详见 core/qq_health.py。
+    from core.qq_health import qq_health_monitor
+    qq_health_monitor.bind(application.bot, config_loader.get('telegram.group_id'))
+    health_monitor_task = await qq_health_monitor.start()
     background_tasks.append(health_monitor_task)
 
     async def auto_check_update():

@@ -155,24 +155,14 @@ async def handle_status_command(start_time: float = None):
     except Exception:
         plugin_info_lines = "\n已加载插件: 获取失败\n"
 
-    # 7. QQ 连接状态 (基于健康监控的心跳时间戳, 阈值与健康告警一致: 10 分钟)
+    # 7. QQ 连接状态 (主动探测 NapCat HTTP 接口的实时结果)
     conn_lines = ""
     try:
-        main_module = sys.modules.get('main')
-        now = time.time()
+        from core.qq_health import qq_health_monitor
 
-        def _fmt_conn(ago):
-            if ago is None:
-                return "⏳ 检测中"
-            if ago <= 600:
-                return "✅ 正常"
-            return f"❌ 可能离线 (已 {ago // 60} 分钟无消息)"
-
-        qq_ago = None
-        if main_module and hasattr(main_module, '_health_last_qq_msg'):
-            qq_ago = max(0, int(now - main_module._health_last_qq_msg))
-
-        conn_lines = f"- QQ 连接: {_fmt_conn(qq_ago)}\n"
+        conn_lines = f"- QQ 连接: {qq_health_monitor.status_text()}\n"
+        if qq_health_monitor.state == "offline" and qq_health_monitor.last_error:
+            conn_lines += f"- 断开原因: {qq_health_monitor.last_error}\n"
     except Exception:
         conn_lines = "- QQ 连接: 获取失败\n"
 

@@ -79,6 +79,86 @@ class OneBotClient:
         logger.error(f"OneBot API {endpoint} GET 失败 (已重试{max_retries}次): {last_error}")
         raise last_error
 
+    async def probe_health(self, timeout: float = 5.0) -> dict:
+        """轻量连通性探测（无重试、短超时），供 QQ 主动健康监测使用。
+
+        依次尝试 /get_status 与 /get_login_info（不同 NapCat 版本/配置可能只开放其一）。
+        连接层失败（拒绝连接、超时）说明 NapCat 整体不可达，直接判定失败；
+        接口可达但返回 online=false，说明 NapCat 进程在、QQ 已掉线，同样判定失败。
+
+        返回: {"ok": bool, "endpoint": str|None, "latency_ms": int|None,
+               "error": str|None, "data": dict|None}
+        """
+        await self._ensure_session()
+        client_timeout = aiohttp.ClientTimeout(total=timeout, connect=min(timeout, 3.0))
+        last_error = None
+
+        for endpoint in ("/get_status", "/get_login_info"):
+            started = time.monotonic()
+            try:
+                async with self._session.post(
+                    f"{self.base_url}{endpoint}",
+                    json={},
+                    headers=self.headers,
+                    timeout=client_timeout,
+                ) as resp:
+                    payload = await resp.json(content_type=None)
+            except asyncio.CancelledError:
+                raise
+            except (aiohttp.ClientOSError, asyncio.TimeoutError) as e:
+                # 连接被拒绝 / DNS 失败 / 超时：整机不可达，不再换端点重试
+                return {
+                    "ok": False,
+                    "endpoint": endpoint,
+                    "latency_ms": None,
+                    "error": f"{type(e).__name__}: {e}",
+                    "data": None,
+                }
+            except Exception as e:
+                # 拿到 HTTP 响应但内容不是预期 JSON 等：换下一个端点再试
+                last_error = f"{endpoint} 响应异常: {type(e).__name__}: {e}"
+                continue
+
+            latency_ms = int((time.monotonic() - started) * 1000)
+            if not isinstance(payload, dict):
+                last_error = f"{endpoint} 返回非 JSON 响应"
+                continue
+            if payload.get("retcode") != 0:
+                last_error = f"{endpoint} retcode={payload.get('retcode')}"
+                continue
+
+            data = payload.get("data") or {}
+            if endpoint == "/get_status":
+                if data.get("online") is False:
+                    # HTTP 通了但 QQ 未登录，属于真实的离线
+                    return {
+                        "ok": False,
+                        "endpoint": endpoint,
+                        "latency_ms": latency_ms,
+                        "error": "NapCat 在线但 QQ 未登录",
+                        "data": data,
+                    }
+            elif endpoint == "/get_login_info":
+                if not data.get("user_id"):
+                    last_error = "/get_login_info 未返回 user_id"
+                    continue
+
+            return {
+                "ok": True,
+                "endpoint": endpoint,
+                "latency_ms": latency_ms,
+                "error": None,
+                "data": data,
+            }
+
+        return {
+            "ok": False,
+            "endpoint": None,
+            "latency_ms": None,
+            "error": last_error or "NapCat 无有效响应",
+            "data": None,
+        }
+
     async def close(self):
         if self._session and not self._session.closed:
             await self._session.close()
