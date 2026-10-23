@@ -83,8 +83,9 @@ class OneBotClient:
         """轻量连通性探测（无重试、短超时），供 QQ 主动健康监测使用。
 
         依次尝试 /get_status 与 /get_login_info（不同 NapCat 版本/配置可能只开放其一）。
-        连接层失败（拒绝连接、超时）说明 NapCat 整体不可达，直接判定失败；
-        接口可达但返回 online=false，说明 NapCat 进程在、QQ 已掉线，同样判定失败。
+        连接被拒绝时直接判定失败；超时、响应异常、retcode 非 0 或缺少登录态字段时
+        自动降级到另一个端点。接口可达但返回 online=false（NapCat 进程在、QQ 掉线）
+        同样判定失败。
 
         返回: {"ok": bool, "endpoint": str|None, "latency_ms": int|None,
                "error": str|None, "data": dict|None}
@@ -102,11 +103,12 @@ class OneBotClient:
                     headers=self.headers,
                     timeout=client_timeout,
                 ) as resp:
+                    status = resp.status
                     payload = await resp.json(content_type=None)
             except asyncio.CancelledError:
                 raise
-            except (aiohttp.ClientOSError, asyncio.TimeoutError) as e:
-                # 连接被拒绝 / DNS 失败 / 超时：整机不可达，不再换端点重试
+            except aiohttp.ClientConnectorError as e:
+                # 连接被拒绝 / DNS 失败：整机不可达，换端点也没有意义
                 return {
                     "ok": False,
                     "endpoint": endpoint,
@@ -114,17 +116,24 @@ class OneBotClient:
                     "error": f"{type(e).__name__}: {e}",
                     "data": None,
                 }
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                # 超时 / 连接被对端断开 / 响应体异常：换下一个端点再试
+                last_error = f"{endpoint} 请求失败: {type(e).__name__}: {e}"
+                continue
             except Exception as e:
-                # 拿到 HTTP 响应但内容不是预期 JSON 等：换下一个端点再试
+                # 拿到 HTTP 响应但内容不是预期 JSON 等
                 last_error = f"{endpoint} 响应异常: {type(e).__name__}: {e}"
                 continue
 
             latency_ms = int((time.monotonic() - started) * 1000)
+            if status >= 400:
+                last_error = f"{endpoint} HTTP {status}"
+                continue
             if not isinstance(payload, dict):
-                last_error = f"{endpoint} 返回非 JSON 响应"
+                last_error = f"{endpoint} 返回非 JSON 响应 (HTTP {status})"
                 continue
             if payload.get("retcode") != 0:
-                last_error = f"{endpoint} retcode={payload.get('retcode')}"
+                last_error = f"{endpoint} HTTP {status} retcode={payload.get('retcode')}"
                 continue
 
             data = payload.get("data") or {}
@@ -138,6 +147,10 @@ class OneBotClient:
                         "error": "NapCat 在线但 QQ 未登录",
                         "data": data,
                     }
+                if "online" not in data:
+                    # 部分版本不回 online 字段：降级用 /get_login_info 确认登录态
+                    last_error = "/get_status 未返回 online 字段"
+                    continue
             elif endpoint == "/get_login_info":
                 if not data.get("user_id"):
                     last_error = "/get_login_info 未返回 user_id"

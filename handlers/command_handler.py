@@ -158,10 +158,10 @@ async def handle_status_command(start_time: float = None):
     # 7. QQ 连接状态 (主动探测 NapCat HTTP 接口的实时结果)
     conn_lines = ""
     try:
-        from core.qq_health import qq_health_monitor
+        from core.qq_health import STATE_OFFLINE, qq_health_monitor
 
         conn_lines = f"- QQ 连接: {qq_health_monitor.status_text()}\n"
-        if qq_health_monitor.state == "offline" and qq_health_monitor.last_error:
+        if qq_health_monitor.state == STATE_OFFLINE and qq_health_monitor.last_error:
             conn_lines += f"- 断开原因: {qq_health_monitor.last_error}\n"
     except Exception:
         conn_lines = "- QQ 连接: 获取失败\n"

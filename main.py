@@ -1154,6 +1154,13 @@ async def main():
         except Exception as e:
             logger.debug(f"同步引擎停止异常: {e}")
 
+        # 1.5 停止 QQ 健康监测（必须在关闭 OneBot 客户端之前，避免关闭后仍探测/发告警）
+        try:
+            from core.qq_health import qq_health_monitor
+            await qq_health_monitor.stop()
+        except Exception as e:
+            logger.debug(f"QQ 健康监测停止异常: {e}")
+
         # 2. 关闭 OneBot HTTP 客户端长连接
         try:
             await onebot_client.close()
