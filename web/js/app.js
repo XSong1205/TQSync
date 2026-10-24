@@ -25,6 +25,7 @@
 import { api, saveConfigBatch, onUnauthorized } from './api.js';
 import * as ui from './ui.js';
 import { initTheme, subscribe as subscribeTheme, resolved as resolvedTheme, setMode as setThemeMode, getMode as getThemeMode } from './theme.js';
+import { initUpdateCheck } from './update.js';
 
 import dashboardPage from './pages/dashboard.js';
 import configPage from './pages/config.js';
@@ -286,6 +287,9 @@ function showApp() {
   const initial = parseHash() || DEFAULT_ROUTE;
   if (!location.hash) history.replaceState(null, '', `#/${initial}`);
   navigate(initial, { restoreScroll: true });
+
+  // 静默检查更新：延迟执行，失败/无网络不打扰用户
+  initUpdateCheck();
 
   if (state.initialToken) setTimeout(promptInitialPassword, 900);
 }

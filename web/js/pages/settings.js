@@ -19,6 +19,7 @@
  */
 import * as ui from '../ui.js';
 import { api } from '../api.js';
+import { checkForUpdate } from '../update.js';
 
 const { h } = ui;
 
@@ -661,6 +662,13 @@ export default {
           icon: 'logs',
           chevron: true,
           onClick: () => ctx.go('logs'),
+        }),
+        ui.row({
+          title: '检查更新',
+          subtitle: '从 GitHub 检查是否有新版本发布',
+          icon: 'download',
+          chevron: true,
+          onClick: () => checkForUpdate({ force: true, interactive: true }),
         }),
         ui.row({
           title: '项目主页',

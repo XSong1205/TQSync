@@ -634,3 +634,144 @@ def update_sync_direction(update: SyncDirectionUpdate):
         raise HTTPException(status_code=400, detail=f"无效的同步方向，可选值: {', '.join(valid)}")
     config_loader.update_config('sync.direction', update.direction)
     return {"status": "success", "message": f"同步方向已设为: {update.direction}", "direction": update.direction}
+
+# ── 更新检查 API ──
+#
+# WebUI 打开时静默调用，返回是否有新提交以及更新日志（git log）。
+# 只读执行 `git fetch`，不会修改工作区；结果缓存 10 分钟避免频繁请求 GitHub。
+
+_UPDATE_CHECK_CACHE: dict = {"data": None, "ts": 0.0}
+_UPDATE_CHECK_LOCK = asyncio.Lock()
+_UPDATE_CHECK_TTL_OK = 600     # 成功结果缓存 10 分钟
+_UPDATE_CHECK_TTL_FAIL = 120   # 失败结果缓存 2 分钟，避免网络异常时反复拉取
+
+# 容器内没有 .git 目录，更新需重建镜像
+_IS_CONTAINER = os.environ.get('TQSYNC_CONTAINER', '0') == '1'
+
+
+def _git_origin_url() -> str:
+    """读取并规范化 origin 仓库地址（供前端生成 compare 链接）。"""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ['git', 'remote', 'get-url', 'origin'],
+            capture_output=True, text=True, timeout=5,
+        )
+        url = (out.stdout or '').strip()
+    except Exception:
+        return ''
+    if not url:
+        return ''
+    if url.startswith('git@github.com:'):
+        url = 'https://github.com/' + url.split(':', 1)[1]
+    if url.endswith('.git'):
+        url = url[:-4]
+    return url
+
+
+def _parse_changelog(raw: str) -> list:
+    """把 `git log --oneline` 文本解析为 [{commit, subject}]。"""
+    items = []
+    for line in (raw or '').splitlines():
+        line = line.strip().lstrip('*').strip()
+        if not line:
+            continue
+        head, _, rest = line.partition(' ')
+        if head and rest and 4 <= len(head) <= 40 and all(c in '0123456789abcdef' for c in head.lower()):
+            items.append({"commit": head, "subject": rest.strip()})
+        else:
+            items.append({"commit": "", "subject": line})
+        if len(items) >= 20:
+            break
+    return items
+
+
+def _run_update_probe() -> tuple:
+    """在线程中执行阻塞的 git 检查，返回 (info, repo_url)。"""
+    from handlers.command_handler import check_for_updates
+    info = asyncio.run(check_for_updates())
+    return info, _git_origin_url()
+
+
+def _normalize_update_info(info: dict, repo_url: str, cached: bool) -> dict:
+    """把 check_for_updates 的结果整理为 WebUI 使用的稳定结构。"""
+    import datetime
+    local_commit = info.get('local_commit') or ''
+    remote_commit = info.get('remote_commit') or ''
+    compare_url = ''
+    if repo_url and local_commit and remote_commit:
+        compare_url = f"{repo_url}/compare/{local_commit}...{remote_commit}"
+    return {
+        "ok": bool(info.get('ok')),
+        "available": bool(info.get('update_found')),
+        "current_version": get_full_version_string(),
+        "branch": info.get('current_branch') or '',
+        "local_commit": local_commit,
+        "remote_commit": remote_commit,
+        "changelog": _parse_changelog(info.get('changelog') or ''),
+        "result": (info.get('result') or '').strip(),
+        "compare_url": compare_url,
+        "repo_url": repo_url,
+        "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "cached": cached,
+        "reason": '',
+    }
+
+
+@app.get("/admin/update/check", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def check_update(force: bool = False):
+    """检查是否有新版本（只读 git fetch，默认使用 10 分钟缓存）。
+
+    - `force=true`：跳过缓存立即重新检查（设置页「检查更新」使用）
+    - 容器部署无法 git 更新，直接返回不可用说明
+    """
+    if _IS_CONTAINER:
+        import datetime
+        return {
+            "ok": True,
+            "available": False,
+            "current_version": get_full_version_string(),
+            "branch": "",
+            "local_commit": "",
+            "remote_commit": "",
+            "changelog": [],
+            "result": "容器部署请通过 docker compose pull 更新镜像",
+            "compare_url": "",
+            "repo_url": "",
+            "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "cached": False,
+            "reason": "container",
+        }
+
+    def _cached_result() -> Optional[dict]:
+        data = _UPDATE_CHECK_CACHE["data"]
+        if not data:
+            return None
+        ttl = _UPDATE_CHECK_TTL_OK if data.get("ok") else _UPDATE_CHECK_TTL_FAIL
+        if time.time() - _UPDATE_CHECK_CACHE["ts"] < ttl:
+            return {**data, "cached": True}
+        return None
+
+    if not force:
+        hit = _cached_result()
+        if hit:
+            return hit
+
+    async with _UPDATE_CHECK_LOCK:
+        if not force:
+            hit = _cached_result()  # 双重检查，避免并发重复 fetch
+            if hit:
+                return hit
+        try:
+            info, repo_url = await asyncio.to_thread(_run_update_probe)
+        except Exception as e:  # noqa: BLE001 - 网络/git 异常统一降级
+            logger.error(f"WebUI 更新检查失败: {e}")
+            info, repo_url = {"ok": False, "update_found": False, "result": f"检查更新失败：{e}"}, ''
+
+        data = _normalize_update_info(info, repo_url, cached=False)
+        _UPDATE_CHECK_CACHE["data"] = data
+        _UPDATE_CHECK_CACHE["ts"] = time.time()
+        logger.info(
+            "WebUI 更新检查: " + ("发现新版本 " + data["remote_commit"] if data["available"] else "已是最新")
+        )
+        return data

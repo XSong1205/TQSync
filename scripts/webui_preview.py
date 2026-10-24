@@ -1015,6 +1015,66 @@ async def trigger_restart() -> Dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# 更新检查（--demo-update 时模拟“有新版本可用”，便于联调更新提示）
+# ---------------------------------------------------------------------------
+
+# 是否模拟发现新版本，由 CLI 参数 --demo-update 打开
+_DEMO_UPDATE = False
+
+_DEMO_UPDATE_CHANGELOG: List[Dict[str, str]] = [
+    {"commit": "a1b2c3d", "subject": "feat(webui): 打开控制台时静默检查更新并展示更新日志 (v1.3.68)"},
+    {"commit": "b2c3d4e", "subject": "fix(webui): 修复移动端日志面板标题换行与重复计数"},
+    {"commit": "c3d4e5f", "subject": "feat(webui): 支持下拉刷新与触觉反馈，优化长列表滚动性能"},
+    {"commit": "d4e5f6a", "subject": "chore: 同步 NapCat API 文档并更新依赖版本"},
+]
+
+
+@app.get("/admin/update/check", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+async def check_update(force: bool = False) -> Dict[str, Any]:
+    """更新检查：默认返回“已是最新”，--demo-update 时返回模拟的新版本与日志。"""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    current_version = _full_version_string()
+    local_commit = _MOCK_COMMIT
+    if not _DEMO_UPDATE:
+        return {
+            "ok": True,
+            "available": False,
+            "current_version": current_version,
+            "branch": "Next",
+            "local_commit": local_commit,
+            "remote_commit": local_commit,
+            "changelog": [],
+            "result": f"当前已是最新版本 (分支: Next, Commit: {local_commit})，无需更新。",
+            "compare_url": "",
+            "repo_url": "https://github.com/XSong1205/TQSync",
+            "checked_at": now.isoformat(),
+            "cached": not force,
+            "reason": "",
+        }
+
+    remote_commit = "d4e5f6a"
+    return {
+        "ok": True,
+        "available": True,
+        "current_version": current_version,
+        "branch": "Next",
+        "local_commit": local_commit,
+        "remote_commit": remote_commit,
+        "changelog": [dict(item) for item in _DEMO_UPDATE_CHANGELOG],
+        "result": (
+            "检测到新版本可用！\n"
+            "分支: Next\n"
+            f"当前版本: {local_commit} => 远程最新: {remote_commit}"
+        ),
+        "compare_url": f"https://github.com/XSong1205/TQSync/compare/{local_commit}...{remote_commit}",
+        "repo_url": "https://github.com/XSong1205/TQSync",
+        "checked_at": now.isoformat(),
+        "cached": not force,
+        "reason": "",
+    }
+
+
+# ---------------------------------------------------------------------------
 # 静态资源托管（必须最后注册，保证 /admin/* 路由优先匹配）
 # ---------------------------------------------------------------------------
 
@@ -1042,10 +1102,16 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--host", default="127.0.0.1", help="监听地址")
     parser.add_argument("--port", type=int, default=8099, help="监听端口")
     parser.add_argument("--api-key", dest="api_key", default=DEFAULT_API_KEY, help="登录 WebUI 使用的 API Key")
+    parser.add_argument(
+        "--demo-update",
+        dest="demo_update",
+        action="store_true",
+        help="模拟发现新版本（用于联调更新提示与更新日志弹窗）",
+    )
     return parser.parse_args(argv)
 
 
-def _print_banner(host: str, port: int, api_key: str) -> None:
+def _print_banner(host: str, port: int, api_key: str, demo_update: bool = False) -> None:
     """启动横幅：打印访问地址、API Key 和静态目录。"""
     display_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     lines = [
@@ -1055,12 +1121,16 @@ def _print_banner(host: str, port: int, api_key: str) -> None:
         f"  API Key  : {api_key}",
         f"  静态目录 : {WEB_DIR}",
         "  数据说明 : 全部保存在内存中，重启服务即恢复初始示例数据",
-        "=" * 68,
     ]
+    if demo_update:
+        lines.append("  更新模拟 : 已开启（打开控制台会弹出「发现新版本」更新日志）")
+    lines.append("=" * 68)
     print("\n".join(lines), flush=True)
 
 
 def main(argv: Optional[List[str]] = None) -> None:
+    global _DEMO_UPDATE
+
     # Windows 控制台默认编码可能是 GBK，尽量切到 UTF-8 以免中文横幅打印异常
     if hasattr(sys.stdout, "reconfigure"):
         try:
@@ -1069,9 +1139,10 @@ def main(argv: Optional[List[str]] = None) -> None:
             pass
 
     args = _parse_args(argv)
+    _DEMO_UPDATE = bool(args.demo_update)
     # 用命令行参数覆盖初始 API Key，保证 /admin/config 与鉴权使用同一个值
     _set_config("server.admin_api_key", args.api_key)
-    _print_banner(args.host, args.port, args.api_key)
+    _print_banner(args.host, args.port, args.api_key, _DEMO_UPDATE)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 

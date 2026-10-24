@@ -20,6 +20,7 @@
  */
 import * as ui from '../ui.js';
 import { api } from '../api.js';
+import { checkForUpdate } from '../update.js';
 
 const { h } = ui;
 
@@ -401,6 +402,13 @@ function buildQuickActions(ctx, onRestart) {
         icon: 'logs',
         chevron: true,
         onClick: () => ctx.go('logs'),
+      }),
+      ui.row({
+        title: '检查更新',
+        subtitle: '查看 GitHub 是否发布了新版本',
+        icon: 'download',
+        chevron: true,
+        onClick: () => checkForUpdate({ force: true, interactive: true }),
       }),
       ui.row({
         title: '修改管理密钥',

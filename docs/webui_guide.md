@@ -91,3 +91,24 @@ Mock 服务会原样托管 `web/`，并按 `api/admin_api.py` 的契约返回演
 - 配置保存优先调用 `PUT /admin/config/batch`（一次往返），后端不支持时自动退化为
   逐条 `PUT /admin/config/{key}`。
 - 静态资源统一 `Cache-Control: no-cache`，升级后刷新即可生效。
+
+## 更新提示
+
+WebUI 启动后会**静默检查**一次 GitHub 更新（`GET /admin/update/check`，后端只读执行
+`git fetch`，结果缓存 10 分钟），有新提交时弹出 Miuix 对话框展示更新日志：
+
+- 对话框顶部显示 `本地 commit → 远端 commit · 分支 · 提交数`；
+- 更新日志逐条列出 commit 短哈希与提交说明（等宽字体）；
+- 「忽略此版本」会记住该远端 commit，之后不再自动打扰，直至出现更新的提交；
+- 「查看变更」在 GitHub 打开对应的 compare 页面（后端从 `origin` 推导仓库地址）；
+- 手动检查入口：概览页「快捷操作 → 检查更新」、设置页「关于 → 检查更新」。
+  手动检查会跳过缓存（`force=true`）并始终给出结果反馈。
+
+容器部署（`TQSYNC_CONTAINER=1`）没有 `.git` 目录，接口直接返回「请通过
+`docker compose pull` 更新镜像」的说明，不会报错。
+
+预览更新弹窗效果：启动 Mock 服务时加上 `--demo-update`：
+
+```bash
+python scripts/webui_preview.py --port 8099 --demo-update
+```
