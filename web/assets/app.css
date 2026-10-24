@@ -1,0 +1,785 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   TQSync 控制台 —— 应用外壳样式（启动页 / 登录 / 导航 / 页面容器）
+   依赖 miuix.css 的设计令牌
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --appbar-h: 56px;
+  --tabbar-h: 62px;
+  --rail-w: 240px;
+  --content-max: 760px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden; /* 由内部滚动容器负责滚动，保证导航栏稳定 */
+}
+
+body {
+  background: var(--mi-bg);
+}
+
+/* ── 启动占位 ───────────────────────────────────────────────────────── */
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--mi-bg);
+  transition: opacity 420ms var(--mi-ease-standard), visibility 420ms;
+}
+
+.boot--done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.boot-logo {
+  filter: drop-shadow(0 10px 24px rgba(52, 130, 255, 0.32));
+  animation: boot-in 620ms var(--mi-ease-spring) both;
+}
+
+.boot-name {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--mi-text);
+  animation: boot-in 620ms 80ms var(--mi-ease-spring) both;
+}
+
+.boot-spinner {
+  width: 20px;
+  height: 20px;
+  margin-top: 6px;
+  border-radius: 50%;
+  border: 2.4px solid var(--mi-fill-strong);
+  border-top-color: var(--mi-accent);
+  animation: mi-spin 0.72s linear infinite;
+}
+
+.boot-noscript {
+  padding: 24px;
+  font-size: 15px;
+  color: var(--mi-text);
+}
+
+@keyframes boot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── 登录页 ─────────────────────────────────────────────────────────── */
+.login-root {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px calc(24px + var(--safe-bottom));
+  overflow-y: auto;
+  background: var(--mi-bg);
+}
+
+.login-bg {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-bg::before,
+.login-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+}
+
+.login-bg::before {
+  width: 320px;
+  height: 320px;
+  top: -110px;
+  left: -90px;
+  background: radial-gradient(circle, rgba(76, 147, 255, 0.55), transparent 70%);
+  animation: orb-drift 16s ease-in-out infinite alternate;
+}
+
+.login-bg::after {
+  width: 300px;
+  height: 300px;
+  right: -100px;
+  bottom: -120px;
+  background: radial-gradient(circle, rgba(120, 86, 255, 0.4), transparent 70%);
+  animation: orb-drift 20s 2s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes orb-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(28px, 24px, 0) scale(1.12); }
+}
+
+.login-card {
+  position: relative;
+  width: min(100%, 380px);
+  padding: 30px 26px 24px;
+  background: var(--mi-surface);
+  border-radius: var(--mi-radius-2xl);
+  box-shadow: var(--mi-shadow-3);
+  animation: login-in 520ms var(--mi-ease-spring) both;
+}
+
+@keyframes login-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.login-brand__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #4c93ff, #2c6ff0);
+  box-shadow: 0 12px 28px rgba(52, 130, 255, 0.34);
+}
+
+.login-brand__name {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.login-brand__desc {
+  font-size: var(--mi-text-caption);
+  color: var(--mi-text-secondary);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: var(--mi-radius-sm);
+  background: var(--mi-danger-soft);
+  color: var(--mi-danger);
+  font-size: 13px;
+  line-height: 1.4;
+  animation: mi-slide-up 220ms var(--mi-ease-standard) both;
+}
+
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mi-text-secondary);
+  user-select: none;
+  cursor: pointer;
+}
+
+.login-footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: var(--mi-text-micro);
+  color: var(--mi-text-tertiary);
+  line-height: 1.6;
+}
+
+.login-footer a {
+  color: var(--mi-text-secondary);
+}
+
+/* ── 应用框架 ───────────────────────────────────────────────────────── */
+.app-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  background: var(--mi-bg);
+}
+
+.app-main {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 滚动视口 */
+.viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
+}
+
+.viewport--no-scroll {
+  overflow: hidden;
+}
+
+.page {
+  position: relative;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: calc(var(--appbar-h) + var(--safe-top) + 8px) 0
+    calc(var(--tabbar-h) + var(--safe-bottom) + 28px);
+  min-height: 100%;
+}
+
+.page--enter {
+  animation: page-enter var(--mi-dur-base) var(--mi-ease-standard) both;
+}
+
+.page--enter-back {
+  animation: page-enter-back var(--mi-dur-base) var(--mi-ease-standard) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-enter-back {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── 顶栏（Miuix TopAppBar） ───────────────────────────────────────── */
+.appbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--mi-z-appbar);
+  padding-top: var(--safe-top);
+  pointer-events: none;
+}
+
+.appbar__bar {
+  position: relative;
+  height: var(--appbar-h);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  pointer-events: auto;
+  background: transparent;
+  transition: background-color var(--mi-dur-base) linear,
+    box-shadow var(--mi-dur-base) linear, backdrop-filter var(--mi-dur-base) linear;
+}
+
+.appbar[data-elevated="true"] .appbar__bar {
+  background: var(--mi-blur-bg);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 0.5px 0 var(--mi-separator);
+}
+
+.appbar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity var(--mi-dur-base) linear, transform var(--mi-dur-base) var(--mi-ease-standard);
+}
+
+.appbar:not([data-large="true"]) .appbar__title,
+.appbar[data-elevated="true"] .appbar__title {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.appbar__side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+}
+
+.appbar__side--right {
+  justify-content: flex-end;
+}
+
+.appbar__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--mi-text-secondary);
+  transition: background-color var(--mi-dur-fast) linear, color var(--mi-dur-fast) linear,
+    transform var(--mi-dur-fast) var(--mi-ease-standard);
+}
+
+.appbar__btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.appbar__btn:active {
+  transform: scale(0.9);
+  color: var(--mi-text);
+}
+
+.appbar__btn:hover {
+  background: var(--mi-surface-pressed);
+  color: var(--mi-text);
+}
+
+/* 视口内的大标题（随内容滚动，类似 Miuix LargeTitle） */
+.page-hero {
+  padding: 10px var(--mi-page-x) 4px;
+}
+
+.page-hero__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-hero__title {
+  font-size: var(--mi-text-large-title);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.page-hero__sub {
+  margin-top: 4px;
+  font-size: var(--mi-text-secondary);
+  color: var(--mi-text-secondary);
+  line-height: 1.45;
+}
+
+.page-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+/* ── 底部标签栏（移动端） ───────────────────────────────────────────── */
+.tabbar {
+  position: relative;
+  z-index: var(--mi-z-tabbar);
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  height: calc(var(--tabbar-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--mi-blur-bg);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 -0.5px 0 var(--mi-separator);
+}
+
+.tabbar__item {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding-top: 6px;
+  color: var(--mi-text-tertiary);
+  font-size: var(--mi-text-micro);
+  font-weight: 500;
+  transition: color var(--mi-dur-fast) linear;
+}
+
+.tabbar__item[aria-current="page"] {
+  color: var(--mi-accent);
+}
+
+.tabbar__item:active {
+  color: var(--mi-text);
+}
+
+.tabbar__icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--mi-radius-pill);
+  transition: background-color var(--mi-dur-base) var(--mi-ease-standard),
+    transform var(--mi-dur-fast) var(--mi-ease-standard);
+}
+
+.tabbar__item[aria-current="page"] .tabbar__icon {
+  background: var(--mi-accent-soft);
+}
+
+.tabbar__item:active .tabbar__icon {
+  transform: scale(0.92);
+}
+
+.tabbar__badge {
+  position: absolute;
+  top: -1px;
+  right: 6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--mi-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* ── 侧边导航（平板 / 桌面） ───────────────────────────────────────── */
+.rail {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  width: var(--rail-w);
+  padding: 18px 12px calc(16px + var(--safe-bottom));
+  padding-top: calc(18px + var(--safe-top));
+  background: var(--mi-bg);
+  border-right: 0.5px solid var(--mi-separator);
+}
+
+.rail__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 22px;
+}
+
+.rail__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4c93ff, #2c6ff0);
+  box-shadow: 0 6px 16px rgba(52, 130, 255, 0.28);
+  flex: none;
+}
+
+.rail__brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.rail__brand-sub {
+  font-size: var(--mi-text-micro);
+  color: var(--mi-text-tertiary);
+}
+
+.rail__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rail__item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--mi-radius-sm);
+  color: var(--mi-text-secondary);
+  font-size: 14.5px;
+  font-weight: 500;
+  transition: background-color var(--mi-dur-fast) linear, color var(--mi-dur-fast) linear;
+}
+
+.rail__item:hover {
+  background: var(--mi-surface-pressed);
+  color: var(--mi-text);
+}
+
+.rail__item[aria-current="page"] {
+  background: var(--mi-accent-soft);
+  color: var(--mi-accent);
+  font-weight: 600;
+}
+
+.rail__badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--mi-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.rail__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 10px 0;
+  border-top: 0.5px solid var(--mi-separator);
+}
+
+.rail__version {
+  font-size: var(--mi-text-micro);
+  color: var(--mi-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 媒体查询：宽屏切换为侧栏布局 */
+@media (min-width: 900px) {
+  :root {
+    --content-max: 820px;
+    --mi-page-x: 20px;
+  }
+
+  .rail {
+    display: flex;
+  }
+
+  .tabbar {
+    display: none;
+  }
+
+  .app-main {
+    max-width: none;
+  }
+
+  /* 顶栏内容与正文列对齐（背景模糊仍铺满整条） */
+  .appbar__bar {
+    padding-left: calc((100% - var(--content-max)) / 2);
+    padding-right: calc((100% - var(--content-max)) / 2);
+  }
+
+  .page {
+    padding-top: calc(var(--appbar-h) + var(--safe-top) + 14px);
+    padding-bottom: 48px;
+  }
+
+  .appbar {
+    left: 0;
+  }
+}
+
+/* ── 下拉刷新 ───────────────────────────────────────────────────────── */
+.ptr {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--appbar-h) - 4px);
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  border-radius: 50%;
+  background: var(--mi-surface);
+  box-shadow: var(--mi-shadow-2);
+  color: var(--mi-accent);
+  opacity: 0;
+  transform: translateY(8px) scale(0.8);
+  transition: opacity var(--mi-dur-fast) linear, transform var(--mi-dur-base) var(--mi-ease-standard);
+  pointer-events: none;
+}
+
+.ptr--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.ptr__ring {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2.2px solid var(--mi-fill-strong);
+  border-top-color: var(--mi-accent);
+}
+
+.ptr--refreshing .ptr__ring {
+  animation: mi-spin 0.72s linear infinite;
+}
+
+/* ── 页面内常用布局块 ───────────────────────────────────────────────── */
+.page-actions {
+  display: flex;
+  gap: 10px;
+  padding: 6px var(--mi-page-x) 16px;
+}
+
+.page-actions .mi-btn {
+  flex: 1 1 0;
+}
+
+.page-note {
+  margin: 0 var(--mi-page-x) 14px;
+  font-size: var(--mi-text-caption);
+  color: var(--mi-text-tertiary);
+  line-height: 1.55;
+}
+
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px var(--mi-page-x) 12px;
+}
+
+.page-toolbar__grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 悬浮操作按钮 */
+.fab {
+  position: fixed;
+  right: max(16px, calc((100% - var(--content-max)) / 2 + 16px));
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 18px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: var(--mi-accent);
+  color: var(--mi-on-accent);
+  box-shadow: 0 10px 26px rgba(52, 130, 255, 0.4);
+  transition: transform var(--mi-dur-fast) var(--mi-ease-standard), box-shadow var(--mi-dur-base) linear;
+}
+
+.fab:active {
+  transform: scale(0.93);
+}
+
+.fab:hover {
+  box-shadow: 0 14px 32px rgba(52, 130, 255, 0.48);
+}
+
+@media (min-width: 900px) {
+  .fab {
+    right: max(24px, calc((100% - var(--content-max)) / 2 - 68px));
+    bottom: 28px;
+  }
+}
+
+/* 离线提示条 */
+.net-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 var(--mi-page-x) 12px;
+  padding: 10px 13px;
+  border-radius: var(--mi-radius-sm);
+  background: var(--mi-warning-soft);
+  color: var(--mi-warning);
+  font-size: 13px;
+  font-weight: 500;
+  animation: mi-slide-up 240ms var(--mi-ease-standard) both;
+}
+
+/* 底部安全区辅助 */
+.safe-bottom-space {
+  height: calc(var(--safe-bottom) + 8px);
+}
+
+/* ── 桌面端细节增强 ────────────────────────────────────────────────── */
+@media (min-width: 900px) {
+  .mi-card--tappable:hover {
+    box-shadow: var(--mi-shadow-2);
+  }
+
+  .mi-row--tappable:hover {
+    background: var(--mi-surface-pressed);
+  }
+
+  .tabbar {
+    box-shadow: 0 -0.5px 0 var(--mi-separator);
+  }
+}
+
+/* 横屏手机：紧凑模式 */
+@media (max-height: 480px) and (orientation: landscape) {
+  :root {
+    --appbar-h: 48px;
+    --tabbar-h: 54px;
+  }
+
+  .page-hero__title {
+    font-size: 24px;
+  }
+}

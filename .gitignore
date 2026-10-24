@@ -128,3 +128,6 @@ perf_log_*/
 tqsync_test_db_*/
 tqsync_webhook_*/
 tqsync_logger_qq_*/
+
+# WebUI 截图/冒烟测试产物（scripts/webui_shots.mjs）
+tmp_webui_shots/

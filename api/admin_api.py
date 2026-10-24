@@ -24,6 +24,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _static_no_cache(request, call_next):
+    """WebUI 静态资源不缓存，保证升级后用户刷新即拿到新控制台。"""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css", ".json")):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
 # 权限等级定义
 PERM_LEVEL_USER = 0   # 普通用户：仅查看状态
 PERM_LEVEL_ADMIN = 1  # 管理员：所有操作
@@ -282,22 +292,64 @@ async def change_password(req: ChangePasswordRequest):
     logger.info("WebUI 管理员密码已被修改")
     return {"status": "success", "message": "密码修改成功"}
 
+def _coerce_config_value(raw: str):
+    """把前端传来的字符串还原成 bool / int，其余保持字符串。"""
+    if isinstance(raw, str):
+        lowered = raw.strip().lower()
+        if lowered in ('true', 'false'):
+            return lowered == 'true'
+        if lowered.isdigit():
+            return int(lowered)
+    return raw
+
+
+class ConfigBatchUpdate(BaseModel):
+    """批量修改配置的请求体。
+
+    WebUI 的“保存”按钮一次性提交所有改动项，避免逐条 PUT 造成
+    多次往返；键名格式与 GET /admin/config 返回的扁平 key 一致。
+    """
+    items: List[ConfigUpdate]
+
+
+# 注意：批量路由必须注册在 /admin/config/{config_key} 之前，
+# 否则 "batch" 会被当成 config_key 匹配到动态路由。
+@app.put("/admin/config/batch", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
+def update_config_batch(payload: ConfigBatchUpdate):
+    """批量更新配置：任一键失败不影响已成功项，失败项单独返回。"""
+    updated = 0
+    failed = []
+    for item in payload.items:
+        key = (item.key or '').strip()
+        if not key:
+            failed.append({"key": item.key, "error": "配置键为空"})
+            continue
+        try:
+            config_loader.update_config(key, _coerce_config_value(item.value))
+            updated += 1
+            if key == 'server.admin_api_key':
+                config_loader.update_config('server.is_initial_token', False)
+        except Exception as e:  # noqa: BLE001 - 逐项收集失败原因
+            failed.append({"key": key, "error": str(e)})
+    return {
+        "status": "success" if not failed else "partial",
+        "updated": updated,
+        "failed": failed,
+        "message": f"已更新 {updated} 项配置" + (f"，{len(failed)} 项失败" if failed else ""),
+    }
+
+
 @app.put("/admin/config/{config_key}", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 def update_config(config_key: str, update: ConfigUpdate):
     try:
-        # 尝试转换类型
-        value = update.value
-        if update.value.lower() in ['true', 'false']:
-            value = update.value.lower() == 'true'
-        elif update.value.isdigit():
-            value = int(update.value)
-        
+        value = _coerce_config_value(update.value)
         config_loader.update_config(config_key, value)
         if config_key == 'server.admin_api_key':
             config_loader.update_config('server.is_initial_token', False)
         return {"status": "success", "message": f"Config {config_key} updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/admin/bindings", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def get_bindings():
