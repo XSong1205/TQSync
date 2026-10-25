@@ -27,6 +27,7 @@ from datetime import datetime
 from db.database import db
 from handlers.qq_handler import onebot_client
 from utils.logger import logger
+from utils.message_style import block, bullet
 
 STATE_UNKNOWN = "unknown"
 STATE_ONLINE = "online"
@@ -234,12 +235,15 @@ class QQHealthMonitor:
             )
             return
 
-        text = (
-            "⚠️ TQSync: QQ 端连接断开\n"
-            f"主动探测 NapCat 连续 {max(1, self.CONFIRM_FAILURES)} 次失败"
-            f"{f'（{self.last_error}）' if self.last_error else ''}\n"
-            f"断开时间: {_fmt_clock(self.since)}\n"
-            "断开期间 QQ ↔ TG 消息无法同步；恢复后会自动通知，期间不再重复提醒。"
+        text = block(
+            "Health",
+            [
+                bullet("状态", "QQ 端连接断开"),
+                bullet("原因", f"主动探测 NapCat 连续 {max(1, self.CONFIRM_FAILURES)} 次失败"
+                       + (f"（{self.last_error}）" if self.last_error else "")),
+                bullet("断开时间", _fmt_clock(self.since)),
+            ],
+            footer=["断开期间 QQ ↔ TG 消息无法同步；恢复后会自动通知，期间不再重复提醒。"],
         )
         if not await self._send(text):
             self._next_alert_attempt = now + self.ALERT_RETRY_BACKOFF
@@ -266,11 +270,13 @@ class QQHealthMonitor:
 
         self._offline_alert_sent = False
         downtime = max(0.0, now - old_since)
-        text = (
-            "✅ TQSync: QQ 端连接已恢复\n"
-            f"中断时长: {_fmt_duration(downtime)}"
-            f"（{_fmt_clock(old_since)} → {_fmt_clock(now)}）\n"
-            "消息同步已恢复正常。"
+        text = block(
+            "Health",
+            [
+                bullet("状态", "QQ 端连接已恢复"),
+                bullet("中断时长", f"{_fmt_duration(downtime)}（{_fmt_clock(old_since)} → {_fmt_clock(now)}）"),
+            ],
+            footer=["消息同步已恢复正常。"],
         )
         if await self._send(text):
             self._recovery_pending = None
@@ -316,11 +322,11 @@ class QQHealthMonitor:
     def status_text(self) -> str:
         """供 /status 等命令展示的一行状态文案。"""
         if self.state == STATE_ONLINE:
-            latency = f" (延迟 {self.latency_ms}ms)" if self.latency_ms is not None else ""
-            return f"✅ 正常{latency}"
+            latency = f"（延迟 {self.latency_ms}ms）" if self.latency_ms is not None else ""
+            return f"正常{latency}"
         if self.state == STATE_OFFLINE:
-            return f"❌ 已断开 {_fmt_duration(time.time() - self.since)}"
-        return "⏳ 检测中"
+            return f"已断开（{_fmt_duration(time.time() - self.since)}）"
+        return "检测中"
 
     # ------------------------------------------------------------------ 持久化
     async def _load_state(self) -> None:

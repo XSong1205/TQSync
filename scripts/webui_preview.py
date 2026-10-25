@@ -446,7 +446,7 @@ _SYNC_HISTORY_HOURLY: List[int] = [
 # 日志模板：(级别, 模块, 行号, 消息)。消息内容与真实 bot 的运行日志风格保持一致。
 _LOG_TEMPLATES: List[tuple] = [
     ("INFO", "main", 618, "收到 QQ 群消息: sender=2856231471, group=728349156, len=36"),
-    ("INFO", "sync_engine", 214, "✅ TG → QQ 文本转发成功 | sender=浅巷墨漓 | msg_id=8821304"),
+    ("INFO", "sync_engine", 214, "TG → QQ 文本转发成功 | sender=浅巷墨漓 | msg_id=8821304"),
     ("INFO", "qq_handler", 142, "NapCat send_group_msg 成功 (group_id=728349156, msg_id=1473201)"),
     ("INFO", "tg_handler", 168, "收到 TG 消息: chat_id=-1002345678901, user=7123456789, type=text"),
     ("WARNING", "file_transfer", 412, "QQ CDN 文件下载超时，正在重试 (2/3): https://multimedia.nt.qq.com.cn/download?appid=1407"),
@@ -457,7 +457,7 @@ _LOG_TEMPLATES: List[tuple] = [
     ("ERROR", "qq_handler", 121, "NapCat API 返回 retcode=100: 账号风控中，请稍后再试 (重试 3/3)"),
     ("INFO", "sync_engine", 262, "同步队列空闲，当前队列长度 0"),
     ("WARNING", "main", 741, "QQ Webhook Token 未配置，跳过鉴权校验"),
-    ("INFO", "plugin_manager", 122, "✅ 插件已加载: QQThumbsUp (耗时 19ms)"),
+    ("INFO", "plugin_manager", 122, "插件已加载: QQThumbsUp (耗时 19ms)"),
     ("INFO", "db", 86, "数据库连接建立成功: db/tqsync.db (WAL 模式)"),
     ("ERROR", "file_transfer", 520, "语音转码失败: FFmpeg 未安装，无法将 OGG 转为 AMR"),
     ("INFO", "tg_handler", 402, "TG 消息已撤回，同步撤回 QQ 消息 msg_id=1473198"),

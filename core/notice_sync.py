@@ -231,7 +231,7 @@ class NoticeSyncManager:
 
                 # 格式化公告消息 (HTML 模式)，注意: clean_text 已经将 &#10; 恢复为真正的 \n 换行
                 escaped_body = html.escape(clean_text)
-                tg_caption = f"📢 <b>【QQ 群公告】</b>\n\n{escaped_body}"
+                tg_caption = f"<b>【QQ 群公告】</b>\n\n{escaped_body}"
 
                 # 尝试附带图片发送
                 sent_msg: Optional[Message] = None

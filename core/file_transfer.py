@@ -718,7 +718,7 @@ class FileTransfer:
             try:
                 await onebot_client.send_group_msg(
                     FileTransfer.qq_group_id,
-                    f'⚠️ 文件同步至 Telegram 失败: {str(e)[:100]}'
+                    f'文件同步至 Telegram 失败：{str(e)[:100]}'
                 )
             except Exception:
                 pass
@@ -767,7 +767,7 @@ class FileTransfer:
                 if FileTransfer.tg_bot:
                     await FileTransfer.tg_bot.send_message(
                         chat_id=FileTransfer.tg_group_id,
-                        text=f'⚠️ 文件同步至 QQ 失败: {str(e)[:100]}'
+                        text=f'文件同步至 QQ 失败：{str(e)[:100]}'
                     )
             except Exception:
                 pass

@@ -15,6 +15,7 @@ from utils.qq_text import tg_emoji_to_qq_emoji_id
 import uuid
 from utils.logger import logger
 from utils.auth import is_admin
+from utils.message_style import block, bullet
 
 async def handle_message_deleted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息删除事件，同步撤回到 QQ"""
@@ -192,7 +193,7 @@ async def handle_tg_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_setprefix_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /setprefix <nickname>")
+        await update.message.reply_text("用法：/setprefix <昵称>")
         return
     
     tg_user = update.effective_user
@@ -215,7 +216,7 @@ async def handle_reboot_command_tg(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     
     if not is_admin(user_id):
-        await update.message.reply_text("您的权限不足以执行此操作")
+        await update.message.reply_text("权限不足，请联系管理员。")
         return
         
     response = await handle_reboot_command_logic('tg')
@@ -231,10 +232,10 @@ async def handle_update_command_tg(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
 
     if not is_admin(user_id):
-        await update.message.reply_text("您的权限不足以执行此操作")
+        await update.message.reply_text("权限不足，请联系管理员。")
         return
 
-    status_msg = await update.message.reply_text("🔍 正在检查并更新...")
+    status_msg = await update.message.reply_text("正在检查更新…")
     info = await handle_update_command()
 
     if info.get("update_found") and info.get("update_notice"):
@@ -258,17 +259,16 @@ async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(response)
 
 async def handle_webui_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = await handle_webui_command_logic()
-    await update.message.reply_text(f"WebUI 管理面板地址:\n{url}")
+    response = await handle_webui_command_logic()
+    await update.message.reply_text(response)
 
 async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 TG 端的 /bind <验证码> 指令"""
     if not context.args:
-        await update.message.reply_text(
-            "请使用验证码完成绑定：\n"
-            "1. 在 QQ 群中发送 /bind 获取验证码\n"
-            "2. 在 Telegram 中使用 /bind <验证码>"
-        )
+        await update.message.reply_text(block("Bind", [
+            bullet("第一步", "在 QQ 群中发送 /bind 获取验证码"),
+            bullet("第二步", "在 Telegram 中发送 /bind <验证码>"),
+        ]))
         return
     
     verification_code = context.args[0]
@@ -278,7 +278,7 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     result = await db.verify_and_consume_code(verification_code)
     
     if not result['valid']:
-        await update.message.reply_text(f"绑定失败: {result['reason']}")
+        await update.message.reply_text(f"绑定失败：{result['reason']}")
         return
     
     qq_user_id = result['qq_user_id']
@@ -286,19 +286,18 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 检查是否已被其他 TG 用户绑定
     existing_binding = await db.get_binding_by_qq(qq_user_id)
     if existing_binding and existing_binding[0] != tg_user.id:
-        await update.message.reply_text("该 QQ 号已被其他用户绑定，请勿尝试重复绑定")
+        await update.message.reply_text("该 QQ 号已被其他用户绑定，请勿重复尝试。")
         return
     
     # 建立绑定关系
     await db.add_binding(tg_user.id, qq_user_id, tg_user.username)
     
     # 通知 TG 用户
-    await update.message.reply_text(
-        f"✅ 绑定成功！\n"
-        f"QQ: {qq_user_id}\n"
-        f"Telegram: @{tg_user.username or tg_user.id}\n"
-        f"现在您的消息将更好地双向同步。"
-    )
+    await update.message.reply_text(block("Bind", [
+        bullet("QQ", qq_user_id),
+        bullet("Telegram", f"@{tg_user.username or tg_user.id}"),
+        bullet("状态", "绑定成功，消息将双向同步"),
+    ]))
     
     # 通知 QQ 用户（通过私聊或群消息@）
     try:
@@ -306,7 +305,7 @@ async def handle_bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         from core.sync_engine import SyncEngine
         engine = SyncEngine.get_instance()
         
-        notify_msg = f"✅ 您的 QQ 已成功绑定到 Telegram (@{tg_user.username or tg_user.id})"
+        notify_msg = f"您的 QQ 已成功绑定到 Telegram（@{tg_user.username or tg_user.id}）。"
         await onebot_client.send_private_msg(qq_user_id, notify_msg)
     except Exception as e:
         logger.warning(f"无法发送 QQ 绑定成功通知: {e}")
@@ -325,14 +324,14 @@ async def handle_confirm_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TY
     
     status = await db.get_setting('ffmpeg_auto_download_confirmed')
     if status == 'confirmed':
-        await update.message.reply_text("您已经确认过自动下载，无需重复操作。")
+        await update.message.reply_text("已经确认过自动下载，无需重复操作。")
         return
 
-    msg = await update.message.reply_text("正在开始下载并安装 FFmpeg")
+    msg = await update.message.reply_text("正在下载并安装 FFmpeg…")
     
     async def progress(percent):
         try:
-            await msg.edit_text(f"正在下载 FFmpeg... {percent}%")
+            await msg.edit_text(f"正在下载 FFmpeg：{percent}%")
         except:
             pass
 
@@ -340,9 +339,12 @@ async def handle_confirm_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TY
     
     if success:
         await db.set_setting('ffmpeg_auto_download_confirmed', 'confirmed')
-        await msg.edit_text("FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
+        await msg.edit_text(block("Media", [
+            bullet("状态", "FFmpeg 安装完成"),
+            bullet("可用功能", "动态贴纸与语音同步"),
+        ]))
     else:
-        await msg.edit_text("FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
+        await msg.edit_text("FFmpeg 下载失败，请检查网络连接后重试，或手动安装。")
 
 async def handle_cancel_ffmpeg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /cancel 指令，取消 FFmpeg 自动下载提示"""
@@ -353,7 +355,7 @@ async def handle_blockword_command(update: Update, context: ContextTypes.DEFAULT
     """处理 /blockword <关键词> (管理员)"""
     user_id = update.effective_user.id
     if not is_admin(user_id):
-        await update.message.reply_text("您的权限不足以执行此操作")
+        await update.message.reply_text("权限不足，请联系管理员。")
         return
     response = await handle_blockword_command_logic(context.args or [], user_id, 'tg')
     await update.message.reply_text(response)
@@ -362,7 +364,7 @@ async def handle_unblockword_command(update: Update, context: ContextTypes.DEFAU
     """处理 /unblockword <关键词> (管理员)"""
     user_id = update.effective_user.id
     if not is_admin(user_id):
-        await update.message.reply_text("您的权限不足以执行此操作")
+        await update.message.reply_text("权限不足，请联系管理员。")
         return
     response = await handle_unblockword_command_logic(context.args or [], user_id, 'tg')
     await update.message.reply_text(response)
@@ -402,7 +404,7 @@ async def handle_unhandled_command(update: Update, context: ContextTypes.DEFAULT
     if await pm.route_message('tg', user.id, engine.tg_group_id, text.strip()):
         return
 
-    await msg.reply_text('Unknown command. Type "/help" for help. ')
+    await msg.reply_text("未知命令，发送 /help 查看可用命令。")
 
 async def handle_tg_pinned_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 Telegram 消息置顶事件，自动感知并同步发布到 QQ 群公告"""
@@ -430,11 +432,11 @@ async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TY
     """处理 /notice <公告内容> 或 /announce <公告内容> 指令"""
     user = update.effective_user
     if not is_admin(user.id):
-        await update.message.reply_text("您的权限不足以发布群公告")
+        await update.message.reply_text("权限不足，无法发布群公告。")
         return
 
     if not context.args:
-        await update.message.reply_text("使用方式: /notice <公告内容>")
+        await update.message.reply_text("使用方式：/notice <公告内容>")
         return
 
     content = " ".join(context.args).strip()
@@ -442,7 +444,7 @@ async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TY
     clean_content = normalize_notice_text(content)
     import html
     escaped_text = html.escape(clean_content)
-    tg_text = f"📢 <b>【群公告】</b>\n\n{escaped_text}"
+    tg_text = f"<b>【群公告】</b>\n\n{escaped_text}"
     sent = await context.bot.send_message(chat_id=update.effective_chat.id, text=tg_text, parse_mode="HTML")
     if sent:
         notice_sync_manager.bot_pinned_msg_ids.add(sent.message_id)
@@ -460,20 +462,20 @@ async def handle_notice_command(update: Update, context: ContextTypes.DEFAULT_TY
             notice_sync_manager.seen_content_hashes.add(h)
         if sent:
             await db.record_synced_notice(source='tg', content_hash=h, tg_message_id=sent.message_id)
-        await update.message.reply_text("✅ 公告已成功在 Telegram 置顶并同步至 QQ 群公告！")
+        await update.message.reply_text("公告已在 Telegram 置顶，并同步至 QQ 群公告。")
     else:
-        await update.message.reply_text(f"⚠️ Telegram 公告已置顶，但 QQ 群公告发布失败: {res.get('message', res)}")
+        await update.message.reply_text(f"Telegram 公告已置顶，但发布 QQ 群公告失败：{res.get('message', res)}")
 
 
 async def handle_syncnotice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /syncnotice 指令，手动立即拉取并同步 QQ 群最新公告至 TG"""
     from core.notice_sync import notice_sync_manager
-    msg = await update.message.reply_text("🔍 正在拉取 QQ 群最新公告...")
+    msg = await update.message.reply_text("正在拉取 QQ 群公告…")
     count = await notice_sync_manager.check_and_sync_qq_notices(force=True)
     if count > 0:
-        await msg.edit_text(f"✅ 成功同步 {count} 条 QQ 群公告至 Telegram 并置顶！")
+        await msg.edit_text(f"已同步 {count} 条公告至 Telegram 并置顶。")
     else:
-        await msg.edit_text("已拉取完毕，当前 QQ 群无未同步的有效公告。")
+        await msg.edit_text("当前没有未同步的群公告。")
 
 async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Telegram 表情回应 -> QQ 消息表情点赞（set_msg_emoji_like）。

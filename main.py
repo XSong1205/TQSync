@@ -36,6 +36,7 @@ from utils.logger import logger
 from utils.auth import is_admin
 from utils.banner import print_banner
 from utils.qq_text import tg_emoji_from_qq, format_qq_face, face_id_of
+from utils.message_style import block, bullet, duration
 
 # 记录全局启动时间，用于 Web 面板显示运行时长
 # GLOBAL_START_TIME is now defined at the top of the file for immediate initialization
@@ -329,17 +330,17 @@ async def handle_qq_webhook(request):
                 elif cmd == '/help':
                     response = await handle_help_command()
                 elif cmd == '/webui':
-                    response = "WebUI 管理面板地址:\n" + await handle_webui_command()
+                    response = await handle_webui_command()
                 elif cmd == '/status':
                     response = await handle_status_command()
                 elif cmd == '/reboot':
                     if IS_CONTAINER:
-                        response = "容器环境下请使用 `docker compose restart` 或 `docker restart tqsync` 重启。"
+                        response = "容器环境下请使用 docker compose restart 或 docker restart tqsync 重启机器人。"
                         await onebot_client.send_group_msg(engine.qq_group_id, response)
                         return web.json_response({})
 
                     if not is_admin(qq_id):
-                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足，请联系管理员。")
                         return web.json_response({})
                     
                     response = await handle_reboot_command('qq')
@@ -348,17 +349,17 @@ async def handle_qq_webhook(request):
                     return web.json_response({})
                 elif cmd in ('/update', '/checkupdate', '/cu'):
                     if IS_CONTAINER:
-                        response = "容器环境下更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。"
+                        response = "容器环境下更新不可用，请使用 docker compose pull 与 docker compose up -d 更新镜像。"
                         await onebot_client.send_group_msg(engine.qq_group_id, response)
                         return web.json_response({})
 
                     if not is_admin(qq_id):
-                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足，请联系管理员。")
                         return web.json_response({})
 
                     info = await handle_update_command()
 
-                    nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 系统更新"}}]}}]
+                    nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "系统更新"}}]}}]
                     if info.get("update_found") and info.get("update_notice"):
                         nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["update_notice"]}}]}})
                     nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["result"]}}]}})
@@ -372,39 +373,45 @@ async def handle_qq_webhook(request):
                     from utils.ffmpeg_manager import ffmpeg_manager
                     status = await db.get_setting('ffmpeg_auto_download_confirmed')
                     if status == 'confirmed':
-                        await onebot_client.send_group_msg(engine.qq_group_id, "您已经确认过自动下载，无需重复操作。\n如因数据库迁移等原因导致没有自动启动下载：\n发送 /cancel 后 再发送 /confirm")
+                        await onebot_client.send_group_msg(engine.qq_group_id, block("Media", [
+                            bullet("状态", "已确认自动下载"),
+                            bullet("说明", "如因数据库迁移等原因未自动下载，请先发送 /cancel 再发送 /confirm"),
+                        ]))
                         return web.json_response({})
-                    
-                    await onebot_client.send_group_msg(engine.qq_group_id, "正在开始下载并安装 FFmpeg")
+
+                    await onebot_client.send_group_msg(engine.qq_group_id, "正在下载并安装 FFmpeg…")
                     success = await ffmpeg_manager.download_and_install()
                     if success:
                         await db.set_setting('ffmpeg_auto_download_confirmed', 'confirmed')
-                        await onebot_client.send_group_msg(engine.qq_group_id, "FFmpeg 自动下载并安装成功！现在您可以使用动态贴纸和语音同步功能了。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, block("Media", [
+                            bullet("状态", "FFmpeg 安装完成"),
+                            bullet("可用功能", "动态贴纸与语音同步"),
+                        ]))
                     else:
-                        await onebot_client.send_group_msg(engine.qq_group_id, "FFmpeg 下载失败，请检查网络连接或尝试手动安装。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "FFmpeg 下载失败，请检查网络连接后重试，或手动安装。")
                     return web.json_response({})
                 elif cmd == '/cancel':
                     await db.set_setting('ffmpeg_auto_download_confirmed', 'cancelled')
-                    await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如果您以后需要，可以手动安装 FFmpeg。或发送 /confirm 重新开始下载")
+                    await onebot_client.send_group_msg(engine.qq_group_id, "已取消自动下载。如需再次下载，请发送 /confirm。")
                     return web.json_response({})
                 elif cmd == '/blockword':
                     if not is_admin(qq_id):
-                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足，请联系管理员。")
                         return web.json_response({})
                     response = await handle_blockword_command(args, qq_id, 'qq')
                 elif cmd == '/unblockword':
                     if not is_admin(qq_id):
-                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以执行此操作，请联系管理员。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足，请联系管理员。")
                         return web.json_response({})
                     response = await handle_unblockword_command(args, qq_id, 'qq')
                 elif cmd == '/blockwords':
                     response = await handle_blockwords_command()
                 elif cmd in ('/notice', '/announce'):
                     if not is_admin(qq_id):
-                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足以发布群公告，请联系管理员。")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "权限不足，无法发布群公告。")
                         return web.json_response({})
                     if not args:
-                        await onebot_client.send_group_msg(engine.qq_group_id, "使用方式: /notice <公告内容>")
+                        await onebot_client.send_group_msg(engine.qq_group_id, "使用方式：/notice <公告内容>")
                         return web.json_response({})
                     content = " ".join(args).strip()
                     from core.notice_sync import notice_sync_manager, normalize_notice_text, get_notice_hash
@@ -415,7 +422,7 @@ async def handle_qq_webhook(request):
                         if h:
                             notice_sync_manager.seen_content_hashes.add(h)
                         escaped = html.escape(clean_content)
-                        sent = await engine.bot.send_message(chat_id=engine.tg_group_id, text=f"<b>[QQ]群公告</b>\n\n{escaped}", parse_mode="HTML")
+                        sent = await engine.bot.send_message(chat_id=engine.tg_group_id, text=f"<b>【QQ 群公告】</b>\n\n{escaped}", parse_mode="HTML")
                         if sent:
                             notice_sync_manager.bot_pinned_msg_ids.add(sent.message_id)
                             try:
@@ -423,24 +430,24 @@ async def handle_qq_webhook(request):
                             except Exception as e:
                                 logger.warning(f"TG 置顶失败: {e}")
                             await db.record_synced_notice('qq', h, tg_message_id=sent.message_id)
-                        response = "✅ 公告已成功发布并在双端置顶同步！"
+                        response = "群公告已发布，并在双端置顶同步。"
                     else:
-                        response = f"⚠️ 发布 QQ 群公告失败: {res.get('message', res)}"
+                        response = f"发布 QQ 群公告失败：{res.get('message', res)}"
 
                 elif cmd == '/syncnotice':
                     from core.notice_sync import notice_sync_manager
                     count = await notice_sync_manager.check_and_sync_qq_notices(force=True)
                     if count > 0:
-                        response = f"✅ 已成功同步 {count} 条公告至 Telegram 并置顶！"
+                        response = f"已同步 {count} 条 QQ 群公告至 Telegram 并置顶。"
                     else:
-                        response = "当前 QQ 群无未同步的有效公告。"
+                        response = "当前没有未同步的 QQ 群公告。"
                 else:
                     # 尝试插件路由（未知命令）
                     if combined_text.strip():
                         pm = PluginManager.get_instance()
                         if await pm.route_message('qq', qq_id, engine.qq_group_id, combined_text.strip()):
                             return web.json_response({})
-                    response = 'Unknown command. Type "/help" for help.'
+                    response = "未知命令，发送 /help 查看可用命令。"
 
                 if response:
                     await onebot_client.send_group_msg(engine.qq_group_id, response)
@@ -579,12 +586,12 @@ async def handle_qq_webhook(request):
             # 仅处理管理命令
             if cmd in ('/update', '/checkupdate', '/cu'):
                 if IS_CONTAINER:
-                    await onebot_client.send_private_msg(qq_id, "容器环境下更新不可用，请使用 `docker compose pull` + `docker compose up -d` 更新镜像。")
+                    await onebot_client.send_private_msg(qq_id, "容器环境下更新不可用，请使用 docker compose pull 与 docker compose up -d 更新镜像。")
                     return web.json_response({})
 
                 info = await handle_update_command()
 
-                nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "🔍 系统更新"}}]}}]
+                nodes = [{"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": "系统更新"}}]}}]
                 if info.get("update_found") and info.get("update_notice"):
                     nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["update_notice"]}}]}})
                 nodes.append({"type": "node", "data": {"nickname": "TQSync", "content": [{"type": "text", "data": {"text": info["result"]}}]}})
@@ -596,7 +603,7 @@ async def handle_qq_webhook(request):
                 return web.json_response({})
             elif cmd == '/reboot':
                 if IS_CONTAINER:
-                    await onebot_client.send_private_msg(qq_id, "容器环境下请使用 `docker compose restart` 或 `docker restart tqsync` 重启。")
+                    await onebot_client.send_private_msg(qq_id, "容器环境下请使用 docker compose restart 或 docker restart tqsync 重启机器人。")
                     return web.json_response({})
 
                 response = await handle_reboot_command('qq')
@@ -921,13 +928,18 @@ async def main():
 
     if not ffmpeg_local_path and not system_ffmpeg and ffmpeg_status != 'cancelled':
         logger.info("未检测到 FFmpeg，正在发送自动下载提示...")
-        prompt_msg = (
-            "⚠️ 检测到系统未安装 FFmpeg\n"
-            "FFmpeg 用于动态贴纸和语音消息的转换。\n\n"
-            "您可以选择：\n"
-            "1. 回复 /confirm 让机器人自动下载并安装 FFmpeg\n"
-            "2. 回复 /cancel 取消提示（需手动安装）\n"
-            "3. 手动安装后重启机器人"
+        prompt_msg = block(
+            "Media",
+            [
+                bullet("状态", "未检测到 FFmpeg"),
+                bullet("影响", "动态贴纸与语音消息无法转换"),
+            ],
+            footer=[
+                "可选操作：",
+                "1. 发送 /confirm 由机器人自动下载并安装",
+                "2. 发送 /cancel 取消提示并改为手动安装",
+                "3. 手动安装后重启机器人",
+            ],
         )
         try:
             await application.bot.send_message(chat_id=global_sync_engine.tg_group_id, text=prompt_msg)
@@ -1063,14 +1075,16 @@ async def main():
                         branch = info.get("current_branch", "")
                         changelog = info.get("changelog", "")
 
-                        changelog_str = f"\n更新日志:\n{changelog}\n" if changelog else ""
-                        msg = (
-                            f"📢 【更新提醒】检测到 TQSync 有新版本可用！\n"
-                            f"- 当前本地: {local_commit}\n"
-                            f"- 远程最新: {remote_commit} ({branch})\n"
-                            f"{changelog_str}\n"
-                            f"💡 为保证系统稳定性，本次仅作提醒，未自动更新。\n"
-                            f"如需升级，请由管理员发送指令 /update 执行升级。"
+                        footer = (["更新日志:", changelog] if changelog else [])
+                        footer.append("本次仅作提醒，未自动更新；如需升级，请管理员发送 /update 执行。")
+                        msg = block(
+                            "Update",
+                            [
+                                bullet("状态", "检测到新版本"),
+                                bullet("本地提交", local_commit),
+                                bullet("远程提交", f"{remote_commit} ({branch})"),
+                            ],
+                            footer=footer,
                         )
                         logger.info(f"后台检测到新版本 {remote_commit}，已发送更新提醒")
 
@@ -1108,7 +1122,10 @@ async def main():
             elapsed_ms = int(time.time() * 1000 - reboot_info['start_time'])
             platform = reboot_info.get('platform', 'qq')
             
-            reboot_msg = f"重启完成\n- 耗时: {elapsed_ms}ms"
+            reboot_msg = block("Reboot", [
+                bullet("状态", "重启完成"),
+                bullet("耗时", duration(elapsed_ms / 1000)),
+            ])
             
             if platform == 'tg':
                 await engine.bot.send_message(engine.tg_group_id, reboot_msg)
@@ -1253,25 +1270,21 @@ def _build_crash_message(exc: BaseException, elapsed: float, attempt: int,
         err = err[:400] + "…"
 
     cwd = os.getcwd()
-    lines = [
-        "⚠️ TQSync 崩溃提醒",
-        f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-        f"版本: {get_full_version_string()}",
-        f"已运行: {elapsed:.0f}s（第 {attempt}/{max_restarts} 次崩溃）",
-        f"异常: {err}",
-        "",
+    body = [
+        bullet("时间", time.strftime('%Y-%m-%d %H:%M:%S')),
+        bullet("版本", get_full_version_string()),
+        bullet("已运行", f"{duration(elapsed)}（第 {attempt}/{max_restarts} 次崩溃）"),
+        bullet("异常", err),
     ]
     if report_path:
-        lines.append(f"崩溃报告: {report_path}")
+        body.append(bullet("崩溃报告", report_path))
     if copy_path:
-        lines.append(f"完整日志: {copy_path}")
-    lines += [
-        "",
-        "下载日志:",
-        "  tqlog -c 500",
-        f"  scp root@<服务器>:{cwd}/{report_path} ./".replace("//", "/"),
-    ]
-    return "\n".join(lines)
+        body.append(bullet("完整日志", copy_path))
+
+    footer = ["下载日志：", "  tqlog -c 500"]
+    if report_path:
+        footer.append(f"  scp root@<服务器>:{cwd}/{report_path} ./".replace("//", "/"))
+    return block("Alert", body, footer=footer)
 
 
 async def _send_crash_alerts(text: str) -> None:

@@ -114,7 +114,7 @@ async def state_machine_tests(fake_ob, fake_db):
     check(await mon.check_once() is True, "探测成功返回 True")
     check(mon.state == qh.STATE_ONLINE, "状态切换为 online")
     check(bot.messages == [], "在线不发送任何 TG 消息")
-    check("✅" in mon.status_text() and "12ms" in mon.status_text(),
+    check("正常" in mon.status_text() and "12ms" in mon.status_text(),
           f"状态文案含延迟: {mon.status_text()}")
 
     print("[2] 断开只告警一次，离线期间不刷屏")

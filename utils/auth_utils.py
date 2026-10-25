@@ -32,7 +32,7 @@ def init_admin_security() -> dict:
         masked_token = f"{new_token[:4]}****" if len(new_token) >= 4 else "****"
         logger.warning("=" * 64)
         logger.warning("【安全提示】检测到 WebUI Token 为空或未设置，已自动生成初始管理密码：")
-        logger.warning(f"🔑 WebUI 初始密码: {masked_token}")
+        logger.warning(f"WebUI 初始密码: {masked_token}")
         logger.warning("完整密钥见 config.yaml → server.admin_api_key")
         logger.warning("首次使用该密码登录 WebUI 时系统将提示修改密码，请妥善保管！")
         logger.warning("=" * 64)
@@ -44,7 +44,7 @@ def init_admin_security() -> dict:
         masked_key = f"{admin_key_str[:4]}****" if len(admin_key_str) >= 4 else "****"
         logger.warning("=" * 64)
         logger.warning("【安全提示】当前 WebUI 仍在使用系统生成的初始密码，建议尽快登录 WebUI 进行修改！")
-        logger.warning(f"🔑 当前初始密码: {masked_key}")
+        logger.warning(f"当前初始密码: {masked_key}")
         logger.warning("完整密钥见 config.yaml → server.admin_api_key")
         logger.warning("=" * 64)
         return {"is_new": False, "password": str(admin_key), "is_initial": True}

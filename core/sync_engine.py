@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from utils.version_utils import get_full_version_string
+from utils.message_style import block, bullet
 from config.config_loader import config_loader
 from handlers.qq_handler import onebot_client
 from db.database import db
@@ -318,11 +319,19 @@ class SyncEngine:
                 if hasattr(self, 'bot') and self.bot:
                     await self.bot.send_message(
                         chat_id=self.tg_group_id,
-                        text="⚠️ 动态贴纸转换失败：系统未安装 FFmpeg\n\n"
-                             "如需启用动态贴纸同步，请安装 FFmpeg：\n"
-                             "- Windows: winget install Gyan.FFmpeg\n"
-                             "- Linux: sudo apt install ffmpeg\n"
-                             "- macOS: brew install ffmpeg"
+                        text=block(
+                            "Media",
+                            [
+                                bullet("状态", "动态贴纸转换失败"),
+                                bullet("原因", "系统未安装 FFmpeg"),
+                            ],
+                            footer=[
+                                "安装 FFmpeg 后即可启用动态贴纸同步：",
+                                "Windows: winget install Gyan.FFmpeg",
+                                "Linux: sudo apt install ffmpeg",
+                                "macOS: brew install ffmpeg",
+                            ],
+                        )
                     )
             except Exception as e:
                 logger.debug(f"发送 TG 提示失败: {e}")
@@ -487,11 +496,19 @@ class SyncEngine:
                 if hasattr(self, 'bot') and self.bot:
                     await self.bot.send_message(
                         chat_id=self.tg_group_id,
-                        text="⚠️ 语音消息转换失败：系统未安装 FFmpeg\n\n"
-                             "如需启用语音同步，请安装 FFmpeg：\n"
-                             "- Windows: winget install Gyan.FFmpeg\n"
-                             "- Linux: sudo apt install ffmpeg\n"
-                             "- macOS: brew install ffmpeg"
+                        text=block(
+                            "Media",
+                            [
+                                bullet("状态", "语音消息转换失败"),
+                                bullet("原因", "系统未安装 FFmpeg"),
+                            ],
+                            footer=[
+                                "安装 FFmpeg 后即可启用语音同步：",
+                                "Windows: winget install Gyan.FFmpeg",
+                                "Linux: sudo apt install ffmpeg",
+                                "macOS: brew install ffmpeg",
+                            ],
+                        )
                     )
             except Exception as e:
                 logger.debug(f"发送 TG 提示失败: {e}")
@@ -540,11 +557,11 @@ class SyncEngine:
         """根据错误类型返回用户友好的错误消息"""
         error_str = str(error).lower()
         if "FFmpeg" in str(error) or isinstance(error, FileNotFoundError):
-            return "⚠️ 动态贴纸同步失败：系统未安装 FFmpeg\n请安装 FFmpeg 以启用动态贴纸功能"
+            return "动态贴纸同步失败：系统未安装 FFmpeg，请安装后重试"
         elif "rlottie" in error_str or "lottie" in error_str or "ImportError" in str(type(error).__name__):
-            return "⚠️ 贴纸转换失败：Lottie 库异常\n请检查相关依赖"
+            return "贴纸转换失败：Lottie 依赖异常，请检查相关依赖"
         else:
-            return "贴纸转换失败，请查看日志"
+            return "贴纸转换失败，详情见运行日志"
 
     async def forward_sticker_to_qq(self, tg_user_id: int, tg_username: str, file_id: str, is_animated: bool = False, reply_segment: list = None, tg_message_id: int = None):
         """将 Telegram 贴纸转发到 QQ (支持静态和动态)
@@ -805,7 +822,7 @@ class SyncEngine:
         safe_display_name = escape_md_v2(display_name)
         # 移除加粗格式以避免 MarkdownV2 转义冲突（如 **{safe}** 中 safe 含 * 时会导致解析失败）
         # 确保括号被正确转义
-        markdown_parts = [f"📋 合并转发消息 \\(来自 {safe_display_name}\\):\n"]
+        markdown_parts = [f"合并转发消息（来自 {safe_display_name}）：\n"]
         
         try:
             # 尝试解析 content，它可能是 JSON 字符串或 Base64 编码的 JSON
@@ -993,7 +1010,7 @@ class SyncEngine:
             try:
                 await self.bot.send_message(
                     chat_id=self.tg_group_id,
-                    text=f"👉 [QQ] {display_name} 给一条消息点了 {emoji}",
+                    text=f"[QQ] {display_name} 对一条消息回应了 {emoji}",
                 )
             except Exception as e2:
                 logger.warning(f"表情回应降级提示发送失败: {e2}")
@@ -1031,15 +1048,13 @@ class SyncEngine:
         except Exception as e:
             logger.debug(f"获取 WebUI 地址失败: {e}")
 
-        message = (
-            f"| TQSync NEXT {version_str} \n"
-            f"--------------------------\n"
-            f"- 最后更新: {last_update}\n"
-            f"- 目标 QQ 群: {qq_gid}\n"
-            f"- 目标 TG 群: {tg_gid}\n"
-            f"- WebUI: {webui_url}\n"
-            f"--------------------------"
-        )
+        message = block("Startup", [
+            bullet("版本", version_str),
+            bullet("最后更新", last_update),
+            bullet("目标 QQ 群", qq_gid),
+            bullet("目标 TG 群", tg_gid),
+            bullet("WebUI", webui_url),
+        ])
         
         # 4. 发送通知
         # 发送到 Telegram

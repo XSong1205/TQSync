@@ -1,4 +1,5 @@
 from utils.version_utils import get_full_version_string
+from utils.message_style import block, bullet, duration, SEP
 from db.database import db
 from config.config_loader import config_loader
 import time
@@ -13,17 +14,17 @@ from utils.logger import logger
 HELP_TEXT = (
     "| TQSync Help\n\n"
     "可用命令：\n"
-    "/bind - 发起绑定流程（QQ端获取验证码，TG端输入验证码）\n"
+    "/bind - 发起绑定流程（QQ 端获取验证码，TG 端输入验证码）\n"
     "/setprefix <昵称> - 设置您的统一昵称\n"
     "/status - 查看机器人运行状态\n"
     "/update - 检查并从 GitHub 拉取最新源码升级重启（仅限管理员）\n"
     "/reboot - 远程重启机器人（仅限管理员）\n"
     "/notice <内容> - 发布群公告并双端置顶同步（仅限管理员）\n"
     "/syncnotice - 手动拉取 QQ 群最新公告并同步至 TG 置顶\n"
-    "/webui - 发送在config中配置的 WebUI 地址\n"
+    "/webui - 发送 WebUI 管理面板地址\n"
     "/blockwords - 查看当前屏蔽词列表\n"
-    "/help - 显示此帮助信息"
-    "更多配置项(如屏蔽词管理等)，请查看 WebUI。"
+    "/help - 显示此帮助信息\n\n"
+    "更多配置项（如屏蔽词管理等）请查看 WebUI，或在群内发送 /webui 获取地址。"
 )
 
 async def handle_bind_command(user_id: int, platform: str, args: list = None):
@@ -44,35 +45,44 @@ async def handle_bind_command(user_id: int, platform: str, args: list = None):
         
         # 生成验证码
         code = await db.create_verification_code(qq_user_id, expire_minutes=5)
-        
+
         # 尝试发送私聊消息
+        bind_msg = block("Bind-User", [
+            bullet("验证码", code),
+            bullet("有效期", "5 分钟"),
+            bullet("下一步", f"在 Telegram 中发送 /bind {code}"),
+        ])
         try:
-            result = await onebot_client.send_private_msg(qq_user_id, 
-                f"| TQSync Bind-User\n"
-                f"您的验证码是: {code} ，有效期: 5分钟。\n"
-                f"请在 Telegram 中使用 /bind {code} 完成绑定。"
-            )
-            
+            result = await onebot_client.send_private_msg(qq_user_id, bind_msg)
+
             if result.get('retcode') == 0:
-                return f"验证码已通过私聊发送给您，请查收。\n如果未收到，请检查是否开启了临时会话权限。"
+                return "验证码已通过私聊发送，请注意查收；如未收到，请检查是否开启临时会话权限。"
             else:
                 raise Exception(f"OneBot API 错误: {result}")
-        
+
         except Exception as e:
             logger.warning(f"发送私聊验证码失败 (QQ: {qq_user_id}): {e}")
             # 降级方案：在群内发送验证码
-            return f"私聊发送失败（可能未开启临时会话权限）\n您的验证码是: {code}\n请在 Telegram 中使用 /bind {code} 完成绑定\n有效期: 5分钟"
-    
+            return block("Bind-User", [
+                bullet("说明", "私聊发送失败（可能未开启临时会话权限）"),
+                bullet("验证码", code),
+                bullet("有效期", "5 分钟"),
+                bullet("下一步", f"在 Telegram 中发送 /bind {code}"),
+            ])
+
     elif platform == 'tg':
         # TG 端不再直接绑定，提示使用验证码方式
-        return "请在 QQ 群中发送 /bind 指令获取验证码，然后在 Telegram 中使用 /bind <验证码> 完成绑定。"
-    
-    return "Usage: /bind"
+        return block("Bind", [
+            bullet("第一步", "在 QQ 群发送 /bind 获取验证码"),
+            bullet("第二步", "在 Telegram 发送 /bind <验证码>"),
+        ])
+
+    return "用法：/bind"
 
 async def handle_setprefix_command(user_id: int, platform: str, args: list):
     """处理 /setprefix 指令"""
     if not args:
-        return "Usage: /setprefix <昵称>"
+        return "用法：/setprefix <昵称>"
     
     new_prefix = " ".join(args)
     
@@ -86,10 +96,10 @@ async def handle_setprefix_command(user_id: int, platform: str, args: list):
         if binding: uid = binding[4]
         
     if not uid:
-        return "您尚未完成绑定，请使用 /bind 获取验证码。"
+        return "您尚未完成绑定，请在 QQ 群发送 /bind 获取验证码。"
     
     await db.update_custom_prefix(uid, new_prefix)
-    return f"Your unified display name has been updated to: {new_prefix}"
+    return f"统一昵称已更新为：{new_prefix}"
 
 async def handle_status_command(start_time: float = None):
     """处理 /status 指令，返回系统状态字符串"""
@@ -116,10 +126,9 @@ async def handle_status_command(start_time: float = None):
 
     # 2. 计算运行时长
     uptime_seconds = int(time.time() - start_time)
-    if uptime_seconds < 0: uptime_seconds = 0
-    hours, remainder = divmod(uptime_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{hours} hrs, {minutes} min, {seconds},sec"
+    if uptime_seconds < 0:
+        uptime_seconds = 0
+    uptime_str = duration(uptime_seconds)
 
     # 3. 获取同步统计 (通过 message_mapping 表行数近似)
     async with db._Database__get_connection() as conn:
@@ -134,53 +143,53 @@ async def handle_status_command(start_time: float = None):
     qq_gid = config_loader.get('qq.group_id')
     tg_gid = config_loader.get('telegram.group_id')
 
-    # 6. 获取插件状态
-    plugin_info_lines = ""
+    # 6. 获取插件状态（状态用文字表达，不用 emoji）
+    plugin_lines = []
     try:
         from core.plugin_manager import PluginManager
         pm = PluginManager.get_instance()
         plugins = pm.get_plugins_status()
         if plugins:
-            plugin_info_lines = "\n已加载插件:\n"
+            enabled_count = sum(1 for p in plugins if p['loaded'] and p['enabled'] and not p['error'])
+            plugin_lines.append(f"插件（{enabled_count}/{len(plugins)} 已启用）:")
             for p in plugins:
-                status_icon = "✅" if (p['loaded'] and p['enabled'] and not p['error']) else ("⏸" if not p['enabled'] else "❌")
-                plugin_info_lines += f"   {status_icon} {p['file']} v{p['version']}"
-                if p['load_time_ms'] > 0:
-                    plugin_info_lines += f" ({p['load_time_ms']}ms)"
-                if p['error']:
-                    plugin_info_lines += f" - {p['error']}"
-                plugin_info_lines += "\n"
+                if p.get('error'):
+                    state = f"加载失败（{p['error']}）"
+                elif not p['enabled']:
+                    state = "未启用"
+                else:
+                    state = "已加载"
+                cost = f" ({p['load_time_ms']}ms)" if p.get('load_time_ms') else ""
+                plugin_lines.append(f"- {p['file']} v{p['version']}{cost} · {state}")
         else:
-            plugin_info_lines = "\n已加载插件: 无\n"
+            plugin_lines.append("插件: 无")
     except Exception:
-        plugin_info_lines = "\n已加载插件: 获取失败\n"
+        plugin_lines.append("插件: 获取失败")
 
     # 7. QQ 连接状态 (主动探测 NapCat HTTP 接口的实时结果)
-    conn_lines = ""
+    conn_lines = []
     try:
         from core.qq_health import STATE_OFFLINE, qq_health_monitor
 
-        conn_lines = f"- QQ 连接: {qq_health_monitor.status_text()}\n"
+        conn_lines.append(bullet("QQ 连接", qq_health_monitor.status_text()))
         if qq_health_monitor.state == STATE_OFFLINE and qq_health_monitor.last_error:
-            conn_lines += f"- 断开原因: {qq_health_monitor.last_error}\n"
+            conn_lines.append(bullet("断开原因", qq_health_monitor.last_error))
     except Exception:
-        conn_lines = "- QQ 连接: 获取失败\n"
+        conn_lines.append(bullet("QQ 连接", "获取失败"))
 
-    return (
-        f"| TQSync Status\n"
-        f"--------------------------\n"
-        f"- 版本信息: {get_full_version_string()}\n"
-        f"- 上次更新: {last_update}\n"
-        f"- 运行时长: {uptime_str}\n"
-        f"- 已同步消息: {sync_count} 条\n"
-        f"- 绑定用户数: {user_count} 人\n"
-        f"- 目标 QQ 群: {qq_gid}\n"
-        f"- 目标 TG 群: {tg_gid}\n"
-        f"{conn_lines}"
-        f"--------------------------"
-        f"{plugin_info_lines}"
-        f"--------------------------"
-    )
+    body = [
+        bullet("版本信息", get_full_version_string()),
+        bullet("上次更新", last_update),
+        bullet("运行时长", uptime_str),
+        bullet("已同步消息", f"{sync_count} 条"),
+        bullet("绑定用户数", f"{user_count} 人"),
+        bullet("目标 QQ 群", qq_gid),
+        bullet("目标 TG 群", tg_gid),
+        *conn_lines,
+        SEP,
+        *plugin_lines,
+    ]
+    return block("Status", body)
 
 async def _get_public_ip() -> str:
     """通过第三方接口获取服务器公网 IP，失败返回空字符串（兼容旧调用）"""
@@ -191,7 +200,8 @@ async def _get_public_ip() -> str:
 async def handle_webui_command():
     """处理 /webui 指令，返回 WebUI 地址"""
     from utils.network_utils import get_webui_url
-    return await get_webui_url()
+    url = await get_webui_url()
+    return block("WebUI", [url])
 
 
 async def handle_help_command():
@@ -300,7 +310,11 @@ async def check_for_updates() -> dict:
         if local_full == remote_full:
             r["ok"] = True
             r["update_found"] = False
-            r["result"] = f"当前已是最新版本 (分支: {current_branch}, Commit: {local_commit})，无需更新。"
+            r["result"] = block("Update", [
+                bullet("状态", "已是最新版本"),
+                bullet("分支", current_branch),
+                bullet("提交", local_commit),
+            ])
             return r
 
         # 3. 存在更新，提取更新日志
@@ -314,13 +328,16 @@ async def check_for_updates() -> dict:
         changelog = log_result.stdout.strip()
         r["changelog"] = changelog
 
-        r["result"] = (
-            f"检测到新版本可用！\n"
-            f"分支: {current_branch}\n"
-            f"当前版本: {local_commit} => 远程最新: {remote_commit}\n"
+        r["result"] = block(
+            "Update",
+            [
+                bullet("状态", "检测到新版本"),
+                bullet("分支", current_branch),
+                bullet("当前提交", local_commit),
+                bullet("远程提交", remote_commit),
+            ],
+            footer=["更新日志:", changelog] if changelog else None,
         )
-        if changelog:
-            r["result"] += f"\n更新日志:\n{changelog}\n"
         return r
 
     except Exception as e:
@@ -360,18 +377,15 @@ async def handle_update_command() -> dict:
 
     # 发现更新，准备拉取
     r["update_found"] = True
-    r["update_notice"] = (
-        f"检测到更新：\n"
-        f"TQSync [Commit: {local_commit} => {remote_commit}]\n"
-        f"即将开始更新..."
-    )
+    r["update_notice"] = block("Update", [
+        bullet("状态", "检测到更新，准备升级"),
+        bullet("提交变动", f"{local_commit} => {remote_commit}"),
+    ])
 
     parts = [
-        f"当前分支: {current_branch}",
-        f"版本变动: {local_commit} => {remote_commit}"
+        bullet("当前分支", current_branch),
+        bullet("版本变动", f"{local_commit} => {remote_commit}"),
     ]
-    if changelog:
-        parts.append(f"\n更新日志:\n{changelog}")
 
     # 2. 执行 pull（先 stash 本地修改避免冲突）
     try:
@@ -381,7 +395,7 @@ async def handle_update_command() -> dict:
         )
         stashed = stash_result.returncode == 0 and 'No local changes' not in stash_result.stdout
         if stashed:
-            parts.append("已暂存本地修改")
+            parts.append(bullet("本地修改", "已暂存"))
     except Exception:
         stashed = False
 
@@ -393,7 +407,7 @@ async def handle_update_command() -> dict:
         if pull_result.returncode != 0:
             r["result"] = f"更新失败：git pull 出错\n{pull_result.stderr.strip()[:500]}"
             return r
-        parts.append("git pull 成功")
+        parts.append(bullet("拉取代码", "成功"))
         logger.info("git pull 完成")
 
         if stashed:
@@ -415,16 +429,16 @@ async def handle_update_command() -> dict:
             capture_output=True, text=True, timeout=120
         )
         if pip_result.returncode == 0:
-            parts.append("依赖安装成功")
+            parts.append(bullet("安装依赖", "成功"))
             logger.info("pip install 完成")
         else:
-            parts.append(f"依赖安装可能存在问题:\n{pip_result.stderr.strip()[:300]}")
+            parts.append(bullet("安装依赖", f"可能存在问题：{pip_result.stderr.strip()[:300]}"))
     except subprocess.TimeoutExpired:
-        parts.append("依赖安装超时，将继续重启")
+        parts.append(bullet("安装依赖", "超时，将继续重启"))
     except Exception as e:
-        parts.append(f"依赖安装异常: {e}")
+        parts.append(bullet("安装依赖", f"异常：{e}"))
 
-    parts.append("\n即将重启以应用更新...")
+    parts.append(bullet("状态", "即将重启以应用更新"))
     r["remote_commit"] = remote_commit
     try:
         from utils.version_utils import get_version
@@ -433,7 +447,7 @@ async def handle_update_command() -> dict:
         pass
     r["ok"] = True
     r["need_restart"] = True
-    r["result"] = "\n".join(parts)
+    r["result"] = block("Update", parts, footer=["更新日志:", changelog] if changelog else None)
     return r
 
 
@@ -444,39 +458,41 @@ handle_checkupdate_command = handle_update_command
 
 async def handle_reboot_command(platform: str = 'qq') -> str:
     """处理 /reboot 指令，返回重启提示消息"""
-    return "正在重启，请稍候..."
+    return "正在重启机器人，请稍候…"
 
 
 async def handle_blockword_command(args: list, user_id: int = None, platform: str = 'qq') -> str:
     """处理 /blockword <关键词> 指令"""
     if not args:
-        return "Usage: /blockword <关键词>"
+        return "用法：/blockword <关键词>"
     word = " ".join(args)
     success = await db.add_blocked_word(word)
     if success:
         logger.info(f"[屏蔽词] {platform.upper()}管理员 {user_id} 添加屏蔽词: {word}")
-        return f"已添加屏蔽词: {word}"
+        return f"已添加屏蔽词：{word}"
     else:
-        return f"屏蔽词已存在: {word}"
+        return f"屏蔽词已存在：{word}"
 
 
 async def handle_unblockword_command(args: list, user_id: int = None, platform: str = 'qq') -> str:
     """处理 /unblockword <关键词> 指令"""
     if not args:
-        return "Usage: /unblockword <关键词>"
+        return "用法：/unblockword <关键词>"
     word = " ".join(args)
     success = await db.remove_blocked_word(word)
     if success:
         logger.info(f"[屏蔽词] {platform.upper()}管理员 {user_id} 删除屏蔽词: {word}")
-        return f"已删除屏蔽词: {word}"
+        return f"已删除屏蔽词：{word}"
     else:
-        return f"屏蔽词不存在: {word}"
+        return f"屏蔽词不存在：{word}"
 
 
 async def handle_blockwords_command() -> str:
     """处理 /blockwords 指令，返回屏蔽词列表"""
     words = await db.get_blocked_words()
     if words:
-        return f"当前屏蔽词 ({len(words)}个):\n" + "\n".join(f"  {i+1}. {w}" for i, w in enumerate(words))
+        body = [bullet("共", f"{len(words)} 个")]
+        body += [f"{i + 1}. {w}" for i, w in enumerate(words)]
+        return block("Blockwords", body)
     else:
         return "当前没有屏蔽词。"

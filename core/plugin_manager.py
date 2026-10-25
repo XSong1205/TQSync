@@ -119,12 +119,12 @@ class PluginManager:
             self.plugins[name] = info
             self._rebuild_matchers()
 
-            logger.info(f"✅ 插件已加载: {name} (耗时 {elapsed_ms}ms)")
+            logger.info(f"插件已加载: {name} (耗时 {elapsed_ms}ms)")
             return info
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"❌ 插件加载失败 {filename}: {error_msg}")
+            logger.error(f"插件加载失败 {filename}: {error_msg}")
             self.plugins[name] = PluginInfo(
                 name=name,
                 version='-',
@@ -158,7 +158,7 @@ class PluginManager:
         del self.plugins[name]
         self._rebuild_matchers()
 
-        logger.info(f"🗑 插件已卸载: {name}")
+        logger.info(f"插件已卸载: {name}")
 
     async def reload_plugin(self, name: str) -> Optional[PluginInfo]:
         """热重载插件（卸载后重新加载）"""
@@ -181,7 +181,7 @@ class PluginManager:
         if name in self.plugins:
             self.plugins[name].enabled = False
             self._rebuild_matchers()
-            logger.info(f"⏸ 插件已禁用: {name}")
+            logger.info(f"插件已禁用: {name}")
 
     async def delete_plugin(self, name: str) -> None:
         """删除插件文件并卸载"""
@@ -192,7 +192,7 @@ class PluginManager:
         await self.unload_plugin(name)
         if os.path.exists(filepath):
             os.remove(filepath)
-            logger.info(f"🗑 插件文件已删除: {name}")
+            logger.info(f"插件文件已删除: {name}")
 
     def _rebuild_matchers(self) -> None:
         """从已启用的插件重建匹配器列表"""
@@ -275,9 +275,9 @@ class PluginManager:
         filename = self.plugins[name].file if name in self.plugins else f"{name}.py"
 
         if success:
-            msg = f"{filename} 插件已加载({elapsed_ms} ms)"
+            msg = f"{filename} 插件已加载（{elapsed_ms}ms）"
         else:
-            msg = f"{filename} 插件加载失败: {error}"
+            msg = f"{filename} 插件加载失败：{error}"
 
         try:
             await self._ctx.tg_bot.send_message(
@@ -296,7 +296,7 @@ class PluginManager:
             except Exception as e:
                 logger.warning(f"发送插件状态通知到 QQ 失败: {e}")
 
-    async def broadcast_plugins_forward_to_qq(self, title: str = "TQSync 插件加载报告") -> None:
+    async def broadcast_plugins_forward_to_qq(self, title: str = "系统插件状态") -> None:
         """将所有已加载插件的状态以合并转发消息发送到 QQ"""
         if not self._ctx:
             return
@@ -314,9 +314,9 @@ class PluginManager:
         for name, info in self.plugins.items():
             filename = info.file
             if info.error:
-                status_text = f"❌ {filename} 加载失败: {info.error}"
+                status_text = f"{filename} 加载失败：{info.error}"
             else:
-                status_text = f"✅ {filename} 已加载 ({info.load_time_ms}ms)"
+                status_text = f"{filename} 已加载（{info.load_time_ms}ms）"
 
             nodes.append({
                 "type": "node",
