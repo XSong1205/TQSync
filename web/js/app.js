@@ -37,7 +37,7 @@ import settingsPage from './pages/settings.js';
 const { h, clear, append, icon, iconButton, button, errorBlock, toast, toastErr } = ui;
 
 /* ── 路由表 ─────────────────────────────────────────────────────────── */
-const PAGES = [dashboardPage, configPage, bindingsPage, pluginsPage, settingsPage, logsPage];
+const PAGES = [dashboardPage, configPage, bindingsPage, pluginsPage, logsPage, settingsPage];
 const ROUTES = Object.fromEntries(PAGES.map((p) => [p.id, p]));
 const TABS = PAGES.filter((p) => p.tab);
 const DEFAULT_ROUTE = 'dashboard';
@@ -187,7 +187,7 @@ function buildTabbar() {
       class: 'tabbar__item', type: 'button', dataset: { route: item.id },
       onClick: () => go(item.id),
     },
-      h('span', { class: 'tabbar__icon' }, icon(item.icon, 22)),
+      h('span', { class: 'tabbar__icon' }, icon(item.icon, 21)),
       h('span', { class: 'tabbar__label' }, item.label)
     ));
   }

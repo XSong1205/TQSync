@@ -100,8 +100,7 @@ export default {
   id: 'logs',
   label: '日志',
   icon: 'logs',
-  tab: false,
-  parent: 'dashboard',
+  tab: true,
   title: '运行日志',
   subtitle: '',
 

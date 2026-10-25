@@ -402,10 +402,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 3px;
-  padding-top: 9px;
+  gap: 2px;
+  padding-top: 8px;
   color: var(--mi-nav-unselected);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 400;
   transition: color var(--mi-dur-fast) linear;
 }
@@ -420,9 +420,20 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 26px;
+  width: 40px;
+  height: 25px;
   transition: transform var(--mi-dur-fast) var(--mi-ease-standard);
+}
+
+/* 6 个标签时在窄屏上进一步收紧 */
+@media (max-width: 360px) {
+  .tabbar__item {
+    font-size: 10px;
+  }
+
+  .tabbar__icon {
+    width: 36px;
+  }
 }
 
 .tabbar__item:active .tabbar__icon {
