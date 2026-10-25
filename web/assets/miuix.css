@@ -46,7 +46,8 @@
   --mi-text-large-title: 28px;
   --mi-text-title: 20px;
   --mi-text-body: 16px;
-  --mi-text-secondary: 14px;
+  /* 字号用 --mi-text-size-*，颜色用 --mi-text-*，两者不要同名 */
+  --mi-text-size-secondary: 14px;
   --mi-text-caption: 13px;
   --mi-text-micro: 11px;
 
@@ -114,6 +115,13 @@
   --mi-scrim: rgba(0, 0, 0, 0.3);
   --mi-log-bg: #1f1f1f;
   --mi-scrollbar: rgba(0, 0, 0, 0.18);
+
+  /* Toast 提示 */
+  --mi-toast-bg: rgba(38, 38, 38, 0.94);
+  --mi-toast-bg-success: rgba(28, 150, 70, 0.95);
+  --mi-toast-bg-error: rgba(212, 44, 35, 0.95);
+  --mi-toast-bg-warning: rgba(196, 130, 20, 0.96);
+  --mi-toast-text: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -168,6 +176,13 @@
   --mi-scrim: rgba(0, 0, 0, 0.6);
   --mi-log-bg: #0f0f0f;
   --mi-scrollbar: rgba(255, 255, 255, 0.18);
+
+  /* Toast 提示 */
+  --mi-toast-bg: rgba(44, 44, 44, 0.96);
+  --mi-toast-bg-success: rgba(38, 166, 91, 0.95);
+  --mi-toast-bg-error: rgba(226, 61, 52, 0.95);
+  --mi-toast-bg-warning: rgba(210, 153, 34, 0.96);
+  --mi-toast-text: #f2f2f2;
 }
 
 /* ── Base / reset ─────────────────────────────────────────────────────── */
@@ -289,11 +304,11 @@ img, svg {
 }
 
 .mi-section-title:first-child {
-  margin-top: 4px;
+  margin-top: 12px;
 }
 
 .mi-group__header {
-  margin: 0 0 8px var(--mi-page-x);
+  margin: 12px 0 8px var(--mi-page-x);
   font-size: 15px;
   font-weight: 400;
   color: var(--mi-section-title);
@@ -321,7 +336,7 @@ img, svg {
 }
 
 .mi-text-sm {
-  font-size: var(--mi-text-secondary);
+  font-size: var(--mi-text-size-secondary);
 }
 
 .mi-text-xs {
@@ -623,8 +638,8 @@ img, svg {
 }
 
 .mi-btn--icon {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
   background: transparent;
@@ -784,7 +799,7 @@ textarea.mi-field__input {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  height: 44px;
   padding: 0 12px;
   border-radius: var(--mi-radius-sm);
   background: var(--mi-fill);
@@ -843,7 +858,7 @@ textarea.mi-field__input {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 34px;
+  height: 40px;
   padding: 0 8px;
   border-radius: calc(var(--mi-radius-sm) - 3px);
   font-size: 13.5px;
@@ -945,7 +960,7 @@ textarea.mi-field__input {
 .mi-select {
   -webkit-appearance: none;
   appearance: none;
-  height: 40px;
+  height: 44px;
   padding: 0 34px 0 12px;
   border: 0;
   border-radius: var(--mi-radius-sm);
@@ -956,7 +971,7 @@ textarea.mi-field__input {
   cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
     linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 17px) 17px, calc(100% - 12px) 17px;
+  background-position: calc(100% - 17px) calc(50% - 2.5px), calc(100% - 12px) calc(50% - 2.5px);
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
@@ -1285,7 +1300,7 @@ textarea.mi-field__input {
   gap: 12px;
   padding: 56px 16px;
   color: var(--mi-text-tertiary);
-  font-size: var(--mi-text-secondary);
+  font-size: var(--mi-text-size-secondary);
 }
 
 /* ── 空状态 ─────────────────────────────────────────────────────────── */
@@ -1608,8 +1623,8 @@ textarea.mi-field__input {
   max-width: 100%;
   padding: 11px 16px;
   border-radius: var(--mi-radius-sm);
-  background: rgba(38, 38, 38, 0.94);
-  color: #ffffff;
+  background: var(--mi-toast-bg);
+  color: var(--mi-toast-text);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.35;
@@ -1621,25 +1636,21 @@ textarea.mi-field__input {
   text-align: left;
 }
 
-:root[data-theme="light"] .mi-toast {
-  background: rgba(38, 38, 42, 0.92);
-}
-
 .mi-toast--show {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
 
 .mi-toast--success {
-  background: rgba(28, 150, 70, 0.95);
+  background: var(--mi-toast-bg-success);
 }
 
 .mi-toast--error {
-  background: rgba(212, 44, 35, 0.95);
+  background: var(--mi-toast-bg-error);
 }
 
 .mi-toast--warning {
-  background: rgba(196, 130, 20, 0.96);
+  background: var(--mi-toast-bg-warning);
 }
 
 .mi-toast__icon {
@@ -1656,7 +1667,7 @@ textarea.mi-field__input {
   border-radius: var(--mi-radius-md);
   background: var(--mi-info-soft);
   color: var(--mi-text);
-  font-size: var(--mi-text-secondary);
+  font-size: var(--mi-text-size-secondary);
   line-height: 1.5;
 }
 
@@ -1734,7 +1745,7 @@ textarea.mi-field__input {
 /* ── 日志块 ─────────────────────────────────────────────────────────── */
 .mi-logs {
   margin: 0 var(--mi-page-x) 14px;
-  border-radius: var(--mi-radius-sm);
+  border-radius: var(--mi-radius-md);
   background: var(--mi-log-bg);
   overflow: hidden;
   box-shadow: none;

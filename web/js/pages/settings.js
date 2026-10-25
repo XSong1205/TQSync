@@ -86,15 +86,6 @@ function infoRow(label, value) {
   return el;
 }
 
-/** 分段控件提升到 44px 触控高度 */
-function enlargeSegment(seg, height = 44) {
-  seg.style.height = `${height + 6}px`;
-  seg.style.boxSizing = 'border-box';
-  seg.querySelectorAll('.mi-segmented__item').forEach((item) => {
-    item.style.height = `${height}px`;
-  });
-  return seg;
-}
 
 /* ─────────────────────────────────────────────────────────────────────
    页面模块
@@ -273,7 +264,7 @@ export default {
     /* ══════════════════════════════════════════════════════════════
        2. 外观
        ══════════════════════════════════════════════════════════════ */
-    themeSeg = enlargeSegment(ui.segmented({
+    themeSeg = ui.segmented({
       options: THEME_OPTIONS,
       value: ctx.getThemeMode() || 'auto',
       onChange: (value) => {
@@ -281,7 +272,7 @@ export default {
         renderThemeHint();
         ctx.vibrate(6);
       },
-    }));
+    });
 
     themeHint = h('div', {
       class: 'mi-text-xs mi-text-tertiary',
@@ -470,7 +461,7 @@ export default {
       const spinner = h('div', { class: 'mi-spinner mi-spinner--lg', style: { margin: '2px auto 14px' } });
       const statusEl = h('div', {
         style: {
-          fontSize: 'var(--mi-text-secondary)',
+          fontSize: 'var(--mi-text-size-secondary)',
           lineHeight: '1.5',
           textAlign: 'center',
           color: 'var(--mi-text-secondary)',

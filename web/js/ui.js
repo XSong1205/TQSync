@@ -131,8 +131,7 @@ function tapFeedback(el) {
 export function card(opts = {}) {
   const { children = [], padded = true, tone = '', className = '', onClick, id } = opts;
   const classes = ['mi-card', padded && 'mi-card--padded', tone && `mi-card--${tone}`, onClick && 'mi-card--tappable', className];
-  const tag = onClick ? 'div' : 'div';
-  const el = h(tag, {
+  const el = h('div', {
     class: classes,
     id: id || null,
     role: onClick ? 'button' : null,
@@ -280,23 +279,37 @@ export function badge(text, tone = 'neutral', iconName) {
   return h('span', { class: ['mi-badge', `mi-badge--${tone}`] }, iconName ? icon(iconName, 12) : null, text);
 }
 
-/** 可删除标签 */
+/**
+ * 可删除标签
+ * @param {{text:string, tone?:string, icon?:string, onRemove?:Function, onClick?:Function, removeLabel?:string}} opts
+ */
 export function chip(opts = {}) {
-  const { text, tone = '', icon: iconName, onRemove, onClick } = opts;
+  const { text, tone = '', icon: iconName, onRemove, onClick, removeLabel = '移除' } = opts;
   const el = h(
     'span',
-    { class: ['mi-chip', tone && `mi-chip--${tone}`], role: onClick ? 'button' : null },
+    {
+      class: ['mi-chip', tone && `mi-chip--${tone}`],
+      role: onClick ? 'button' : null,
+      tabindex: onClick ? '0' : null,
+    },
     iconName ? icon(iconName, 14) : null,
-    h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, text),
-    null
+    h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, text)
   );
-  if (onClick) el.addEventListener('click', onClick);
+  if (onClick) {
+    el.addEventListener('click', onClick);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onClick(e);
+      }
+    });
+  }
   if (onRemove) {
     el.appendChild(
       h('button', {
         class: 'mi-chip__remove',
         type: 'button',
-        'aria-label': '移除',
+        'aria-label': removeLabel || '移除',
         onClick: (e) => {
           e.stopPropagation();
           onRemove(e);
@@ -478,11 +491,12 @@ export function iconButton({ icon: iconName, label = '', onClick = null, classNa
 
 /**
  * 开关（受控 + 乐观更新）
- * @param {{checked?:boolean, onChange?:(v:boolean)=>any, disabled?:boolean}} opts
+ * @param {{checked?:boolean, onChange?:(v:boolean)=>any, disabled?:boolean, ariaLabel?:string}} opts
  * @returns {HTMLButtonElement & {set:(v:boolean)=>void, isChecked:()=>boolean}}
  */
-export function switchControl({ checked = false, onChange = null, disabled = false } = {}) {
+export function switchControl({ checked = false, onChange = null, disabled = false, ariaLabel = '' } = {}) {
   let value = Boolean(checked);
+  let pending = false;
   const thumb = h('span', { class: 'mi-switch__thumb' });
   const el = h('button', {
     class: 'mi-switch',
@@ -490,6 +504,7 @@ export function switchControl({ checked = false, onChange = null, disabled = fal
     role: 'switch',
     disabled,
     'aria-checked': String(value),
+    'aria-label': ariaLabel || null,
     dataset: { checked: String(value) },
   }, thumb);
   el.set = (v) => {
@@ -499,16 +514,25 @@ export function switchControl({ checked = false, onChange = null, disabled = fal
   };
   el.isChecked = () => value;
   el.addEventListener('click', async (e) => {
-    if (disabled) return;
+    if (disabled || pending) return;
     const next = !value;
     el.set(next);
     vibrate(8);
     if (typeof onChange === 'function') {
       try {
         const ret = onChange(next, e);
-        if (ret && typeof ret.then === 'function') await ret;
+        if (ret && typeof ret.then === 'function') {
+          pending = true;
+          el.style.opacity = '0.6';
+          await ret;
+        }
       } catch {
         el.set(!next); // 失败回滚
+      } finally {
+        if (pending) {
+          pending = false;
+          el.style.opacity = '';
+        }
       }
     }
   });
@@ -701,16 +725,46 @@ export function sliderRow(opts = {}) {
 /**
  * 文件选择
  * @param {{accept?:string, multiple?:boolean}} opts
- * @returns {Promise<File[]>}
+ * @returns {Promise<File[]|null>}
  */
 export function pickFile({ accept = '.py', multiple = false } = {}) {
   return new Promise((resolve) => {
+    let settled = false;
+    let focusTimer = null;
     const input = h('input', { type: 'file', accept, multiple, style: { display: 'none' } });
     document.body.appendChild(input);
+
+    function cleanup() {
+      if (focusTimer) clearTimeout(focusTimer);
+      window.removeEventListener('focus', onWindowFocus);
+      if (input.parentNode) input.remove();
+    }
+
+    function done(files) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(files);
+    }
+
     input.addEventListener('change', () => {
-      resolve(Array.from(input.files || []));
-      input.remove();
+      done(Array.from(input.files || []));
     });
+
+    input.addEventListener('cancel', () => {
+      done(null);
+    });
+
+    function onWindowFocus() {
+      focusTimer = setTimeout(() => {
+        if (!settled && (!input.files || input.files.length === 0)) {
+          done(null);
+        }
+      }, 300);
+    }
+
+    window.addEventListener('focus', onWindowFocus, { once: true });
+
     input.click();
   });
 }
@@ -720,6 +774,9 @@ export function pickFile({ accept = '.py', multiple = false } = {}) {
    ───────────────────────────────────────────────────────────────────── */
 
 const TOAST_ICON = { success: 'check', error: 'warning', warning: 'warning', default: 'info' };
+const MAX_TOASTS = 3;
+const TOAST_DEDUP_WINDOW = 800;
+const activeToasts = [];
 
 /**
  * 轻提示
@@ -728,20 +785,62 @@ const TOAST_ICON = { success: 'check', error: 'warning', warning: 'warning', def
  */
 export function toast(message, { type = 'default', duration = 2400 } = {}) {
   const root = document.getElementById('toast-root');
-  if (!root) return;
+  if (!root) return { close: () => {} };
+
+  const now = Date.now();
+  const existing = activeToasts.find((t) => t.message === message && now - t.createdAt < TOAST_DEDUP_WINDOW);
+  if (existing) {
+    existing.createdAt = now;
+    existing.resetTimer(duration);
+    return { close: existing.close };
+  }
+
+  while (activeToasts.length >= MAX_TOASTS) {
+    const oldest = activeToasts.shift();
+    if (oldest) oldest.close();
+  }
+
   const el = h('div', { class: ['mi-toast', type !== 'default' && `mi-toast--${type}`] },
     h('span', { class: 'mi-toast__icon' }, icon(TOAST_ICON[type] || 'info', 16)),
     h('span', null, message)
   );
   root.appendChild(el);
   requestAnimationFrame(() => el.classList.add('mi-toast--show'));
+
+  let closed = false;
+  let timer = null;
+
   const remove = () => {
+    if (closed) return;
+    closed = true;
+    if (timer) clearTimeout(timer);
+    const idx = activeToasts.indexOf(item);
+    if (idx !== -1) activeToasts.splice(idx, 1);
     el.classList.remove('mi-toast--show');
     setTimeout(() => el.remove(), 260);
   };
-  const timer = setTimeout(remove, Math.max(1200, duration));
+
+  const resetTimer = (dur) => {
+    if (timer) clearTimeout(timer);
+    if (dur === 0) {
+      timer = null;
+    } else {
+      timer = setTimeout(remove, Math.max(1200, dur));
+    }
+  };
+
+  const item = {
+    message,
+    el,
+    close: remove,
+    createdAt: now,
+    resetTimer,
+  };
+
+  activeToasts.push(item);
+  resetTimer(duration);
+
   el.addEventListener('click', () => {
-    clearTimeout(timer);
     remove();
   });
   return { close: remove };
@@ -752,6 +851,89 @@ export function toastErr(err, fallback = '操作失败') {
   const msg = err && (err.detail || err.message) ? err.detail || err.message : fallback;
   return toast(msg || fallback, { type: 'error', duration: 3200 });
 }
+
+const overlayStack = [];
+
+function focusOverlay(container) {
+  if (!container || !document.contains(container)) return;
+  let target = container.querySelector('[data-autofocus]');
+  if (!target) {
+    const list = getFocusableElements(container);
+    if (list.length > 0) target = list[0];
+  }
+  if (target && typeof target.focus === 'function') {
+    target.focus({ preventScroll: true });
+  } else {
+    if (!container.hasAttribute('tabindex')) {
+      container.setAttribute('tabindex', '-1');
+    }
+    container.focus({ preventScroll: true });
+  }
+}
+
+function getFocusableElements(container) {
+  const elements = container.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  return Array.from(elements).filter((el) => {
+    return !el.disabled && el.getAttribute('aria-hidden') !== 'true' && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0);
+  });
+}
+
+function trapFocus(e, container) {
+  const focusables = getFocusableElements(container);
+  if (focusables.length === 0) {
+    e.preventDefault();
+    if (!container.hasAttribute('tabindex')) {
+      container.setAttribute('tabindex', '-1');
+    }
+    container.focus({ preventScroll: true });
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+
+  if (e.shiftKey) {
+    if (active === first || !container.contains(active)) {
+      e.preventDefault();
+      last.focus();
+    }
+  } else {
+    if (active === last || !container.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+
+function restoreFocus(prevActive) {
+  if (prevActive && typeof prevActive.focus === 'function' && document.contains(prevActive)) {
+    try {
+      prevActive.focus({ preventScroll: true });
+    } catch { /* 忽略聚焦失败 */ }
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (overlayStack.length === 0) return;
+  const top = overlayStack[overlayStack.length - 1];
+  if (!top) return;
+
+  if (e.key === 'Escape') {
+    e.stopPropagation();
+    if (typeof top.onEscape === 'function') {
+      top.onEscape(e);
+    } else if (typeof top.close === 'function') {
+      top.close();
+    }
+    return;
+  }
+
+  if (e.key === 'Tab' && top.el) {
+    trapFocus(e, top.el);
+  }
+});
 
 function overlayRoot() {
   return document.getElementById('overlay-root');
@@ -769,9 +951,11 @@ export function dialog(opts = {}) {
     dismissible = true, stackActions = false,
   } = opts;
 
+  const prevActive = document.activeElement;
   let resolveFn;
   const result = new Promise((res) => { resolveFn = res; });
   let closed = false;
+  let stackRemoved = false;
 
   const scrim = h('div', { class: 'mi-scrim' });
   const bodyChildren = [];
@@ -803,12 +987,24 @@ export function dialog(opts = {}) {
   root.appendChild(scrim);
   root.appendChild(wrap);
 
+  const overlayItem = {
+    el: dialogEl,
+    close: () => close(undefined),
+    onEscape: () => { if (dismissible) close(undefined); },
+  };
+  overlayStack.push(overlayItem);
+
   function close(value) {
     if (closed) return;
     closed = true;
+    if (!stackRemoved) {
+      stackRemoved = true;
+      const idx = overlayStack.lastIndexOf(overlayItem);
+      if (idx !== -1) overlayStack.splice(idx, 1);
+    }
+    restoreFocus(prevActive);
     scrim.classList.remove('mi-scrim--show');
     dialogEl.classList.remove('mi-dialog--show');
-    document.removeEventListener('keydown', onKey);
     setTimeout(() => {
       scrim.remove();
       wrap.remove();
@@ -816,10 +1012,6 @@ export function dialog(opts = {}) {
     resolveFn(value);
   }
 
-  function onKey(e) {
-    if (e.key === 'Escape' && dismissible) close(undefined);
-  }
-  document.addEventListener('keydown', onKey);
   scrim.addEventListener('click', () => { if (dismissible) close(undefined); });
 
   requestAnimationFrame(() => {
@@ -827,10 +1019,8 @@ export function dialog(opts = {}) {
     dialogEl.classList.add('mi-dialog--show');
   });
 
-  // 聚焦首个可聚焦元素
   setTimeout(() => {
-    const focusable = dialogEl.querySelector('button, input, textarea, select');
-    if (focusable) focusable.focus({ preventScroll: true });
+    focusOverlay(dialogEl);
   }, 120);
 
   return { el: dialogEl, close, result };
@@ -861,7 +1051,9 @@ export async function confirm({ title = '确认操作', message = '', confirmTex
  */
 export async function actionSheet({ title = '', items = [], cancelText = '取消' } = {}) {
   return new Promise((resolve) => {
+    const prevActive = document.activeElement;
     let done = false;
+    let stackRemoved = false;
     const scrim = h('div', { class: 'mi-scrim' });
     const list = h('div', { class: 'mi-actionsheet' });
     items.forEach((it) => {
@@ -889,22 +1081,35 @@ export async function actionSheet({ title = '', items = [], cancelText = '取消
     root.appendChild(scrim);
     root.appendChild(sheetEl);
 
+    const overlayItem = {
+      el: sheetEl,
+      close: () => finish(null),
+      onEscape: () => finish(null),
+    };
+    overlayStack.push(overlayItem);
+
     function finish(value) {
       if (done) return;
       done = true;
+      if (!stackRemoved) {
+        stackRemoved = true;
+        const idx = overlayStack.lastIndexOf(overlayItem);
+        if (idx !== -1) overlayStack.splice(idx, 1);
+      }
+      restoreFocus(prevActive);
       scrim.classList.remove('mi-scrim--show');
       sheetEl.classList.remove('mi-sheet--show');
-      document.removeEventListener('keydown', onKey);
       setTimeout(() => { scrim.remove(); sheetEl.remove(); }, 320);
       resolve(value);
     }
-    function onKey(e) { if (e.key === 'Escape') finish(null); }
-    document.addEventListener('keydown', onKey);
     scrim.addEventListener('click', () => finish(null));
     requestAnimationFrame(() => {
       scrim.classList.add('mi-scrim--show');
       sheetEl.classList.add('mi-sheet--show');
     });
+    setTimeout(() => {
+      focusOverlay(sheetEl);
+    }, 120);
   });
 }
 
@@ -914,7 +1119,9 @@ export async function actionSheet({ title = '', items = [], cancelText = '取消
  * @returns {{el:HTMLElement, body:HTMLElement, close:()=>void}}
  */
 export function openSheet({ title = '', content = null, wide = true, onClose = null } = {}) {
+  const prevActive = document.activeElement;
   let closed = false;
+  let stackRemoved = false;
   const scrim = h('div', { class: 'mi-scrim' });
   const body = h('div', { class: 'mi-sheet__body' },
     content ? (content instanceof Node ? content : append(h('div'), content)) : null
@@ -932,17 +1139,27 @@ export function openSheet({ title = '', content = null, wide = true, onClose = n
   root.appendChild(scrim);
   root.appendChild(sheetEl);
 
+  const overlayItem = {
+    el: sheetEl,
+    close: () => close(),
+    onEscape: () => close(),
+  };
+  overlayStack.push(overlayItem);
+
   function close() {
     if (closed) return;
     closed = true;
+    if (!stackRemoved) {
+      stackRemoved = true;
+      const idx = overlayStack.lastIndexOf(overlayItem);
+      if (idx !== -1) overlayStack.splice(idx, 1);
+    }
+    restoreFocus(prevActive);
     scrim.classList.remove('mi-scrim--show');
     sheetEl.classList.remove('mi-sheet--show');
-    document.removeEventListener('keydown', onKey);
     setTimeout(() => { scrim.remove(); sheetEl.remove(); }, 320);
     if (onClose) onClose();
   }
-  function onKey(e) { if (e.key === 'Escape') close(); }
-  document.addEventListener('keydown', onKey);
   scrim.addEventListener('click', close);
 
   /* 拖拽关闭：仅当面板内容滚动到顶部时生效 */
@@ -975,6 +1192,9 @@ export function openSheet({ title = '', content = null, wide = true, onClose = n
     scrim.classList.add('mi-scrim--show');
     sheetEl.classList.add('mi-sheet--show');
   });
+  setTimeout(() => {
+    focusOverlay(sheetEl);
+  }, 120);
   return { el: sheetEl, body, close };
 }
 

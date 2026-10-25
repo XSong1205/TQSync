@@ -20,18 +20,18 @@ const { h } = ui;
    分区定义（顺序即渲染顺序）
    ───────────────────────────────────────────────────────────────────── */
 const SECTIONS = [
-  { id: 'telegram', title: 'Telegram', icon: 'telegram', desc: '机器人令牌、目标群组与代理设置' },
-  { id: 'qq', title: 'QQ / NapCat', icon: 'qq', desc: 'NapCat HTTP API 与 QQ 群组连接参数' },
-  { id: 'server', title: '服务端', icon: 'server', desc: '监听地址、端口、Webhook 与管理密钥' },
-  { id: 'sync', title: '同步策略', icon: 'sync', desc: '同步方向、消息类型与队列并发' },
-  { id: 'database', title: '数据库', icon: 'database', desc: 'SQLite 数据文件位置' },
-  { id: 'debug', title: '调试', icon: 'settings', desc: '贴纸转换等调试选项' },
+  { id: 'telegram', title: 'Telegram', desc: '机器人令牌、目标群组与代理设置' },
+  { id: 'qq', title: 'QQ / NapCat', desc: 'NapCat HTTP API 与 QQ 群组连接参数' },
+  { id: 'server', title: '服务端', desc: '监听地址、端口、Webhook 与管理密钥' },
+  { id: 'sync', title: '同步策略', desc: '同步方向、消息类型与队列并发' },
+  { id: 'database', title: '数据库', desc: 'SQLite 数据文件位置' },
+  { id: 'debug', title: '调试', desc: '贴纸转换等调试选项' },
 ];
 const SECTION_MAP = Object.fromEntries(SECTIONS.map((section) => [section.id, section]));
 
 /* 同步方向可选值 */
 const DIRECTION_CHOICES = [
-  { value: 'both', label: '双向' },
+  { value: 'both', label: '双向同步' },
   { value: 'tg_to_qq', label: '仅 TG → QQ' },
   { value: 'qq_to_tg', label: '仅 QQ → TG' },
 ];
@@ -53,7 +53,7 @@ const META = {
   /* telegram */
   'telegram.bot_token': {
     title: 'Bot Token',
-    desc: 'Telegram Bot 访问令牌，从 @BotFather 获取（以密码形式显示，点击眼睛可查看）',
+    desc: 'Telegram Bot 访问令牌，从 @BotFather 获取（以掩码显示，点击眼睛可查看）',
     type: 'password',
     required: true,
     placeholder: '123456789:AAxxxx…',
@@ -82,7 +82,7 @@ const META = {
   },
   'qq.access_token': {
     title: 'Access Token',
-    desc: 'NapCat 若配置了 Access Token 请填写，留空表示不校验（以密码形式显示）',
+    desc: 'NapCat 若配置了 Access Token 请填写，留空表示不校验（以掩码显示）',
     type: 'password',
     placeholder: '留空表示不校验',
   },
@@ -160,7 +160,7 @@ const META = {
   /* sync */
   'sync.direction': {
     title: '同步方向',
-    desc: '控制消息在两个平台之间的转发方向',
+    desc: '控制消息在两个平台之间的同步方向',
     type: 'select',
     options: DIRECTION_CHOICES,
   },
@@ -181,7 +181,7 @@ const META = {
   },
   'sync.worker_count': {
     title: '并发工作者',
-    desc: '同步任务并发数，高峰可调至 4~8（1–16）',
+    desc: '同步任务并发数，高峰可调至 4–8（1–16）',
     type: 'int',
     required: true,
     min: 1,
@@ -352,6 +352,7 @@ export default {
     let saveBtn = null;
     let undoBtn = null;
     let saveHint = null;
+    let saveFailHint = '';
     let searchApi = null;
     let noResultsEl = null;
 
@@ -415,7 +416,7 @@ export default {
       }
       for (const [sectionId, items] of bySection) {
         if (SECTION_MAP[sectionId]) continue;
-        groups.push({ id: sectionId, title: sectionId, icon: 'sliders', desc: '其他配置项', items });
+        groups.push({ id: sectionId, title: sectionId, desc: '其他配置项', items });
       }
       return groups;
     }
@@ -477,6 +478,7 @@ export default {
       const badge = makeDirtyBadge();
       const switcher = ui.switchControl({
         checked: entry.value === 'true',
+        ariaLabel: entry.meta.title,
         onChange: (checked) => updateDraft(entry.key, checked ? 'true' : 'false'),
       });
       const el = ui.row({
@@ -514,6 +516,7 @@ export default {
         inputMode: meta.inputMode || (meta.type === 'int' ? 'numeric' : undefined),
         onInput: (value) => updateDraft(entry.key, value),
       });
+      field.input.setAttribute('aria-label', meta.title);
       field.el.style.flex = '1 1 auto';
       field.el.style.minWidth = '0';
 
@@ -593,6 +596,7 @@ export default {
         value: entry.value,
         onChange: (value) => updateDraft(entry.key, value),
       });
+      select.select.setAttribute('aria-label', meta.title);
       select.el.style.width = '100%';
       select.el.style.height = '44px';
 
@@ -640,11 +644,13 @@ export default {
         autocomplete: 'off',
         autocapitalize: 'off',
         placeholder: '输入用户 ID 后回车添加',
+        'aria-label': meta.title,
       });
       const addBtn = ui.button({
         text: '添加',
         variant: 'tonal',
         size: 'sm',
+        ariaLabel: `添加 ${meta.title}`,
         onClick: () => addFromInput(),
       });
       addBtn.style.height = '44px';
@@ -662,6 +668,7 @@ export default {
         chipsEl.replaceChildren(...items.map((id) => ui.chip({
           text: id,
           tone: 'accent',
+          removeLabel: `移除 ${meta.title} ${id}`,
           onRemove: () => {
             items = items.filter((item) => item !== id);
             renderChips();
@@ -744,6 +751,7 @@ export default {
        ──────────────────────────────────────────────────────────────── */
 
     function updateDraft(key, rawValue) {
+      saveFailHint = '';
       const meta = metaFor(key, rawValue);
       draft.set(key, normalize(meta, rawValue));
       const editor = editors.get(key);
@@ -759,6 +767,9 @@ export default {
         if (saving) {
           saveHint.textContent = '正在保存…';
           saveHint.style.color = 'var(--mi-text-secondary)';
+        } else if (saveFailHint) {
+          saveHint.textContent = saveFailHint;
+          saveHint.style.color = 'var(--mi-danger)';
         } else if (dirty.size) {
           saveHint.textContent = `${dirty.size} 项修改未保存`;
           saveHint.style.color = 'var(--mi-accent)';
@@ -775,6 +786,7 @@ export default {
     }
 
     function undoChanges() {
+      saveFailHint = '';
       const dirtyKeys = getDirtyKeys();
       if (!dirtyKeys.length) return;
       for (const key of dirtyKeys) {
@@ -793,6 +805,7 @@ export default {
 
     async function saveChanges() {
       if (saving) return;
+      saveFailHint = '';
       const dirtyKeys = getDirtyKeys();
       if (!dirtyKeys.length) {
         refreshDirtyUI();
@@ -827,8 +840,39 @@ export default {
 
       if (saveBtn) saveBtn.setLoading(true);
       try {
-        await ctx.saveConfigBatch(items);
+        const res = await ctx.saveConfigBatch(items);
         if (disposed) return;
+
+        // 兼容新返回值：若存在 failed 且有失败项
+        if (res && Array.isArray(res.failed) && res.failed.length > 0) {
+          const failedKeys = new Set(res.failed.map((f) => f && f.key));
+          const successItems = items.filter((it) => !failedKeys.has(it.key));
+          for (const item of successItems) {
+            const normalized = normalize(metaFor(item.key, item.value), item.value);
+            originals.set(item.key, normalized);
+            draft.set(item.key, normalized);
+            const entry = entryByKey.get(item.key);
+            if (entry) entry.value = normalized;
+          }
+          const updated = typeof res.updated === 'number' ? res.updated : successItems.length;
+          ctx.toast(`已保存 ${updated} 项，${res.failed.length} 项失败`, { type: 'warning' });
+
+          const failedNames = res.failed.map((f) => labelForKey(f.key) || f.key);
+          const display = failedNames.length > 3
+            ? `${failedNames.slice(0, 3).join('、')} 等`
+            : failedNames.join('、');
+          saveFailHint = `保存失败：${display}`;
+
+          for (const f of res.failed) {
+            const editor = editors.get(f.key);
+            if (editor && typeof editor.setError === 'function') {
+              editor.setError(f.error || '保存失败');
+            }
+          }
+          return;
+        }
+
+        // 全部成功（含兼容旧返回值）
         for (const item of items) {
           const normalized = normalize(metaFor(item.key, item.value), item.value);
           originals.set(item.key, normalized);
@@ -957,7 +1001,7 @@ export default {
         const itemEls = group.items.map((entry) => buildItem(entry, group));
         const cardEl = ui.cardGroup({ children: itemEls, footer: group.desc || '' });
         const sectionEl = h('div', null,
-          ui.sectionTitle(group.title, { iconName: group.icon }),
+          ui.sectionTitle(group.title),
           cardEl
         );
         sectionNodes.push({ el: sectionEl, items: itemEls });
@@ -969,7 +1013,6 @@ export default {
         placeholder: '搜索配置项、分区或说明…',
         onInput: (value) => applyFilter(value),
       });
-      searchApi.el.style.height = '44px';
       noResultsEl = buildNoResults();
 
       configPane.replaceChildren(

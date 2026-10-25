@@ -516,7 +516,7 @@ app = FastAPI(title="TQSync Admin API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -698,12 +698,10 @@ async def get_bindings() -> List[Dict[str, Any]]:
 async def add_binding(binding: BindingUpdate) -> Dict[str, str]:
     """新增 / 覆盖一条绑定。
 
-    真实后端把 ``tg_username`` 同时写进了 ``qq_nickname`` 列（历史行为）；
-    预览环境优先使用请求里的 ``qq_nickname``，缺省时才回退到 ``tg_username``，
-    以便 WebUI 展示更真实。
+    与真实后端保持一致：分别写入 ``tg_username`` 与 ``qq_nickname``。
     """
     tg_username = binding.tg_username
-    qq_nickname = binding.qq_nickname or tg_username
+    qq_nickname = binding.qq_nickname
 
     # 保留同一 TG/QQ 用户原有的 uid（真实数据库按 tg_user_id / qq_user_id 复用 UID）
     existing = next(
@@ -835,6 +833,7 @@ async def enable_plugin(plugin_name: str) -> Dict[str, str]:
     if plugin is None:
         raise HTTPException(status_code=404, detail=f"插件 {plugin_name} 不存在")
     plugin["enabled"] = True
+    plugin["loaded"] = True  # 与真机一致：启用即尝试加载，成功后 loaded=True
     return {"status": "success", "message": f"插件 {plugin_name} 已启用"}
 
 
@@ -844,6 +843,7 @@ async def disable_plugin(plugin_name: str) -> Dict[str, str]:
     if plugin is None:
         raise HTTPException(status_code=404, detail=f"插件 {plugin_name} 不存在")
     plugin["enabled"] = False
+    plugin["loaded"] = False  # 与真机一致：停用会卸载插件
     return {"status": "success", "message": f"插件 {plugin_name} 已禁用"}
 
 

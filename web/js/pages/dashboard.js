@@ -68,7 +68,7 @@ function isConfigured(value) {
 /** 后端 hour 为 UTC 小时号，转成本地 "HH:00" */
 function localHourLabel(hour) {
   const hh = Number(hour);
-  if (!Number.isFinite(hh)) return '--:00';
+  if (!Number.isFinite(hh)) return '—';
   const offsetHours = Math.round(-new Date().getTimezoneOffset() / 60);
   const local = ((hh + offsetHours) % 24 + 24) % 24;
   return `${String(local).padStart(2, '0')}:00`;
@@ -82,6 +82,23 @@ function logTone(line) {
   if (/\bDEBUG\b/i.test(text)) return 'debug';
   if (/\bINFO\b/i.test(text)) return 'info';
   return '';
+}
+
+/** 探测后端 /health 接口是否恢复，带超时控制 */
+async function probeHealth(timeoutMs = 2000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch('/health', { cache: 'no-store', signal: controller.signal });
+    if (!res.ok) return false;
+    const body = await res.json().catch(() => null);
+    if (body && body.status && body.status !== 'ok') return false;
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -202,7 +219,7 @@ function buildHistoryCard(history) {
       ),
       ui.barChart({ data, height: 96 }),
       h('div', { class: 'mi-field__support', style: { marginTop: '2px' } },
-        total > 0 ? `峰值 ${ui.formatNumber(peak.value)} 条 · ${peak.label}` : '新消息同步后将在此显示统计')
+        total > 0 ? `峰值 ${ui.formatNumber(peak.value)} 条 · ${peak.label} · 蓝柱为峰值时段` : '新消息同步后将在此显示统计')
     ],
   });
 }
@@ -264,7 +281,7 @@ function buildQuickActions(ctx, onRestart) {
       }),
       ui.row({
         title: '修改管理密钥',
-        subtitle: '前往设置页更新控制台访问密钥',
+        subtitle: '前往设置页更新管理密钥',
         icon: 'shield',
         chevron: true,
         onClick: () => ctx.go('settings'),
@@ -328,6 +345,7 @@ export default {
     let statusTimer = null;
     let slowTimer = null;
     let restarting = false;
+    let activeRestartDialog = null;
     let quietRefreshing = false;
 
     const refs = {
@@ -348,6 +366,10 @@ export default {
       if (slowTimer) {
         clearInterval(slowTimer);
         slowTimer = null;
+      }
+      if (activeRestartDialog) {
+        try { activeRestartDialog.close(); } catch { /* 忽略 */ }
+        activeRestartDialog = null;
       }
     });
     ctx.onRefresh(async () => {
@@ -551,6 +573,7 @@ export default {
         dismissible: false,
         actions: [],
       });
+      activeRestartDialog = dialog;
 
       try {
         await api.post('/admin/restart');
@@ -558,6 +581,7 @@ export default {
         // 服务可能已经关闭连接；403/401 等鉴权错误则应中止
         if (err && err.status && err.status !== 0) {
           restarting = false;
+          activeRestartDialog = null;
           dialog.close();
           if (!disposed) ctx.toastErr(err, '重启请求失败');
           return;
@@ -565,6 +589,7 @@ export default {
       }
       if (disposed) {
         restarting = false;
+        activeRestartDialog = null;
         dialog.close();
         return;
       }
@@ -574,18 +599,12 @@ export default {
       while (!disposed && Date.now() - startedAt < RESTART_TIMEOUT_MS) {
         await ui.sleep(RESTART_POLL_MS);
         if (disposed) break;
-        try {
-          const res = await fetch('/health', { cache: 'no-store' });
-          if (!res.ok) continue;
-          const body = await res.json().catch(() => null);
-          if (body && body.status && body.status !== 'ok') continue;
-          // 等待旧进程彻底退出，避免刷新回旧页面
-          if (Date.now() - startedAt >= 4000) {
-            ready = true;
-            break;
-          }
-        } catch {
-          /* 服务重启中，继续轮询 */
+        const healthy = await probeHealth(2000);
+        if (!healthy) continue;
+        // 等待旧进程彻底退出，避免刷新回旧页面
+        if (Date.now() - startedAt >= 4000) {
+          ready = true;
+          break;
         }
       }
       restarting = false;
@@ -594,6 +613,7 @@ export default {
         location.reload();
         return;
       }
+      activeRestartDialog = null;
       dialog.close();
       ctx.toast('重启超时，请手动刷新页面确认服务状态', { type: 'error', duration: 3600 });
     }

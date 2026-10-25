@@ -64,29 +64,6 @@ function classifyLine(raw) {
   return 'plain';
 }
 
-/** 分段控件提升到 44px 触控高度（Miuix 默认 34px 视觉高度） */
-function enlargeSegment(seg, height = 44) {
-  seg.style.height = `${height + 6}px`;
-  seg.style.boxSizing = 'border-box';
-  seg.querySelectorAll('.mi-segmented__item').forEach((item) => {
-    item.style.height = `${height}px`;
-  });
-  return seg;
-}
-
-/** 搜索框提升到 46px 触控高度 */
-function enlargeSearch(search) {
-  search.el.style.height = '46px';
-  return search;
-}
-
-/** 图标按钮提升到 44px 触控尺寸 */
-function enlargeIconButton(btn) {
-  btn.style.width = '44px';
-  btn.style.height = '44px';
-  return btn;
-}
-
 /** 带页面左右边距的容器 */
 function inset(node, extra = {}) {
   return h('div', { style: Object.assign({ margin: '0 var(--mi-page-x) 14px' }, extra) }, node);
@@ -141,7 +118,7 @@ export default {
       style: { marginTop: '12px', lineHeight: '1.5', minHeight: '18px' },
     }, '正在读取日志…');
 
-    const countSeg = enlargeSegment(ui.segmented({
+    const countSeg = ui.segmented({
       options: PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) })),
       value: String(lineCount),
       onChange: (value) => {
@@ -151,18 +128,18 @@ export default {
         countBadge.textContent = `${next} 行`;
         load({ quiet: false }).catch(() => {});
       },
-    }));
+    });
 
-    const refreshBtn = enlargeIconButton(ui.iconButton({
+    const refreshBtn = ui.iconButton({
       icon: 'refresh',
       label: '刷新日志',
       onClick: () => {
         if (loading) return;
         load({ quiet: false }).catch(() => {});
       },
-    }));
+    });
 
-    const copyBtn = enlargeIconButton(ui.iconButton({
+    const copyBtn = ui.iconButton({
       icon: 'copy',
       label: '复制全部日志',
       onClick: async () => {
@@ -179,14 +156,30 @@ export default {
           ctx.toastErr(err, '复制失败');
         }
       },
-    }));
+    });
 
-    const autoSwitch = ui.switchControl({ checked: false, onChange: (on) => setAutoRefresh(on) });
+    const autoSwitch = ui.switchControl({
+      checked: false,
+      ariaLabel: '自动刷新',
+      onChange: (on) => setAutoRefresh(on),
+    });
+    if (!autoSwitch.getAttribute('aria-label')) {
+      autoSwitch.setAttribute('aria-label', '自动刷新');
+    }
     const autoRow = h('div', {
       class: 'mi-hstack',
+      role: 'button',
+      tabindex: '0',
+      'aria-label': '自动刷新',
       style: { minHeight: '44px', cursor: 'pointer' },
       onClick: (e) => {
         if (!autoSwitch.contains(e.target)) autoSwitch.click();
+      },
+      onKeydown: (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          autoSwitch.click();
+        }
       },
     },
       autoSwitch,
@@ -219,12 +212,12 @@ export default {
       updateCaption();
     }, 220);
 
-    const search = enlargeSearch(ui.searchBar({
+    const search = ui.searchBar({
       placeholder: '搜索日志内容（不区分大小写）',
       onInput: (value) => keywordDebounced(value),
-    }));
+    });
 
-    const levelSeg = enlargeSegment(ui.segmented({
+    const levelSeg = ui.segmented({
       options: LEVEL_OPTIONS,
       value: 'all',
       onChange: (value) => {
@@ -232,7 +225,7 @@ export default {
         render({ scrollMode: 'top' });
         updateCaption();
       },
-    }));
+    });
 
     const filterHint = h('div', {
       class: 'mi-text-xs mi-text-tertiary',

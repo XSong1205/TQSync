@@ -282,6 +282,7 @@ function mountMembers(root, ctx) {
   }
 
   function bindingHaystack(b) {
+    if (!b) return '';
     return [b.tg_username, b.qq_nickname, b.tg_user_id, b.qq_user_id, b.uid, b.status]
       .filter((v) => v !== null && v !== undefined && v !== '')
       .join(' ')
@@ -327,9 +328,8 @@ function mountMembers(root, ctx) {
 
     view.setList(
       cardGroup({
-        header: '绑定关系',
         children: filtered.map((b) => bindingRow(b)),
-        footer: `已绑定 ${boundCount} 位 · 未绑定 ${unboundCount} 位（未绑定表示该 QQ 用户同步过消息，但尚未绑定 Telegram）`,
+        footer: `已绑定 ${boundCount} 条 · 未绑定 ${unboundCount} 条（未绑定表示该 QQ 用户同步过消息，但尚未绑定 Telegram）`,
       })
     );
   }
@@ -520,7 +520,7 @@ function mountMembers(root, ctx) {
 
   function openAddBinding(preset = {}) {
     const tgField = field({
-      label: 'Telegram User ID',
+      label: 'Telegram 用户 ID',
       value: preset.tgId == null ? '' : String(preset.tgId),
       placeholder: '例如 7123456789',
       inputMode: 'numeric',
@@ -567,7 +567,7 @@ function mountMembers(root, ctx) {
             const tgRaw = tgField.get().trim();
             const qqRaw = qqField.get().trim();
             if (!tgRaw) {
-              tgField.setError('请输入 Telegram User ID');
+              tgField.setError('请输入 Telegram 用户 ID');
               tgField.focus();
               return false;
             }
@@ -628,12 +628,12 @@ function mountMembers(root, ctx) {
 
     const note = alert({
       tone: 'info',
-      text: '管理员可在 Telegram / QQ 使用机器人管理指令（/bind、/status、/blockword 等）。此处填写 Telegram User ID 或 QQ 号。',
+      text: '管理员可在 Telegram / QQ 使用机器人管理指令（/bind、/status、/blockword 等）。此处填写 Telegram 用户 ID 或 QQ 号。',
     });
 
     const idField = field({
       label: '管理员 ID',
-      placeholder: 'Telegram User ID 或 QQ 号',
+      placeholder: 'Telegram 用户 ID 或 QQ 号',
       inputMode: 'numeric',
     });
     const addBtn = tapify(
@@ -701,7 +701,7 @@ function mountMembers(root, ctx) {
         emptyState({
           icon: 'shield',
           title: '暂无管理员',
-          desc: '添加 Telegram User ID 或 QQ 号后，该用户即可在群内使用机器人管理指令。',
+          desc: '添加 Telegram 用户 ID 或 QQ 号后，该用户即可在群内使用机器人管理指令。',
           actionText: '添加管理员',
           onAction: () => view.focusAdd(),
         })
@@ -727,7 +727,6 @@ function mountMembers(root, ctx) {
 
     view.setList(
       cardGroup({
-        header: '管理员',
         children: filtered.map((id) => adminRow(id)),
         footer: '修改会立即写入 config.yaml 的 server.admin_user_ids；该接口为切换语义（已存在则移除）。',
       })

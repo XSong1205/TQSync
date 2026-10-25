@@ -292,6 +292,12 @@ function mountPlugins(root, ctx) {
     );
   }
 
+  function getPluginStatus(plugin) {
+    if (!plugin || plugin.enabled === false) return { label: '未启用', tone: 'neutral' };
+    if (!plugin.loaded) return { label: '加载失败', tone: 'danger' };
+    return { label: '已加载', tone: 'success' };
+  }
+
   function pluginCard(plugin) {
     const name = String(plugin.name || '未命名插件');
     const version = plugin.version && String(plugin.version) !== '-' ? String(plugin.version) : '';
@@ -299,11 +305,11 @@ function mountPlugins(root, ctx) {
     const file = plugin.file ? String(plugin.file) : '';
     const matchers = Array.isArray(plugin.matchers) ? plugin.matchers : [];
     const loadMs = Math.max(0, safeInt(plugin.load_time_ms, 0));
-    const loadTimeText = plugin.loaded || loadMs > 0 ? `加载耗时 ${loadMs} ms` : '未加载';
+    const loadTimeText = plugin.enabled && plugin.loaded ? `加载耗时 ${loadMs} ms` : '—';
     let pending = false;
 
-    const enabledBadge = badge(plugin.enabled ? '已启用' : '已禁用', plugin.enabled ? 'success' : 'neutral');
-    const loadedBadge = badge(plugin.loaded ? '加载正常' : '加载失败', plugin.loaded ? 'success' : 'danger');
+    const status = getPluginStatus(plugin);
+    const statusBadge = badge(status.label, status.tone);
 
     const head = h(
       'div',
@@ -363,6 +369,23 @@ function mountPlugins(root, ctx) {
       errAlert.style.margin = '2px 0 0';
     }
 
+    const switchCtrl = switchControl({
+      checked: Boolean(plugin.enabled),
+      ariaLabel: `${plugin.enabled ? '停用' : '启用'}插件 ${name}`,
+      onChange: async (next) => {
+        if (pending) throw new Error('操作进行中');
+        pending = true;
+        try {
+          await togglePlugin(plugin, next, statusBadge, switchCtrl);
+        } catch (err) {
+          ctx.toastErr(err, '切换插件状态失败');
+          throw err;
+        } finally {
+          pending = false;
+        }
+      },
+    });
+
     const footer = h(
       'div',
       {
@@ -377,21 +400,10 @@ function mountPlugins(root, ctx) {
       h(
         'div',
         { class: 'mi-grow', style: { minWidth: '0', display: 'flex', flexDirection: 'column', gap: '4px' } },
-        h('div', { class: 'mi-hstack mi-wrap', style: { gap: '6px' } }, enabledBadge, loadedBadge),
+        h('div', { class: 'mi-hstack mi-wrap', style: { gap: '6px' } }, statusBadge),
         h('div', { class: 'mi-text-xs mi-text-tertiary mi-num' }, loadTimeText)
       ),
-      switchControl({
-        checked: Boolean(plugin.enabled),
-        onChange: async (next) => {
-          if (pending) throw new Error('操作进行中');
-          pending = true;
-          try {
-            await togglePlugin(plugin, next, enabledBadge);
-          } finally {
-            pending = false;
-          }
-        },
-      })
+      switchCtrl
     );
 
     const body = h(
@@ -413,15 +425,21 @@ function mountPlugins(root, ctx) {
     });
   }
 
-  function syncEnabledBadge(el, enabled) {
-    el.textContent = enabled ? '已启用' : '已禁用';
-    el.className = `mi-badge mi-badge--${enabled ? 'success' : 'neutral'}`;
+  function syncPluginStatus(badgeEl, switchEl, plugin) {
+    const st = getPluginStatus(plugin);
+    if (badgeEl) {
+      badgeEl.textContent = st.label;
+      badgeEl.className = `mi-badge mi-badge--${st.tone}`;
+    }
+    if (switchEl) {
+      switchEl.setAttribute('aria-label', `${plugin.enabled ? '停用' : '启用'}插件 ${plugin.name || ''}`);
+    }
   }
 
-  async function togglePlugin(plugin, next, enabledBadgeEl) {
+  async function togglePlugin(plugin, next, statusBadgeEl, switchCtrlEl) {
     const prev = Boolean(plugin.enabled);
     plugin.enabled = next;
-    syncEnabledBadge(enabledBadgeEl, next);
+    syncPluginStatus(statusBadgeEl, switchCtrlEl, plugin);
     recomputeCounts();
     renderMetrics();
     try {
@@ -432,13 +450,14 @@ function mountPlugins(root, ctx) {
         type: 'success',
         duration: 1800,
       });
+      // 启停会改变 loaded 状态，重新拉一次列表，避免状态徽标停留在旧值
+      await loadPlugins({ force: true, quiet: true });
     } catch (err) {
       plugin.enabled = prev;
-      syncEnabledBadge(enabledBadgeEl, prev);
+      syncPluginStatus(statusBadgeEl, switchCtrlEl, plugin);
       recomputeCounts();
       renderMetrics();
-      ctx.toastErr(err, next ? '启用插件失败' : '禁用插件失败');
-      throw err; // 让 switchControl 回滚开关
+      throw err; // 让 switchControl 回滚开关并在上层 toastErr
     }
   }
 
@@ -540,8 +559,9 @@ function mountPlugins(root, ctx) {
 
     function dataEntry(key, value) {
       const valueText = value === null || value === undefined ? '' : String(value);
-      const editBtn = iconButton({ icon: 'edit', label: `编辑 ${key}`, onClick: () => editEntry(key, valueText) });
-      const delBtn = iconButton({ icon: 'trash', label: `删除 ${key}`, onClick: () => deleteEntry(key) });
+      const editBtn = iconButton({ icon: 'edit', label: `编辑键值 ${key}`, onClick: () => editEntry(key, valueText) });
+      const delBtn = iconButton({ icon: 'trash', label: `删除键值 ${key}`, onClick: () => deleteEntry(key) });
+      delBtn.setAttribute('aria-label', `删除键值 ${key}`);
       [editBtn, delBtn].forEach((btn) => {
         btn.style.width = '44px';
         btn.style.height = '44px';
@@ -655,7 +675,8 @@ function mountPlugins(root, ctx) {
 
     function editEntry(key, value) {
       const valueField = field({ value, multiline: true, rows: 4 });
-      ctx.dialog({
+      let saving = false;
+      const d = ctx.dialog({
         title: `编辑「${key}」`,
         content: h(
           'div',
@@ -674,6 +695,12 @@ function mountPlugins(root, ctx) {
             variant: 'filled',
             value: true,
             onClick: async () => {
+              if (saving) return false;
+              saving = true;
+              const saveBtnEl = d && d.el && d.el.querySelector('.mi-dialog__actions .mi-btn--filled');
+              if (saveBtnEl && typeof saveBtnEl.setLoading === 'function') {
+                saveBtnEl.setLoading(true);
+              }
               try {
                 await api.put(`/admin/plugins/${encodeURIComponent(pluginName)}/data`, {
                   key,
@@ -685,6 +712,11 @@ function mountPlugins(root, ctx) {
               } catch (err) {
                 ctx.toastErr(err, '保存键值失败');
                 return false;
+              } finally {
+                saving = false;
+                if (saveBtnEl && typeof saveBtnEl.setLoading === 'function') {
+                  saveBtnEl.setLoading(false);
+                }
               }
             },
           },

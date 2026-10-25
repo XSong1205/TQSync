@@ -67,6 +67,8 @@ let appbarLeft = null;
 let appbarRight = null;
 let ptrEl = null;
 let ptrRing = null;
+let shellBound = false;
+let updateCleanup = null;
 
 /* ── 启动占位 ───────────────────────────────────────────────────────── */
 
@@ -79,6 +81,10 @@ function hideBoot() {
 /* ── 登录页 ─────────────────────────────────────────────────────────── */
 
 function showLogin(message = '') {
+  if (typeof updateCleanup === 'function') {
+    try { updateCleanup(); } catch { /* ignore */ }
+    updateCleanup = null;
+  }
   document.title = '登录 · TQSync 控制台';
   clear($loginRoot);
   $loginRoot.hidden = false;
@@ -279,7 +285,10 @@ function showApp() {
     toast('登录凭证已失效，请重新登录', { type: 'error' });
     showLogin('登录凭证已失效，请重新输入');
   });
-  window.addEventListener('hashchange', onHashChange);
+  if (!shellBound) {
+    window.addEventListener('hashchange', onHashChange);
+    shellBound = true;
+  }
 
   hideBoot();
 
@@ -288,7 +297,10 @@ function showApp() {
   navigate(initial, { restoreScroll: true });
 
   // 静默检查更新：延迟执行，失败/无网络不打扰用户
-  initUpdateCheck();
+  if (typeof updateCleanup === 'function') {
+    try { updateCleanup(); } catch { /* ignore */ }
+  }
+  updateCleanup = initUpdateCheck();
 
   if (state.initialToken) setTimeout(promptInitialPassword, 900);
 }

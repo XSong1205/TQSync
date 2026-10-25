@@ -22,11 +22,27 @@ export function resolved() {
   return media && media.matches ? 'dark' : 'light';
 }
 
+const COLOR_LIGHT = '#f5f5f7';
+const COLOR_DARK = '#000000';
+
 function apply() {
   const actual = resolved();
   document.documentElement.setAttribute('data-theme', actual);
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', actual === 'dark' ? '#000000' : '#f5f5f7');
+  const metas = document.querySelectorAll('meta[name="theme-color"]');
+  metas.forEach((meta) => {
+    if (mode === 'auto') {
+      const m = meta.getAttribute('media') || '';
+      if (m.includes('dark')) {
+        meta.setAttribute('content', COLOR_DARK);
+      } else if (m.includes('light')) {
+        meta.setAttribute('content', COLOR_LIGHT);
+      } else {
+        meta.setAttribute('content', actual === 'dark' ? COLOR_DARK : COLOR_LIGHT);
+      }
+    } else {
+      meta.setAttribute('content', actual === 'dark' ? COLOR_DARK : COLOR_LIGHT);
+    }
+  });
   listeners.forEach((fn) => {
     try {
       fn(actual, mode);

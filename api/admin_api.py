@@ -19,7 +19,7 @@ app = FastAPI(title="TQSync Admin API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -354,7 +354,8 @@ def update_config(config_key: str, update: ConfigUpdate):
             config_loader.update_config('server.is_initial_token', False)
         return {"status": "success", "message": f"Config {config_key} updated"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"保存配置 {config_key} 失败: {e}")
+        raise HTTPException(status_code=500, detail="保存配置失败，请查看服务端日志")
 
 
 @app.get("/admin/bindings", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
@@ -393,7 +394,7 @@ async def delete_binding(tg_user_id: int):
 
 @app.put("/admin/bindings", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])
 async def add_binding(binding: BindingUpdate):
-    await db.add_binding(binding.tg_user_id, binding.qq_user_id, binding.tg_username, binding.tg_username)
+    await db.add_binding(binding.tg_user_id, binding.qq_user_id, binding.tg_username, binding.qq_nickname)
     return {"status": "success"}
 
 @app.get("/admin/admins", dependencies=[Depends(require_permission(PERM_LEVEL_ADMIN))])

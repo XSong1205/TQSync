@@ -164,15 +164,6 @@ body {
   animation: mi-slide-up 220ms var(--mi-ease-standard) both;
 }
 
-.login-remember {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--mi-text-secondary);
-  user-select: none;
-  cursor: pointer;
-}
 
 .login-footer {
   margin-top: 20px;
@@ -215,9 +206,6 @@ body {
   scroll-behavior: smooth;
 }
 
-.viewport--no-scroll {
-  overflow: hidden;
-}
 
 .page {
   position: relative;
@@ -232,10 +220,6 @@ body {
   animation: page-enter var(--mi-dur-base) var(--mi-ease-standard) both;
 }
 
-.page--enter-back {
-  animation: page-enter-back var(--mi-dur-base) var(--mi-ease-standard) both;
-}
-
 @keyframes page-enter {
   from {
     opacity: 0;
@@ -247,16 +231,6 @@ body {
   }
 }
 
-@keyframes page-enter-back {
-  from {
-    opacity: 0;
-    transform: translateX(-14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
 
 /* ── 顶栏（Miuix TopAppBar） ───────────────────────────────────────── */
 .appbar {
@@ -322,32 +296,6 @@ body {
   justify-content: flex-end;
 }
 
-.appbar__btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  color: var(--mi-text-secondary);
-  transition: background-color var(--mi-dur-fast) linear, color var(--mi-dur-fast) linear,
-    transform var(--mi-dur-fast) var(--mi-ease-standard);
-}
-
-.appbar__btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-.appbar__btn:active {
-  transform: scale(0.9);
-  color: var(--mi-text);
-}
-
-.appbar__btn:hover {
-  background: var(--mi-surface-pressed);
-  color: var(--mi-text);
-}
 
 /* 视口内的大标题（随内容滚动，类似 Miuix LargeTitle） */
 .page-hero {
@@ -440,21 +388,6 @@ body {
   transform: scale(0.9);
 }
 
-.tabbar__badge {
-  position: absolute;
-  top: -1px;
-  right: 6px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--mi-danger);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 15px;
-  text-align: center;
-}
 
 /* ── 侧边导航（平板 / 桌面） ───────────────────────────────────────── */
 .rail {
@@ -528,19 +461,6 @@ body {
   font-weight: 600;
 }
 
-.rail__badge {
-  margin-left: auto;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--mi-danger);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
-  text-align: center;
-}
 
 .rail__footer {
   margin-top: auto;
@@ -632,15 +552,6 @@ body {
 }
 
 /* ── 页面内常用布局块 ───────────────────────────────────────────────── */
-.page-actions {
-  display: flex;
-  gap: 10px;
-  padding: 6px var(--mi-page-x) 16px;
-}
-
-.page-actions .mi-btn {
-  flex: 1 1 0;
-}
 
 .page-note {
   margin: 0 var(--mi-page-x) 14px;
@@ -661,58 +572,6 @@ body {
   min-width: 0;
 }
 
-/* 悬浮操作按钮 */
-.fab {
-  position: fixed;
-  right: max(16px, calc((100% - var(--content-max)) / 2 + 16px));
-  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 18px);
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: var(--mi-radius-md);
-  background: var(--mi-accent);
-  color: var(--mi-on-accent);
-  box-shadow: none;
-  transition: opacity var(--mi-dur-fast) linear;
-}
-
-.fab:active {
-  opacity: 0.8;
-}
-
-.fab:hover {
-  opacity: 0.92;
-}
-
-@media (min-width: 900px) {
-  .fab {
-    right: max(24px, calc((100% - var(--content-max)) / 2 - 68px));
-    bottom: 28px;
-  }
-}
-
-/* 离线提示条 */
-.net-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 var(--mi-page-x) 12px;
-  padding: 10px 13px;
-  border-radius: var(--mi-radius-sm);
-  background: var(--mi-warning-soft);
-  color: var(--mi-warning);
-  font-size: 13px;
-  font-weight: 500;
-  animation: mi-slide-up 240ms var(--mi-ease-standard) both;
-}
-
-/* 底部安全区辅助 */
-.safe-bottom-space {
-  height: calc(var(--safe-bottom) + 8px);
-}
 
 /* ── 桌面端细节增强 ────────────────────────────────────────────────── */
 @media (min-width: 900px) {

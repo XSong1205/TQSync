@@ -177,23 +177,37 @@ export const api = {
 };
 
 /**
- * 批量保存配置：优先走后端批量接口，失败（如旧后端 404）时退化为逐条 PUT。
+ * 批量保存配置：优先走后端批量接口，失败（如旧后端 404/405）时退化为逐条 PUT。
  * @param {Array<{key:string, value:string}>} items
- * @returns {Promise<{updated:number, fallback:boolean}>}
+ * @returns {Promise<{updated:number, failed:Array<{key:string, error:string}>, fallback:boolean, message:string}>}
  */
 export async function saveConfigBatch(items) {
-  if (!items.length) return { updated: 0, fallback: false };
+  if (!items.length) return { updated: 0, failed: [], fallback: false, message: '' };
   try {
     const res = await api.put('/admin/config/batch', { items });
-    return { updated: (res && res.updated) || items.length, fallback: false };
+    const updated = typeof res?.updated === 'number' ? res.updated : items.length;
+    const failed = Array.isArray(res?.failed) ? res.failed : [];
+    const message = typeof res?.message === 'string' ? res.message : '';
+    return { updated, failed, fallback: false, message };
   } catch (err) {
     if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
       const results = await Promise.allSettled(
         items.map((it) => api.put(`/admin/config/${encodeURIComponent(it.key)}`, { key: it.key, value: it.value }))
       );
-      const failed = results.filter((r) => r.status === 'rejected');
-      if (failed.length) throw failed[0].reason;
-      return { updated: items.length, fallback: true };
+      const failed = [];
+      let updated = 0;
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          updated += 1;
+        } else {
+          const reason = r.reason;
+          const errorMsg = (reason && (reason.detail || reason.message)) || String(reason || '保存失败');
+          failed.push({ key: items[idx].key, error: errorMsg });
+        }
+      });
+      if (failed.length === items.length) throw results[0].reason;
+      const message = `已更新 ${updated} 项配置` + (failed.length ? `，${failed.length} 项失败` : '');
+      return { updated, failed, fallback: true, message };
     }
     throw err;
   }

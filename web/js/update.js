@@ -21,6 +21,8 @@ let promptedThisSession = false;
 let inflight = null;
 /** 对话框被占用时的延迟提示计时器 */
 let autoPromptTimer = null;
+/** 启动检查更新的延迟计时器 */
+let updateCheckTimer = null;
 
 function readIgnored() {
   try {
@@ -140,6 +142,10 @@ export function showUpdateDialog(info, { auto = false } = {}) {
  * @returns {Promise<object|null>} 更新信息，失败返回 null
  */
 export async function checkForUpdate({ force = false, interactive = false } = {}) {
+  let loadingToast = null;
+  if (interactive) {
+    loadingToast = ui.toast('正在检查更新…', { duration: 0 });
+  }
   let info = null;
   try {
     info = await fetchUpdateInfo({ force });
@@ -148,6 +154,10 @@ export async function checkForUpdate({ force = false, interactive = false } = {}
       ui.toastErr(err, '检查更新失败，请检查网络后重试');
     }
     return null;
+  } finally {
+    if (loadingToast && typeof loadingToast.close === 'function') {
+      loadingToast.close();
+    }
   }
   if (!info) return null;
 
@@ -216,13 +226,27 @@ function shortVersion(value) {
 /**
  * WebUI 启动后静默检查（延迟执行，失败不打扰用户）。
  * @param {{delay?:number}} opts
+ * @returns {()=>void} 清理函数
  */
 export function initUpdateCheck({ delay = 2600 } = {}) {
-  if (!api.hasToken()) return;
+  if (updateCheckTimer) {
+    clearTimeout(updateCheckTimer);
+    updateCheckTimer = null;
+  }
+  if (!api.hasToken()) return () => {};
   const run = () => {
+    updateCheckTimer = null;
     checkForUpdate({ force: false, interactive: false }).catch(() => {});
   };
-  const timer = setTimeout(run, delay);
-  // 页面隐藏时若计时器未触发，延后执行即可，无需额外处理
-  return () => clearTimeout(timer);
+  updateCheckTimer = setTimeout(run, delay);
+  return () => {
+    if (updateCheckTimer) {
+      clearTimeout(updateCheckTimer);
+      updateCheckTimer = null;
+    }
+    if (autoPromptTimer) {
+      clearTimeout(autoPromptTimer);
+      autoPromptTimer = null;
+    }
+  };
 }

@@ -34,7 +34,7 @@ TQSync 是一个简单的基于 Python 的机器人，用于实现 Telegram 与 
 - **Python 3.12+**
 - **Telegram**: `python-telegram-bot` (v20+)
 - **QQ**: `aiohttp` (对接 Napcat OneBot v11 HTTP)
-- **Web Framework**: `FastAPI` + `Uvicorn` + `Vue`
+- **Web Framework**: `FastAPI` + `Uvicorn` + 原生 ES Module（零构建 WebUI）
 - **Database**: `SQLite`
 
 
