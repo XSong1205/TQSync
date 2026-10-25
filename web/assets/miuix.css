@@ -293,14 +293,14 @@ img, svg {
 }
 
 .mi-group__header {
-  margin: 0 0 8px 16px;
+  margin: 0 0 8px var(--mi-page-x);
   font-size: 15px;
   font-weight: 400;
   color: var(--mi-section-title);
 }
 
 .mi-group__footer {
-  margin: 8px 16px 0;
+  margin: 8px var(--mi-page-x) 0;
   font-size: var(--mi-text-caption);
   line-height: 1.5;
   color: var(--mi-text-secondary);

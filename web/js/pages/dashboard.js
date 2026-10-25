@@ -446,7 +446,9 @@ export default {
       const quickCard = buildQuickActions(ctx, restartService);
 
       root.replaceChildren(
-        inset(hero.el, { paddingTop: '2px' }),
+        // 状态卡自带 .mi-group 的左右边距，这里只补一点顶部间距，
+        // 不能再套 inset()（否则水平方向会多出 20px，与大标题错位）
+        h('div', { style: { paddingTop: '2px' } }, hero.el),
         ui.sectionTitle('运行指标'),
         metricsSlot,
         inset(chartSlot),
