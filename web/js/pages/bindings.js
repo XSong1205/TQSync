@@ -1,8 +1,9 @@
 /**
- * 成员页 —— 绑定关系 / 屏蔽词 / 管理员
+ * 用户页 —— 绑定关系 / 管理员
  * =====================================================================
- * 顶部 segmented 切换三个视图；每个视图的数据只在首次进入时拉取，
+ * 顶部 segmented 切换两个视图；每个视图的数据只在首次进入时拉取，
  * 之后常驻内存（增删改后静默刷新），切换时仅重绘列表区域。
+ * 屏蔽词属于消息过滤策略，已移动到「设置 → 消息过滤」。
  *
  * 依赖：../ui.js（唯一组件库）、../api.js
  */
@@ -33,13 +34,11 @@ const {
 
 const VIEW_OPTIONS = [
   { value: 'bindings', label: '绑定关系' },
-  { value: 'blocked', label: '屏蔽词' },
   { value: 'admins', label: '管理员' },
 ];
 
 const HERO_LABELS = {
   bindings: '新增绑定',
-  blocked: '添加屏蔽词',
   admins: '添加管理员',
 };
 
@@ -93,39 +92,33 @@ function trashButton(label, onClick) {
 
 export default {
   id: 'bindings',
-  label: '成员',
+  label: '用户',
   icon: 'users',
   tab: true,
-  title: '成员',
-  subtitle: '绑定关系、屏蔽词与管理员',
+  title: '用户',
+  subtitle: '绑定关系与管理员权限',
   async mount(root, ctx) {
     mountMembers(root, ctx);
   },
 };
 
 function mountMembers(root, ctx) {
-  /* ── 内存状态：三个视图各自惰性加载 ── */
+  /* ── 内存状态：两个视图各自惰性加载 ── */
   const store = {
     bindings: { loaded: false, loading: false, error: null, data: null },
-    blocked: { loaded: false, loading: false, error: null, data: null },
     admins: { loaded: false, loading: false, error: null, data: null },
   };
-  const filters = { bindings: '', blocked: '', admins: '' };
+  const filters = { bindings: '', admins: '' };
   const views = {};
   const deferred = [];
   let active = 'bindings';
 
   const FETCHERS = {
     bindings: () => api.get('/admin/bindings'),
-    blocked: () => api.get('/admin/blocked_words'),
     admins: () => api.get('/admin/admins'),
   };
   const PARSERS = {
     bindings: (res) => (Array.isArray(res) ? res : []),
-    blocked: (res) => ({
-      words: Array.isArray(res && res.words) ? res.words.map((w) => String(w)) : [],
-      count: Number(res && res.count) || 0,
-    }),
     admins: (res) => ({
       admins: Array.isArray(res && res.admins)
         ? res.admins.map((id) => Number(id)).filter((id) => Number.isFinite(id))
@@ -164,8 +157,7 @@ function mountMembers(root, ctx) {
 
   function ensureView(v) {
     if (views[v]) return views[v];
-    const view =
-      v === 'bindings' ? buildBindingsView() : v === 'blocked' ? buildBlockedView() : buildAdminsView();
+    const view = v === 'bindings' ? buildBindingsView() : buildAdminsView();
     views[v] = view;
     listHost.appendChild(view.el);
     return view;
@@ -204,7 +196,7 @@ function mountMembers(root, ctx) {
 
   /**
    * 拉取 / 渲染某个视图。
-   * @param {'bindings'|'blocked'|'admins'} v
+   * @param {'bindings'|'admins'} v
    * @param {{force?:boolean, quiet?:boolean}} options
    */
   function loadView(v, options = {}) {
@@ -256,7 +248,6 @@ function mountMembers(root, ctx) {
       return;
     }
     if (v === 'bindings') renderBindings(view, st.data);
-    else if (v === 'blocked') renderBlocked(view, st.data);
     else renderAdmins(view, st.data);
   }
 
@@ -617,147 +608,7 @@ function mountMembers(root, ctx) {
     return d.result;
   }
 
-  /* ────────────────────────── B. 屏蔽词 ────────────────────────── */
-
-  function buildBlockedView() {
-    const listEl = h('div');
-    const onSearch = debounce((raw) => {
-      filters.blocked = String(raw || '').trim().toLowerCase();
-      renderView('blocked');
-    }, 160);
-    deferred.push(() => onSearch.cancel());
-    const search = searchBar({ placeholder: '搜索屏蔽词…', onInput: onSearch });
-    const count = badge('0 个', 'neutral');
-    const toolbar = h(
-      'div',
-      { class: 'page-toolbar' },
-      h('div', { class: 'page-toolbar__grow' }, search.el),
-      count
-    );
-
-    const wordField = field({ placeholder: '输入新的屏蔽词，例如：加微信', maxLength: 200 });
-    const addBtn = tapify(
-      button({ text: '添加', icon: 'plus', variant: 'filled', onClick: () => addBlockedWord() })
-    );
-    wordField.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addBlockedWord();
-      }
-    });
-    const addRow = h(
-      'div',
-      { class: 'page-toolbar' },
-      h('div', { class: 'page-toolbar__grow' }, wordField.el),
-      addBtn
-    );
-
-    const el = h('div', { hidden: true }, toolbar, addRow, listEl);
-    return {
-      el,
-      listEl,
-      search,
-      count,
-      wordField,
-      addBtn,
-      setList(node) {
-        clear(listEl);
-        if (node) listEl.appendChild(node);
-      },
-      focusAdd() {
-        wordField.focus();
-        wordField.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      },
-    };
-  }
-
-  function renderBlocked(view, payload) {
-    const words = payload && Array.isArray(payload.words) ? payload.words : [];
-    const q = filters.blocked;
-    const filtered = q ? words.filter((w) => String(w).toLowerCase().includes(q)) : words;
-    view.count.textContent = q ? `${filtered.length}/${words.length}` : `${words.length} 个`;
-
-    if (!words.length) {
-      view.setList(
-        emptyState({
-          icon: 'shield',
-          title: '暂无屏蔽词',
-          desc: '添加后，消息内容包含这些词的同步会被拦截，不再转发到对端。',
-          actionText: '添加屏蔽词',
-          onAction: () => view.focusAdd(),
-        })
-      );
-      return;
-    }
-    if (!filtered.length) {
-      view.setList(
-        emptyState({
-          icon: 'search',
-          title: '没有匹配的屏蔽词',
-          desc: `没有找到包含「${q}」的屏蔽词。`,
-          actionText: '清空搜索',
-          onAction: () => {
-            filters.blocked = '';
-            view.search.set('');
-            renderView('blocked');
-          },
-        })
-      );
-      return;
-    }
-
-    view.setList(
-      cardGroup({
-        header: '屏蔽词',
-        children: filtered.map((word) =>
-          row({
-            title: String(word),
-            icon: 'shield',
-            iconTone: 'neutral',
-            trailing: trashButton(`删除屏蔽词 ${word}`, () => removeBlockedWord(String(word))),
-          })
-        ),
-        footer: '同步前会逐条检查消息内容，命中后不再转发；包含 / 的屏蔽词同样可正常删除。',
-      })
-    );
-  }
-
-  async function addBlockedWord() {
-    const view = views.blocked;
-    if (!view) return;
-    const word = view.wordField.get().trim();
-    if (!word) {
-      view.wordField.setError('屏蔽词不能为空');
-      view.wordField.focus();
-      return;
-    }
-    view.wordField.setError('');
-    view.addBtn.setLoading(true);
-    try {
-      await api.post('/admin/blocked_words', { word });
-      view.wordField.set('');
-      ctx.toast('已添加屏蔽词', { type: 'success' });
-      await loadView('blocked', { force: true, quiet: true });
-      view.wordField.focus();
-    } catch (err) {
-      ctx.toastErr(err, '添加屏蔽词失败');
-      if (err && err.status === 409) view.wordField.setError('该屏蔽词已存在');
-    } finally {
-      view.addBtn.setLoading(false);
-    }
-  }
-
-  async function removeBlockedWord(word) {
-    try {
-      await api.del(`/admin/blocked_words/${encodeURIComponent(word)}`);
-      ctx.toast('已删除屏蔽词', { type: 'success' });
-      await loadView('blocked', { force: true, quiet: true });
-    } catch (err) {
-      ctx.toastErr(err, '删除屏蔽词失败');
-    }
-  }
-
-  /* ────────────────────────── C. 管理员 ────────────────────────── */
+  /* ────────────────────────── B. 管理员 ────────────────────────── */
 
   function buildAdminsView() {
     const listEl = h('div');

@@ -151,7 +151,13 @@ async def get_status():
     
     # 性能监控数据
     process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
+    # 内存优先取 USS（独占物理内存），更接近任务管理器/系统监控里的实际占用；
+    # 部分平台不支持 memory_full_info 时回退到 RSS。
+    try:
+        _mem = process.memory_full_info()
+        mem_bytes = getattr(_mem, 'uss', None) or _mem.rss
+    except Exception:
+        mem_bytes = process.memory_info().rss
     # cpu_percent(interval=0.1) 会阻塞 100ms，放到线程里执行，避免 WebUI 刷新时卡住事件循环
     cpu_percent = await asyncio.to_thread(process.cpu_percent, 0.1)
     
@@ -194,7 +200,7 @@ async def get_status():
         "qq_group_id": config_loader.get('qq.group_id'),
         "tg_group_id": config_loader.get('telegram.group_id'),
         "cpu_usage": f"{cpu_percent:.1f}%",
-        "memory_usage": f"{mem_info.rss / 1024 / 1024:.1f} MB",
+        "memory_usage": f"{mem_bytes / 1024 / 1024:.1f} MB",
         "disk_usage": f"{disk_usage.percent:.1f}%",
         "db_size": f"{db_size / 1024:.1f} KB",
         "is_initial_token": bool(config_loader.get('server.is_initial_token', False)),

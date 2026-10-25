@@ -43,16 +43,15 @@ body {
 }
 
 .boot-logo {
-  filter: drop-shadow(0 10px 24px rgba(52, 130, 255, 0.32));
-  animation: boot-in 620ms var(--mi-ease-spring) both;
+  animation: boot-in 480ms var(--mi-ease-standard) both;
 }
 
 .boot-name {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--mi-text);
-  animation: boot-in 620ms 80ms var(--mi-ease-spring) both;
+  animation: boot-in 480ms 60ms var(--mi-ease-standard) both;
 }
 
 .boot-spinner {
@@ -95,63 +94,23 @@ body {
   background: var(--mi-bg);
 }
 
-.login-bg {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.login-bg::before,
-.login-bg::after {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.55;
-}
-
-.login-bg::before {
-  width: 320px;
-  height: 320px;
-  top: -110px;
-  left: -90px;
-  background: radial-gradient(circle, rgba(76, 147, 255, 0.55), transparent 70%);
-  animation: orb-drift 16s ease-in-out infinite alternate;
-}
-
-.login-bg::after {
-  width: 300px;
-  height: 300px;
-  right: -100px;
-  bottom: -120px;
-  background: radial-gradient(circle, rgba(120, 86, 255, 0.4), transparent 70%);
-  animation: orb-drift 20s 2s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes orb-drift {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(28px, 24px, 0) scale(1.12); }
-}
-
 .login-card {
   position: relative;
   width: min(100%, 380px);
   padding: 30px 26px 24px;
   background: var(--mi-surface);
   border-radius: var(--mi-radius-2xl);
-  box-shadow: var(--mi-shadow-3);
-  animation: login-in 520ms var(--mi-ease-spring) both;
+  animation: login-in 320ms var(--mi-ease-standard) both;
 }
 
 @keyframes login-in {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -167,17 +126,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 62px;
-  height: 62px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #4c93ff, #2c6ff0);
-  box-shadow: 0 12px 28px rgba(52, 130, 255, 0.34);
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: var(--mi-accent);
 }
 
 .login-brand__name {
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .login-brand__desc {
@@ -335,9 +293,9 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   text-align: center;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -393,7 +351,7 @@ body {
 
 /* 视口内的大标题（随内容滚动，类似 Miuix LargeTitle） */
 .page-hero {
-  padding: 10px var(--mi-page-x) 4px;
+  padding: 10px var(--mi-page-x) 2px;
 }
 
 .page-hero__row {
@@ -405,14 +363,14 @@ body {
 
 .page-hero__title {
   font-size: var(--mi-text-large-title);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
 }
 
 .page-hero__sub {
   margin-top: 4px;
-  font-size: var(--mi-text-secondary);
+  font-size: var(--mi-text-caption);
   color: var(--mi-text-secondary);
   line-height: 1.45;
 }
@@ -424,7 +382,7 @@ body {
   padding-bottom: 4px;
 }
 
-/* ── 底部标签栏（移动端） ───────────────────────────────────────────── */
+/* ── 底部标签栏（对齐 Miuix NavigationBar：无选中胶囊、未选中 40% 透明度） ── */
 .tabbar {
   position: relative;
   z-index: var(--mi-z-tabbar);
@@ -433,10 +391,8 @@ body {
   align-items: stretch;
   height: calc(var(--tabbar-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
-  background: var(--mi-blur-bg);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  box-shadow: 0 -0.5px 0 var(--mi-separator);
+  background: var(--mi-bg);
+  border-top: 1px solid var(--mi-separator);
 }
 
 .tabbar__item {
@@ -445,21 +401,18 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding-top: 6px;
-  color: var(--mi-text-tertiary);
-  font-size: var(--mi-text-micro);
-  font-weight: 500;
+  justify-content: flex-start;
+  gap: 3px;
+  padding-top: 9px;
+  color: var(--mi-nav-unselected);
+  font-size: 12px;
+  font-weight: 400;
   transition: color var(--mi-dur-fast) linear;
 }
 
 .tabbar__item[aria-current="page"] {
-  color: var(--mi-accent);
-}
-
-.tabbar__item:active {
   color: var(--mi-text);
+  font-weight: 600;
 }
 
 .tabbar__icon {
@@ -469,17 +422,11 @@ body {
   justify-content: center;
   width: 44px;
   height: 26px;
-  border-radius: var(--mi-radius-pill);
-  transition: background-color var(--mi-dur-base) var(--mi-ease-standard),
-    transform var(--mi-dur-fast) var(--mi-ease-standard);
-}
-
-.tabbar__item[aria-current="page"] .tabbar__icon {
-  background: var(--mi-accent-soft);
+  transition: transform var(--mi-dur-fast) var(--mi-ease-standard);
 }
 
 .tabbar__item:active .tabbar__icon {
-  transform: scale(0.92);
+  transform: scale(0.9);
 }
 
 .tabbar__badge {
@@ -493,7 +440,7 @@ body {
   background: var(--mi-danger);
   color: #fff;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 15px;
   text-align: center;
 }
@@ -524,27 +471,26 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #4c93ff, #2c6ff0);
-  box-shadow: 0 6px 16px rgba(52, 130, 255, 0.28);
+  background: var(--mi-accent);
   flex: none;
 }
 
 .rail__brand-name {
   font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.2;
 }
 
 .rail__brand-sub {
   font-size: var(--mi-text-micro);
-  color: var(--mi-text-tertiary);
+  color: var(--mi-text-secondary);
 }
 
 .rail__nav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .rail__item {
@@ -556,7 +502,7 @@ body {
   border-radius: var(--mi-radius-sm);
   color: var(--mi-text-secondary);
   font-size: 14.5px;
-  font-weight: 500;
+  font-weight: 400;
   transition: background-color var(--mi-dur-fast) linear, color var(--mi-dur-fast) linear;
 }
 
@@ -566,8 +512,8 @@ body {
 }
 
 .rail__item[aria-current="page"] {
-  background: var(--mi-accent-soft);
-  color: var(--mi-accent);
+  background: var(--mi-fill);
+  color: var(--mi-text);
   font-weight: 600;
 }
 
@@ -715,19 +661,19 @@ body {
   justify-content: center;
   width: 52px;
   height: 52px;
-  border-radius: 18px;
+  border-radius: var(--mi-radius-md);
   background: var(--mi-accent);
   color: var(--mi-on-accent);
-  box-shadow: 0 10px 26px rgba(52, 130, 255, 0.4);
-  transition: transform var(--mi-dur-fast) var(--mi-ease-standard), box-shadow var(--mi-dur-base) linear;
+  box-shadow: none;
+  transition: opacity var(--mi-dur-fast) linear;
 }
 
 .fab:active {
-  transform: scale(0.93);
+  opacity: 0.8;
 }
 
 .fab:hover {
-  box-shadow: 0 14px 32px rgba(52, 130, 255, 0.48);
+  opacity: 0.92;
 }
 
 @media (min-width: 900px) {
@@ -759,16 +705,8 @@ body {
 
 /* ── 桌面端细节增强 ────────────────────────────────────────────────── */
 @media (min-width: 900px) {
-  .mi-card--tappable:hover {
-    box-shadow: var(--mi-shadow-2);
-  }
-
   .mi-row--tappable:hover {
     background: var(--mi-surface-pressed);
-  }
-
-  .tabbar {
-    box-shadow: 0 -0.5px 0 var(--mi-separator);
   }
 }
 

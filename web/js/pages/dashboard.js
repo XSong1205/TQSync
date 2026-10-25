@@ -1,21 +1,20 @@
 /**
  * 概览页（dashboard）
  * =====================================================================
- * 展示：服务运行状态、运行指标、24 小时消息量、同步方向、插件概况、
+ * 展示：服务运行状态、运行指标、24 小时消息量、插件概况、
  *       快捷操作与最近日志。
  *
  * 数据来源：
  *   GET  /admin/status            系统状态（CPU / 内存 / 磁盘 / 插件 / 群组）
  *   GET  /admin/stats/sync_history 最近 24 小时消息量（UTC 整点桶）
- *   GET  /admin/sync/direction    当前同步方向
- *   PUT  /admin/sync/direction    修改同步方向
  *   GET  /admin/logs?lines=6      最近日志
  *   POST /admin/restart           优雅重启
  *   GET  /health                  重启后存活探测（无需鉴权）
  *
  * 设计要点：
  *   - mount 先同步输出骨架屏，避免白屏；数据到达后一次性建 DOM
- *   - 每 15s 静默刷新（仅页面可见时），就地更新数值，不整页重绘
+ *   - 概览定位为监控页：状态指标每 1.5s 静默刷新（仅页面可见时），
+ *     消息统计/日志按较低频率刷新，避免无谓开销
  *   - 所有异步区域都有 加载 / 空 / 错误 三态
  */
 import * as ui from '../ui.js';
@@ -24,22 +23,11 @@ import { checkForUpdate } from '../update.js';
 
 const { h } = ui;
 
-const AUTO_REFRESH_MS = 15000;
+const STATUS_REFRESH_MS = 1500;   // 监控指标刷新间隔
+const SLOW_REFRESH_MS = 15000;    // 统计 / 日志等低频数据
 const RESTART_POLL_MS = 1500;
 const RESTART_TIMEOUT_MS = 60000;
 const LOG_LINES = 6;
-
-/* 同步方向：值 → 短标签 / 说明 */
-const DIRECTION_OPTIONS = [
-  { value: 'both', label: '双向' },
-  { value: 'tg_to_qq', label: '仅 TG→QQ' },
-  { value: 'qq_to_tg', label: '仅 QQ→TG' },
-];
-const DIRECTION_DESC = {
-  both: 'Telegram ↔ QQ 双向同步，两端消息互通',
-  tg_to_qq: '仅将 Telegram 消息同步到 QQ，QQ 侧消息不再转发',
-  qq_to_tg: '仅将 QQ 消息同步到 Telegram，TG 侧消息不再转发',
-};
 
 /* ─────────────────────────────────────────────────────────────────────
    小工具
@@ -63,13 +51,13 @@ function parsePercent(value) {
   return Number.isFinite(n) ? n : NaN;
 }
 
-/** 百分比阈值 → 颜色语气 */
+/** 仅在超过阈值时用警示色，正常值保持正文颜色（避免满屏彩色数字） */
 function percentTone(value, warningAt, dangerAt) {
   const n = parsePercent(value);
   if (!Number.isFinite(n)) return '';
   if (n > dangerAt) return 'danger';
   if (n > warningAt) return 'warning';
-  return 'success';
+  return '';
 }
 
 /** 群组 ID 展示 */
@@ -123,135 +111,51 @@ function buildSkeleton() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   状态 Hero 卡
+   服务状态卡（Miuix 普通卡片 + 列表行，无渐变、无彩色徽标）
    ───────────────────────────────────────────────────────────────────── */
 
-function buildConnRow(iconName, title) {
-  const valueEl = h('div', {
-    style: {
-      fontFamily: 'var(--mi-font-mono)',
-      fontSize: '13.5px',
-      fontWeight: '600',
-      lineHeight: '1.3',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-    },
-  }, '—');
-  const badgeEl = h('span', {
-    style: {
-      flex: 'none',
-      padding: '2px 8px',
-      borderRadius: '999px',
-      background: 'rgba(255,255,255,0.2)',
-      color: '#fff',
-      fontSize: '10.5px',
-      fontWeight: '600',
-      letterSpacing: '0.01em',
-    },
-  }, '—');
-
-  const el = h('div', {
-    class: 'mi-hstack',
-    style: { gap: '11px', padding: '7px 0', minHeight: '44px' },
-  },
-    h('span', {
-      class: 'mi-row__icon',
-      style: { background: 'rgba(255,255,255,0.16)', color: '#fff' },
-    }, ui.icon(iconName, 19)),
-    h('div', { class: 'mi-grow', style: { minWidth: '0' } },
-      h('div', { style: { fontSize: '11.5px', color: 'rgba(255,255,255,0.72)', marginBottom: '1px' } }, title),
-      valueEl
-    ),
-    badgeEl
-  );
-
+function valueRow(title) {
+  const rowEl = ui.row({ title, value: '—' });
+  const valueEl = rowEl.querySelector('.mi-row__value');
   return {
-    el,
-    update(rawValue) {
-      const configured = isConfigured(rawValue);
-      valueEl.textContent = configured ? String(rawValue) : '未配置';
-      badgeEl.textContent = configured ? '已配置' : '待配置';
-      badgeEl.style.background = configured ? 'rgba(255,255,255,0.2)' : 'rgba(255,214,120,0.28)';
-      badgeEl.style.color = configured ? '#fff' : '#ffe7ab';
+    el: rowEl,
+    set(text, colorVar) {
+      valueEl.textContent = text;
+      valueEl.style.color = colorVar ? `var(${colorVar})` : '';
     },
   };
 }
 
 function buildStatusHero() {
-  const versionChip = h('span', {
-    style: {
-      flex: 'none',
-      maxWidth: '52%',
-      padding: '3px 10px',
-      borderRadius: '999px',
-      background: 'rgba(255,255,255,0.2)',
-      fontSize: '11.5px',
-      fontWeight: '600',
-      letterSpacing: '0.01em',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-    },
-  }, '—');
+  const stateRow = valueRow('服务状态');
+  const tgRow = valueRow('Telegram 群组');
+  const qqRow = valueRow('QQ 群组');
+  const uptimeRow = valueRow('运行时长');
+  const versionRow = valueRow('版本');
+  const versionValue = versionRow.el.querySelector('.mi-row__value');
+  versionValue.style.fontFamily = 'var(--mi-font-mono)';
+  versionValue.style.fontSize = '13.5px';
+  versionValue.style.maxWidth = '58%';
 
-  const uptimeEl = h('span', { class: 'mi-num', style: { fontWeight: '600' } }, '—');
-  const updatedEl = h('span', { class: 'mi-num', style: { fontWeight: '600' } }, '—');
-
-  const tg = buildConnRow('telegram', 'Telegram 群组');
-  const qq = buildConnRow('qq', 'QQ 群组');
-
-  const el = ui.card({
-    tone: 'accent',
-    children: [
-      h('div', { class: 'mi-between', style: { alignItems: 'flex-start', gap: '10px' } },
-        h('div', {
-          class: 'mi-hstack',
-          style: { gap: '7px', fontSize: '12.5px', fontWeight: '500', color: 'rgba(255,255,255,0.84)' },
-        }, ui.icon('shield', 15), h('span', null, '服务运行状态')),
-        versionChip
-      ),
-      h('div', {
-        style: { margin: '12px 0 3px', fontSize: '23px', fontWeight: '700', letterSpacing: '-0.02em', lineHeight: '1.2' },
-      }, '运行正常'),
-      h('div', {
-        style: { fontSize: '12.5px', lineHeight: '1.5', color: 'rgba(255,255,255,0.76)' },
-      }, 'Telegram ↔ QQ 消息同步服务已就绪'),
-      h('div', { style: { marginTop: '10px' } }, tg.el, qq.el),
-      h('div', {
-        class: 'mi-between',
-        style: {
-          marginTop: '9px',
-          paddingTop: '11px',
-          borderTop: '1px solid rgba(255,255,255,0.18)',
-          fontSize: '12px',
-          color: 'rgba(255,255,255,0.85)',
-          gap: '10px',
-        },
-      },
-        h('div', { class: 'mi-hstack', style: { gap: '6px', minWidth: '0' } },
-          ui.icon('clock', 14),
-          h('span', { style: { whiteSpace: 'nowrap' } }, '已运行'),
-          uptimeEl
-        ),
-        h('div', { class: 'mi-hstack', style: { gap: '5px', flex: 'none' } },
-          h('span', null, '更新于'),
-          updatedEl
-        )
-      ),
-    ],
-  });
+  const footer = h('div', { class: 'mi-group__footer' }, '');
+  const el = h('div', { class: 'mi-group-wrap' },
+    h('div', { class: 'mi-group' },
+      h('div', { class: 'mi-group__body' },
+        stateRow.el, tgRow.el, qqRow.el, uptimeRow.el, versionRow.el)
+    ),
+    footer
+  );
 
   return {
     el,
     update(status) {
       const st = status || {};
-      versionChip.textContent = st.version || '—';
-      versionChip.title = st.version || '';
-      uptimeEl.textContent = ui.formatUptime(st.uptime_seconds);
-      updatedEl.textContent = ui.formatClock(new Date());
-      tg.update(st.tg_group_id);
-      qq.update(st.qq_group_id);
+      stateRow.set('运行中', '--mi-success');
+      tgRow.set(isConfigured(st.tg_group_id) ? String(st.tg_group_id) : '未配置');
+      qqRow.set(isConfigured(st.qq_group_id) ? String(st.qq_group_id) : '未配置');
+      uptimeRow.set(ui.formatUptime(st.uptime_seconds));
+      versionRow.set(st.version || '—');
+      footer.textContent = `更新于 ${ui.formatClock(new Date())}`;
     },
   };
 }
@@ -263,44 +167,12 @@ function buildStatusHero() {
 function buildMetrics(status) {
   const st = status || {};
   return ui.metricsGrid([
-    {
-      label: '绑定用户',
-      value: ui.formatNumber(st.bound_users ?? 0),
-      sub: 'TG ↔ QQ 用户对',
-      icon: 'users',
-    },
-    {
-      label: '同步消息',
-      value: ui.formatNumber(st.sync_count ?? 0),
-      sub: '累计消息映射',
-      icon: 'activity',
-    },
-    {
-      label: 'CPU',
-      value: st.cpu_usage || '—',
-      sub: '进程占用',
-      icon: 'cpu',
-      tone: percentTone(st.cpu_usage, 60, 80),
-    },
-    {
-      label: '内存',
-      value: st.memory_usage || '—',
-      sub: 'RSS 常驻',
-      icon: 'memory',
-    },
-    {
-      label: '磁盘',
-      value: st.disk_usage || '—',
-      sub: '磁盘占用',
-      icon: 'disk',
-      tone: percentTone(st.disk_usage, 75, 90),
-    },
-    {
-      label: '数据库',
-      value: st.db_size || '—',
-      sub: 'SQLite 体积',
-      icon: 'database',
-    },
+    { label: '绑定用户', value: ui.formatNumber(st.bound_users ?? 0), sub: 'TG ↔ QQ 用户对' },
+    { label: '同步消息', value: ui.formatNumber(st.sync_count ?? 0), sub: '累计消息映射' },
+    { label: 'CPU', value: st.cpu_usage || '—', sub: '进程占用', tone: percentTone(st.cpu_usage, 60, 80) },
+    { label: '内存', value: st.memory_usage || '—', sub: '独占内存（USS）' },
+    { label: '磁盘', value: st.disk_usage || '—', sub: '磁盘占用', tone: percentTone(st.disk_usage, 75, 90) },
+    { label: '数据库', value: st.db_size || '—', sub: 'SQLite 体积' },
   ]);
 }
 
@@ -347,26 +219,6 @@ function buildHistoryError(message, onRetry) {
       }),
     ],
   });
-}
-
-/* ─────────────────────────────────────────────────────────────────────
-   同步方向
-   ───────────────────────────────────────────────────────────────────── */
-
-function buildDirectionBody(currentDirection, setDirection) {
-  const descEl = h('div', { class: 'mi-row__subtitle', style: { marginTop: '9px', minHeight: '18px' } },
-    DIRECTION_DESC[currentDirection] || '');
-  const seg = ui.segmented({
-    options: DIRECTION_OPTIONS,
-    value: currentDirection,
-    onChange: (value) => setDirection(value),
-  });
-  const body = h('div', null,
-    seg,
-    descEl,
-    h('div', { class: 'mi-field__support', style: { marginTop: '5px' } }, '修改后立即生效，无需重启服务')
-  );
-  return { body, seg, descEl };
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -467,25 +319,21 @@ export default {
   subtitle: '',
 
   async mount(root, ctx) {
+    ctx.setHero({ subtitle: '服务状态每 1.5 秒自动刷新' });
     let disposed = false;
     let status = null;
     let history = null;
     let mounted = false;
     let lastHistorySig = null;
-    let timer = null;
+    let statusTimer = null;
+    let slowTimer = null;
     let restarting = false;
-    let direction = 'both';
-    let directionBusy = false;
-    let directionSaving = false;
     let quietRefreshing = false;
 
     const refs = {
       hero: null,
       metricsSlot: null,
       chartSlot: null,
-      directionSlot: null,
-      directionSeg: null,
-      directionDesc: null,
       pluginSlot: null,
       logsBody: null,
     };
@@ -493,14 +341,21 @@ export default {
     /* ── 清理 / 下拉刷新注册 ─────────────────────────────────────── */
     ctx.onCleanup(() => {
       disposed = true;
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
+      if (statusTimer) {
+        clearInterval(statusTimer);
+        statusTimer = null;
+      }
+      if (slowTimer) {
+        clearInterval(slowTimer);
+        slowTimer = null;
       }
     });
-    ctx.onRefresh(loadAll);
+    ctx.onRefresh(async () => {
+      await loadAll();
+      await Promise.allSettled([loadHistory(), loadLogs()]);
+    });
 
-    /* ── 主数据加载（状态 + 统计，失败时抛错由调用方展示） ──────── */
+    /* ── 主数据加载（状态 + 统计 + 日志，失败时抛错由调用方展示） ── */
     async function loadAll() {
       const results = await Promise.allSettled([
         api.get('/admin/status'),
@@ -519,39 +374,30 @@ export default {
         applyStatus(status);
         if (historyResult.status === 'fulfilled') applyHistory(historyResult.value);
       }
-      await Promise.allSettled([loadDirection(), loadLogs()]);
+      await loadLogs();
     }
 
-    /* ── 静默刷新（定时器；不整页重绘、不弹 toast） ─────────────── */
-    async function silentRefresh() {
+    /* ── 监控轮询：仅刷新状态指标（1.5s，监控页语义） ───────────── */
+    async function pollStatus() {
       if (disposed || restarting || quietRefreshing) return;
       quietRefreshing = true;
       try {
-        const results = await Promise.allSettled([
-          api.get('/admin/status'),
-          api.get('/admin/stats/sync_history'),
-        ]);
-        if (disposed) return;
-        const statusResult = results[0];
-        const historyResult = results[1];
-
-        if (statusResult.status === 'fulfilled') {
-          status = statusResult.value;
-          if (!mounted) {
-            history = historyResult.status === 'fulfilled' ? historyResult.value : null;
-            buildContent();
-            loadDirection();
-            loadLogs();
-          } else {
-            applyStatus(status);
-            if (historyResult.status === 'fulfilled') applyHistory(historyResult.value);
-          }
-        } else if (historyResult.status === 'fulfilled' && mounted) {
-          applyHistory(historyResult.value);
-        }
+        const nextStatus = await api.get('/admin/status');
+        if (disposed || restarting) return;
+        status = nextStatus;
+        if (!mounted) buildContent();
+        else applyStatus(status);
+      } catch {
+        /* 静默失败：保留上一次数据，等待下一轮 */
       } finally {
         quietRefreshing = false;
       }
+    }
+
+    /* ── 低频刷新：消息统计 + 最近日志 ──────────────────────────── */
+    async function slowRefresh() {
+      if (disposed || restarting) return;
+      await Promise.allSettled([loadHistory(), loadLogs()]);
     }
 
     /* ── 首次加载：骨架 → 内容 / 错误态 ─────────────────────────── */
@@ -579,13 +425,11 @@ export default {
 
       const metricsSlot = h('div', null, buildMetrics(status));
       const chartSlot = h('div', null);
-      const directionSlot = h('div', null, ui.loadingBlock('加载同步方向…'));
       const pluginSlot = h('div', null);
       const logs = buildLogsBlock(ctx);
 
       refs.metricsSlot = metricsSlot;
       refs.chartSlot = chartSlot;
-      refs.directionSlot = directionSlot;
       refs.pluginSlot = pluginSlot;
       refs.logsBody = logs.body;
 
@@ -603,16 +447,14 @@ export default {
 
       root.replaceChildren(
         inset(hero.el, { paddingTop: '2px' }),
-        ui.sectionTitle('运行指标', { iconName: 'activity' }),
+        ui.sectionTitle('运行指标'),
         metricsSlot,
         inset(chartSlot),
-        ui.sectionTitle('同步方向', { iconName: 'sync' }),
-        inset(ui.card({ padded: true, children: [directionSlot] })),
-        ui.sectionTitle('插件', { iconName: 'puzzle' }),
+        ui.sectionTitle('插件'),
         pluginSlot,
-        ui.sectionTitle('快捷操作', { iconName: 'sparkle' }),
+        ui.sectionTitle('快捷操作'),
         quickCard,
-        ui.sectionTitle('最近日志', { iconName: 'logs' }),
+        ui.sectionTitle('最近日志'),
         logs.el
       );
       mounted = true;
@@ -651,68 +493,6 @@ export default {
       } catch (err) {
         if (disposed) return;
         ctx.toastErr(err, '加载消息统计失败');
-      }
-    }
-
-    /* ── 同步方向 ───────────────────────────────────────────────── */
-    function applyDirection(value) {
-      if (!refs.directionSeg || !refs.directionDesc) return;
-      refs.directionSeg.set(value);
-      refs.directionDesc.textContent = DIRECTION_DESC[value] || '';
-    }
-
-    function renderDirectionBody() {
-      if (!refs.directionSlot) return;
-      const built = buildDirectionBody(direction, (value) => setDirection(value));
-      refs.directionSeg = built.seg;
-      refs.directionDesc = built.descEl;
-      refs.directionSlot.replaceChildren(built.body);
-    }
-
-    async function loadDirection() {
-      if (directionBusy) return;
-      directionBusy = true;
-      try {
-        const data = await api.get('/admin/sync/direction');
-        if (disposed) return;
-        direction = data && data.direction ? data.direction : 'both';
-        if (refs.directionSlot) renderDirectionBody();
-      } catch (err) {
-        if (disposed) return;
-        if (refs.directionSlot) {
-          refs.directionSlot.replaceChildren(ui.errorBlock({
-            title: '同步方向加载失败',
-            message: errorText(err),
-            onRetry: () => loadDirection(),
-          }));
-        }
-      } finally {
-        directionBusy = false;
-      }
-    }
-
-    async function setDirection(next) {
-      if (!next || next === direction) return;
-      if (directionSaving) {
-        // 上一次修改仍在提交：把分段控件回滚到当前值
-        applyDirection(direction);
-        return;
-      }
-      const previous = direction;
-      direction = next;
-      directionSaving = true;
-      refs.directionDesc && (refs.directionDesc.textContent = DIRECTION_DESC[next] || '');
-      try {
-        await api.put('/admin/sync/direction', { direction: next });
-        if (disposed) return;
-        ctx.toast('同步方向已更新', { type: 'success' });
-      } catch (err) {
-        if (disposed) return;
-        direction = previous;
-        applyDirection(previous);
-        ctx.toastErr(err, '修改同步方向失败');
-      } finally {
-        directionSaving = false;
       }
     }
 
@@ -816,15 +596,19 @@ export default {
       ctx.toast('重启超时，请手动刷新页面确认服务状态', { type: 'error', duration: 3600 });
     }
 
-    /* ── 定时自动刷新（仅页面可见时） ───────────────────────────── */
+    /* ── 定时刷新：指标 1.5s，统计/日志 15s（仅页面可见时） ─────── */
     function startAutoRefresh() {
-      if (timer) clearInterval(timer);
-      timer = setInterval(() => {
-        if (disposed) return;
-        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-        if (restarting) return;
-        silentRefresh();
-      }, AUTO_REFRESH_MS);
+      if (statusTimer) clearInterval(statusTimer);
+      if (slowTimer) clearInterval(slowTimer);
+      const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+      statusTimer = setInterval(() => {
+        if (disposed || !visible()) return;
+        pollStatus();
+      }, STATUS_REFRESH_MS);
+      slowTimer = setInterval(() => {
+        if (disposed || !visible()) return;
+        slowRefresh();
+      }, SLOW_REFRESH_MS);
     }
 
     /* ── 启动 ───────────────────────────────────────────────────── */

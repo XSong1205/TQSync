@@ -188,9 +188,9 @@ function mountPlugins(root, ctx) {
     }
     const data = state.data;
     const grid = metricsGrid([
-      { label: '插件总数', value: String(data.total), icon: 'puzzle', tone: 'accent' },
-      { label: '已加载', value: String(data.loaded), icon: 'check', tone: 'success' },
-      { label: '已启用', value: String(data.enabled), icon: 'activity' },
+      { label: '插件总数', value: String(data.total) },
+      { label: '已加载', value: String(data.loaded) },
+      { label: '已启用', value: String(data.enabled) },
     ]);
     grid.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))'; // 3 个指标一排，移动端也放得下
     metricsHost.appendChild(grid);
@@ -279,7 +279,7 @@ function mountPlugins(root, ctx) {
       const label = MATCHER_LABELS[type] || type;
       const pattern =
         matcher && matcher.pattern !== null && matcher.pattern !== undefined ? String(matcher.pattern) : '';
-      const el = chip({ text: `${label} ${pattern}`, tone: 'accent' });
+      const el = chip({ text: `${label} ${pattern}` });
       const desc = matcher && matcher.description ? String(matcher.description) : '';
       el.title = desc ? `${desc}（${type}: ${pattern}）` : `匹配方式 ${type}：${pattern}`;
       return el;

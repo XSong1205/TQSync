@@ -7,13 +7,13 @@
  *   3. 安全      修改管理密钥（POST /admin/change-password）、退出登录
  *   4. 系统      重启服务（POST /admin/restart + /health 轮询恢复）
  *   5. 运行信息  只读展示 ctx.state.status
- *   6. 关于      版本、运行日志入口、GitHub 项目主页与脚注
+ *   6. 关于      版本、更新检查、运行日志入口、GitHub 项目主页与脚注
  *
  * 数据来源：
  *   GET  /admin/sync/direction  { direction, options:[{value,label,desc}] }
  *   PUT  /admin/sync/direction  { direction }
  *   POST /admin/change-password { new_password }
- *   POST /admin/restart
+ * * * *   POST /admin/restart
  *   GET  /health（重启后探活，无需鉴权）
  *   GET  /admin/status（运行信息，与 app.js 共享 ctx.state.status）
  */
@@ -78,7 +78,11 @@ function formatGroupId(value) {
 function infoRow(label, value) {
   const el = ui.row({ title: label, value: String(value) });
   const valueEl = el.querySelector('.mi-row__value');
-  if (valueEl) valueEl.classList.add('mi-mono');
+  if (valueEl) {
+    valueEl.classList.add('mi-mono');
+    valueEl.style.fontSize = '13.5px';
+    valueEl.style.maxWidth = '58%';
+  }
   return el;
 }
 
@@ -168,7 +172,7 @@ export default {
         h('span', { class: 'mi-row__content' },
           h('span', {
             class: 'mi-row__title',
-            style: active ? { fontWeight: '600', color: 'var(--mi-accent)' } : null,
+            style: active ? { fontWeight: '500' } : null,
           }, option.label)
         ),
         radio
@@ -427,6 +431,7 @@ export default {
       api.clearToken();
       location.reload();
     }
+
 
     /* ══════════════════════════════════════════════════════════════
        4. 系统：重启服务

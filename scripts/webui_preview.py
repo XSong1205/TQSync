@@ -414,10 +414,14 @@ def _bindings_result() -> List[Dict[str, Any]]:
 
 
 def _process_metrics() -> Dict[str, str]:
-    """模拟 psutil 的性能指标：用正弦波动制造平滑变化，磁盘取真实值。"""
+    """模拟 psutil 的性能指标：用小幅正弦波动制造平滑变化，磁盘取真实值。
+
+    数值按真实 bot 空闲时的量级设置（独占内存约 70~80 MB、CPU 个位数），
+    避免预览界面出现明显偏离实际的占用数字。
+    """
     now = time.time()
-    cpu_percent = max(0.0, 12.6 + 6.2 * math.sin(now / 11.0))
-    memory_mb = 186.4 + 3.2 * math.sin(now / 17.0 + 0.8)
+    cpu_percent = max(0.2, 2.6 + 1.8 * math.sin(now / 11.0))
+    memory_mb = 76.8 + 2.4 * math.sin(now / 17.0 + 0.8)
     try:
         usage = shutil.disk_usage(str(REPO_ROOT))
         disk_percent = usage.used / max(usage.total, 1) * 100.0

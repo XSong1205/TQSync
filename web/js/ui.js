@@ -169,9 +169,9 @@ export function cardGroup(opts = {}) {
   return wrap;
 }
 
-/** 小节标题 */
-export function sectionTitle(text, { iconName } = {}) {
-  return h('div', { class: 'mi-section-title' }, iconName ? icon(iconName, 14) : null, text);
+/** 小节标题（Miuix SmallTitle：蓝灰色普通字重，无图标装饰） */
+export function sectionTitle(text) {
+  return h('div', { class: 'mi-section-title' }, text);
 }
 
 /**
@@ -211,7 +211,7 @@ export function row(opts = {}) {
   }
 
   const content = h('div', { class: 'mi-row__content' });
-  content.appendChild(h('div', { class: ['mi-row__title', subtitle ? 'mi-row__title--strong' : null] }, title));
+  content.appendChild(h('div', { class: 'mi-row__title' }, title));
   if (subtitle) content.appendChild(h('div', { class: 'mi-row__subtitle' }, subtitle));
   el.appendChild(content);
 
@@ -471,7 +471,7 @@ export function button(opts = {}) {
 
 /** 图标按钮 */
 export function iconButton({ icon: iconName, label = '', onClick = null, className = '' } = {}) {
-  const el = h('button', { class: ['mi-btn mi-btn--icon', className], type: 'button', 'aria-label': label, title: label, onClick }, icon(iconName, 21));
+  const el = h('button', { class: ['mi-btn mi-btn--icon', className], type: 'button', 'aria-label': label, title: label, onClick }, icon(iconName, 20));
   tapFeedback(el);
   return el;
 }

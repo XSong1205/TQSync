@@ -159,7 +159,7 @@ function showLogin(message = '') {
   const card = h('div', { class: 'login-card' },
     h('div', { class: 'login-brand' },
       logo,
-      h('div', { class: 'login-brand__name' }, h('span', { style: { color: 'var(--mi-accent)' } }, 'TQ'), 'Sync'),
+      h('div', { class: 'login-brand__name' }, 'TQSync'),
       h('div', { class: 'login-brand__desc' }, 'Telegram × QQ 跨群组双向消息同步控制台')
     ),
     form,
@@ -169,7 +169,6 @@ function showLogin(message = '') {
     )
   );
 
-  $loginRoot.appendChild(h('div', { class: 'login-bg' }));
   $loginRoot.appendChild(card);
   hideBoot();
   setTimeout(() => pwdField.focus(), 320);

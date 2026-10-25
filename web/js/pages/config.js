@@ -39,6 +39,12 @@ const DIRECTION_CHOICES = [
 /* 不在界面中展示的内部状态键 */
 const HIDDEN_KEYS = new Set(['server.is_initial_token']);
 
+/* 页面分页：配置项 / 消息过滤 */
+const CONFIG_TABS = [
+  { value: 'config', label: '配置项' },
+  { value: 'filter', label: '消息过滤' },
+];
+
 /* ─────────────────────────────────────────────────────────────────────
    配置元数据：覆盖 config.yaml.example 中的全部键
    type: text | password | int | bool | select | list
@@ -332,6 +338,7 @@ export default {
   async mount(root, ctx) {
     let disposed = false;
     let saving = false;
+    let activeTab = 'config';
     let dataEntries = [];
     let entryByKey = new Map();
     let dataGroups = [];
@@ -965,7 +972,7 @@ export default {
       searchApi.el.style.height = '44px';
       noResultsEl = buildNoResults();
 
-      root.replaceChildren(
+      configPane.replaceChildren(
         stickyBar,
         h('div', { style: { padding: '0 var(--mi-page-x) 12px' } }, searchApi.el),
         sectionsEl,
@@ -992,12 +999,213 @@ export default {
     }
 
     /* ────────────────────────────────────────────────────────────────
+       分页：配置项 / 消息过滤（屏蔽词）
+       ──────────────────────────────────────────────────────────────── */
+
+    const blockedState = { loaded: false, loading: false, error: '', words: [] };
+    let blockedQuery = '';
+    let blockedCount = null;
+    let blockedListHost = null;
+
+    const blockedSearch = ui.searchBar({
+      placeholder: '搜索屏蔽词…',
+      onInput: ui.debounce((value) => {
+        blockedQuery = String(value || '').trim().toLowerCase();
+        renderBlockedList();
+      }, 160),
+    });
+    blockedSearch.el.style.height = '44px';
+
+    function blockedMatches() {
+      return blockedQuery
+        ? blockedState.words.filter((word) => word.toLowerCase().includes(blockedQuery))
+        : blockedState.words;
+    }
+
+    function renderBlockedList() {
+      if (!blockedListHost) return;
+      const filtered = blockedMatches();
+      if (blockedCount) {
+        blockedCount.textContent = blockedQuery
+          ? `${filtered.length}/${blockedState.words.length}`
+          : `${blockedState.words.length} 个`;
+      }
+      const children = [];
+      if (blockedState.loading && !blockedState.loaded) {
+        children.push(ui.loadingBlock('正在读取屏蔽词…'));
+      } else if (blockedState.error) {
+        children.push(ui.errorBlock({
+          title: '屏蔽词加载失败',
+          message: blockedState.error,
+          onRetry: () => loadBlocked({ force: true }),
+        }));
+      } else if (!filtered.length) {
+        children.push(h('div', { class: 'mi-row' },
+          h('div', { class: 'mi-row__content' },
+            h('div', { class: 'mi-row__title' }, blockedQuery ? '没有匹配的屏蔽词' : '暂无屏蔽词'),
+            h('div', { class: 'mi-row__subtitle' },
+              blockedQuery
+                ? `没有找到包含「${blockedQuery}」的屏蔽词`
+                : '添加后，消息内容命中这些词的同步会被拦截，不再转发到对端')
+          )
+        ));
+      } else {
+        for (const word of filtered) {
+          children.push(ui.row({
+            title: word,
+            icon: 'shield',
+            trailing: ui.iconButton({
+              icon: 'close',
+              label: `删除屏蔽词 ${word}`,
+              onClick: () => removeBlockedWord(word),
+            }),
+          }));
+        }
+      }
+      children.push(ui.row({
+        title: '添加屏蔽词',
+        icon: 'plus',
+        chevron: true,
+        onClick: () => openAddBlocked(),
+      }));
+      blockedListHost.replaceChildren(ui.cardGroup({
+        header: '屏蔽词',
+        children,
+        footer: '同步前会逐条检查消息内容，命中后不再转发；包含 / 的屏蔽词同样可正常删除。',
+      }));
+    }
+
+    function buildFilterPane() {
+      blockedCount = ui.badge('—', 'neutral');
+      const toolbar = h('div', { class: 'page-toolbar' },
+        h('div', { class: 'page-toolbar__grow' }, blockedSearch.el),
+        blockedCount
+      );
+      blockedListHost = h('div');
+      return h('div', null, toolbar, blockedListHost);
+    }
+
+    async function loadBlocked({ force = false } = {}) {
+      if (blockedState.loading) return;
+      if (blockedState.loaded && !force) {
+        renderBlockedList();
+        return;
+      }
+      blockedState.loading = true;
+      renderBlockedList();
+      try {
+        const res = await api.get('/admin/blocked_words');
+        if (disposed) return;
+        blockedState.words = Array.isArray(res && res.words) ? res.words.map((word) => String(word)) : [];
+        blockedState.error = '';
+        blockedState.loaded = true;
+      } catch (err) {
+        if (disposed) return;
+        blockedState.error = errorText(err, '请稍后重试');
+      } finally {
+        blockedState.loading = false;
+        if (!disposed) renderBlockedList();
+      }
+    }
+
+    function openAddBlocked() {
+      const wordField = ui.field({
+        label: '屏蔽词',
+        placeholder: '例如：加微信',
+        maxLength: 200,
+        autofocus: true,
+        supporting: '支持包含 / 的文本，最长 200 字符',
+      });
+      let busy = false;
+      ctx.dialog({
+        title: '添加屏蔽词',
+        message: '消息内容包含该词时将不会同步到对端。',
+        content: wordField.el,
+        actions: [
+          { text: '取消', variant: 'text', value: false },
+          {
+            text: '添加',
+            variant: 'filled',
+            onClick: async () => {
+              if (busy) return false;
+              const word = wordField.get().trim();
+              if (!word) {
+                wordField.setError('屏蔽词不能为空');
+                wordField.focus();
+                return false;
+              }
+              busy = true;
+              try {
+                await api.post('/admin/blocked_words', { word });
+                ctx.toast('已添加屏蔽词', { type: 'success' });
+                await loadBlocked({ force: true });
+                return true;
+              } catch (err) {
+                if (err && err.status === 409) {
+                  wordField.setError('该屏蔽词已存在');
+                  wordField.focus();
+                } else {
+                  ctx.toastErr(err, '添加屏蔽词失败');
+                }
+                return false;
+              } finally {
+                busy = false;
+              }
+            },
+          },
+        ],
+      });
+    }
+
+    async function removeBlockedWord(word) {
+      const confirmed = await ctx.confirm({
+        title: '删除屏蔽词',
+        message: `确定删除「${word}」吗？删除后命中该词的消息会恢复同步。`,
+        confirmText: '删除',
+        danger: true,
+      });
+      if (!confirmed || disposed) return;
+      try {
+        await api.del(`/admin/blocked_words/${encodeURIComponent(word)}`);
+        ctx.toast('已删除屏蔽词', { type: 'success' });
+        await loadBlocked({ force: true });
+      } catch (err) {
+        ctx.toastErr(err, '删除屏蔽词失败');
+      }
+    }
+
+    /* 分页骨架：切换页签时隐藏另一页，保存栏只属于「配置项」 */
+    const tabSeg = ui.segmented({
+      options: CONFIG_TABS,
+      value: activeTab,
+      onChange: (value) => switchTab(value),
+    });
+    tabSeg.style.width = '100%';
+    const tabWrap = h('div', { class: 'page-toolbar', style: { paddingTop: '2px' } }, tabSeg);
+    const configPane = h('div');
+    const filterPane = h('div', { hidden: true }, buildFilterPane());
+    root.replaceChildren(tabWrap, configPane, filterPane);
+
+    function switchTab(value) {
+      if (value === activeTab) return;
+      activeTab = value;
+      tabSeg.set(value);
+      configPane.hidden = value !== 'config';
+      filterPane.hidden = value !== 'filter';
+      ctx.setHero({
+        subtitle: value === 'config' ? '修改后点击保存生效' : '命中屏蔽词的消息不再转发',
+      });
+      if (value === 'filter' && !blockedState.loaded) loadBlocked();
+      ui.vibrate(6);
+    }
+
+    /* ────────────────────────────────────────────────────────────────
        加载 / 刷新
        ──────────────────────────────────────────────────────────────── */
 
     async function loadConfig() {
-      root.setAttribute('aria-busy', 'true');
-      root.replaceChildren(buildSkeleton());
+      configPane.setAttribute('aria-busy', 'true');
+      configPane.replaceChildren(buildSkeleton());
       try {
         const data = await api.get('/admin/config');
         if (disposed) return;
@@ -1007,13 +1215,13 @@ export default {
         renderPage();
       } catch (err) {
         if (disposed) return;
-        root.replaceChildren(ui.errorBlock({
+        configPane.replaceChildren(ui.errorBlock({
           title: '配置加载失败',
           message: errorText(err, '无法读取配置，请检查后端服务'),
           onRetry: () => loadConfig(),
         }));
       } finally {
-        root.removeAttribute('aria-busy');
+        configPane.removeAttribute('aria-busy');
       }
     }
 
@@ -1072,7 +1280,14 @@ export default {
     /* ────────────────────────────────────────────────────────────────
        启动
        ──────────────────────────────────────────────────────────────── */
-    ctx.onRefresh(handleRefresh);
+    /* 下拉刷新 / 顶栏刷新：按当前页签刷新对应数据 */
+    ctx.onRefresh(async () => {
+      if (activeTab === 'filter') {
+        await loadBlocked({ force: true });
+        return;
+      }
+      await handleRefresh();
+    });
     await loadConfig();
   },
 };
