@@ -30,6 +30,9 @@ MANIFEST
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
+.cache/
 .coverage
 .coverage.*
 htmlcov/
@@ -45,6 +48,11 @@ ENV/
 env.bak/
 venv.bak/
 *.venv/
+
+# 前端依赖与工具缓存（web/ 下的静态资源需要提交）
+node_modules/
+.npm/
+.pnpm-store/
 
 # ==========================================
 # IDE / 编辑器配置
@@ -65,20 +73,24 @@ venv.bak/
 .DS_Store?
 ._*
 Thumbs.db
+Thumbs.db:encryptable
 ehthumbs.db
+ehthumbs_vista.db
 desktop.ini
 
 # ==========================================
 # 本地配置与密钥 (Configs & Secrets)
 # ==========================================
-config.yaml
+/config.yaml
 !config.yaml.example
 .env
 .env.*
 !.env.example
-docker-compose.yml
-docker-compose.override.yml
-docker-compose.*.yml
+!.env.*.example
+/docker-compose*.yml
+/docker-compose*.yaml
+/compose*.yml
+/compose*.yaml
 !docker-compose.yml.example
 .commit
 
@@ -89,8 +101,7 @@ logs/
 *.log
 temp/
 *.tmp
-logs/.restart_marker
-logs/.reboot_info
+*.temp
 .tqsync_aliases
 
 # ==========================================
@@ -101,7 +112,13 @@ logs/.reboot_info
 *.db-shm
 *.db-wal
 *.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
 *.sqlite3
+*.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
 plugins/db/
 
 # ==========================================
@@ -113,14 +130,13 @@ bin/
 # AI 助手与本地工具配置
 # ==========================================
 .claude/
+.codex/
+AGENTS.md
 CLAUDE.md
-
-# autopusher 相关
-push.py
-utils/version_bumper.py
 
 # 测试/基准脚本产生的临时目录（正常会自动清理，中断时可能残留）
 tqsync_runtime_*/
+tqsync_bench_*/
 bench_logger_*/
 dbg_*/
 perf_copy_*/

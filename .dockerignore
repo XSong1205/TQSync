@@ -1,38 +1,125 @@
-# 版本控制
-.git/
+# 版本控制与 CI
+.git
 .gitignore
-.github/
+.gitattributes
+.github
+.dockerignore
 
-# 运行时目录（由 volume 挂载，不应进入镜像）
+# 本地配置与密钥；保留配置模板供入口脚本初始化
+config.yaml
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+.commit
+.tqsync_aliases
+
+# 运行时目录（通过 volume 挂载）
 logs/
 temp/
-db/
 bin/
-config.yaml
+plugins/db/
 
-# Docker 与部署相关
-docker-compose*.yml
-docker-compose*.yaml
+# db/ 包含运行必需的 database.py，只排除数据文件，不能排除整个目录
+**/*.db
+**/*.db-journal
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite-journal
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/*.sqlite3
+**/*.sqlite3-journal
+**/*.sqlite3-shm
+**/*.sqlite3-wal
+
+# Docker 与部署相关（入口脚本 docker-entrypoint.sh 必须保留）
+docker-compose*.yml*
+docker-compose*.yaml*
+compose*.yml*
+compose*.yaml*
 Dockerfile*
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-venv/
-env/
-.venv/
+# Python 缓存、虚拟环境与构建产物；Docker 匹配子目录需要显式使用 **
+**/__pycache__
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info
+**/*.egg
+**/.eggs
+**/.Python
+**/venv
+**/.venv
+**/env
+**/ENV
+**/env.bak
+**/venv.bak
+**/*.venv
+build/
+dist/
+downloads/
+develop-eggs/
+eggs/
+wheels/
+pip-wheel-metadata/
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.tox
+**/.nox
+**/.cache
+**/.coverage
+**/.coverage.*
+**/htmlcov
+**/.hypothesis
 
-# 编辑器 / IDE
-.idea/
-.vscode/
-*.swp
+# 前端依赖与工具缓存；保留 web/ 和 assets/ 的运行资源
+**/node_modules
+**/.npm
+**/.pnpm-store
 
-# 本地工具与文档
+# 编辑器、AI 助手与操作系统文件
+**/.idea
+**/.vscode
+**/.lingma
+**/.cursor
+**/.claude
+**/.codex
+**/AGENTS.md
+**/CLAUDE.md
+gemini.md
+**/*.swp
+**/*.swo
+**/*~
+**/*.bak
+**/.DS_Store
+**/.DS_Store?
+**/._*
+**/Thumbs.db
+**/Thumbs.db:encryptable
+**/ehthumbs.db
+**/ehthumbs_vista.db
+**/desktop.ini
+
+# 开发工具、文档与测试产物
 push.py
+utils/version_bumper.py
+install.py
+install.bat
+scripts/
 NapCatQQAPI.md
 docs/
-
-# 临时文件
-*.log
-*.tmp
+**/*.log
+**/*.tmp
+**/*.temp
+tqsync_runtime_*/
+tqsync_bench_*/
+bench_logger_*/
+dbg_*/
+perf_copy_*/
+perf_log_*/
+tqsync_test_db_*/
+tqsync_webhook_*/
+tqsync_logger_qq_*/
+tmp_webui_shots/
